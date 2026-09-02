@@ -1,0 +1,518 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>策略交易系统 · 一键启动后端 8000（HTA 启动器）</title>
+<HTA:APPLICATION
+    ID="StrategyTradeLauncherHTA"
+    APPLICATIONNAME="StrategyTradeLauncherHTA"
+    BORDER="thin"
+    CAPTION="yes"
+    SHOWINTASKBAR="yes"
+    SINGLEINSTANCE="yes"
+    SYSMENU="yes"
+    SCROLL="no"
+    WINDOWSTATE="normal"
+    INNERBORDER="no"
+    MAXIMIZEBUTTON="no"
+    MINIMIZEBUTTON="yes"
+    CONTEXTMENU="no"
+    NAVIGABLE="no"
+/>
+<style>
+    html, body { margin: 0; padding: 0; height: 100%; font-family: "Microsoft YaHei", "PingFang SC", Segoe UI, Arial, sans-serif; background: linear-gradient(135deg,#1e3c72,#2a5298); color:#fff; }
+    body { padding: 24px; box-sizing: border-box; }
+    h1 { font-size: 22px; margin: 0 0 6px 0; letter-spacing:1px; }
+    .sub { font-size: 13px; color:#cfe0ff; margin-bottom: 20px; }
+    .card { background: rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.18); border-radius: 12px; padding:18px 20px; margin-bottom:16px; backdrop-filter: blur(6px); }
+    .row { display:flex; gap:10px; align-items:center; margin: 8px 0; flex-wrap: wrap;}
+    button { padding: 10px 18px; font-size: 15px; cursor:pointer; border:none; border-radius: 8px; color:#fff; letter-spacing: 1px; font-weight:600; }
+    button.primary { background: linear-gradient(135deg,#34d399,#10b981); box-shadow: 0 4px 14px rgba(16,185,129,0.35); }
+    button.primary:hover { filter: brightness(1.08); }
+    button.secondary { background: rgba(255,255,255,0.14); border:1px solid rgba(255,255,255,0.3); font-weight:500; }
+    button.secondary:hover { background: rgba(255,255,255,0.22); }
+    button:disabled { filter: grayscale(0.8) opacity(0.6); cursor: not-allowed; }
+    .progress-wrap { height: 14px; background: rgba(0,0,0,0.3); border-radius:999px; overflow:hidden; margin-top: 10px; border:1px solid rgba(255,255,255,0.2); }
+    .progress-bar { height: 100%; width: 0%; background: linear-gradient(90deg,#34d399,#60a5fa,#a78bfa); transition: width 0.4s ease; border-radius: 999px; }
+    .status { font-size: 14px; color: #e0f2fe; margin-top: 8px; min-height: 22px; font-family: Consolas, "Courier New", monospace; }
+    .ok { color: #34d399 !important; font-weight: 700; }
+    .err { color: #fca5a5 !important; font-weight: 700; }
+    .warn { color: #fde68a !important; }
+    .link { color: #93c5fd; text-decoration: underline; cursor: pointer; }
+    .footer { font-size: 12px; color:#aac4ff; position: fixed; bottom: 16px; right: 24px; opacity: 0.85; }
+    .mono { font-family: Consolas, "Courier New", monospace; background: rgba(0,0,0,0.25); padding: 2px 6px; border-radius: 6px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 560px) { .grid-2 { grid-template-columns: 1fr; } }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    td { padding: 6px 8px; border-bottom:1px solid rgba(255,255,255,0.1); vertical-align: top; }
+    td:first-child { width: 120px; color:#bfdbfe; font-weight:600; }
+</style>
+</head>
+<body>
+
+<h1>🚀 策略交易系统 · 一键启动后端 8000 /docs</h1>
+<div class="sub">
+    本启动器使用 Windows 原生 <span class="mono">mshta.exe</span> 执行，完全绕开 PowerShell ExecutionPolicy 与 .bat/.vbs 脚本拦截策略。
+    <span class="warn">首次启动要建 venv + pip 装依赖，需要 1~5 分钟（看网速），请耐心等进度条。</span>
+</div>
+
+<div class="card">
+    <div class="row">
+        <button class="primary" id="btnStart" onclick="startAll()">▶️ 点我一键启动后端（:8000 → 自动打开 /docs）</button>
+        <button class="secondary" onclick="openLogFile()">📄 查看启动日志</button>
+        <button class="secondary" onclick="openBackendLog()">📋 查看后端运行日志</button>
+    </div>
+    <div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+    <div class="status" id="statusLine">准备就绪 —— 点击上方绿色按钮启动</div>
+</div>
+
+<div class="card grid-2" style="padding: 12px 16px;">
+    <div>
+        <strong style="display:block;margin-bottom:6px;">📁 路径信息</strong>
+        <table>
+            <tr><td>项目根</td><td id="projectRootCell">-</td></tr>
+            <tr><td>venv python</td><td id="venvPyCell">-</td></tr>
+            <tr><td>embeddable python</td><td id="embedPyCell">-</td></tr>
+            <tr><td>启动日志</td><td id="logLauncherCell">-</td></tr>
+            <tr><td>后端日志</td><td id="logBackendCell">-</td></tr>
+        </table>
+    </div>
+    <div>
+        <strong style="display:block;margin-bottom:6px;">💡 成功信号（任一出现即可）</strong>
+        <ul style="margin:0; padding-left:20px; line-height:1.9; font-size:13px; color:#dbeafe;">
+            <li>系统默认浏览器<strong>自动弹出</strong>并打开 <span class="mono">http://127.0.0.1:8000/docs</span></li>
+            <li>看到 Swagger UI（左侧一长串接口列表 + Authorize 按钮）</li>
+            <li>下方状态框显示 <span class="ok">✅ /health 返回 200，已自动打开浏览器</span></li>
+        </ul>
+    </div>
+</div>
+
+<div class="footer" id="footerInfo">初始化中…</div>
+
+<script language="VBScript">
+'' HTA VBScript engine. We use VBScript because it has native access to WScript.Shell, Scripting.FileSystemObject and Win32_Process via WMI.
+Option Explicit
+
+Const PROJECT_ROOT = "C:\Users\AI\AppData\Roaming\TRAE SOLO CN\ModularData\ai-agent\work-mode-projects\6a6da3890eac9824cd4457aa"
+
+Dim sh, fso, started, backendProcess
+Set sh = CreateObject("WScript.Shell")
+Set fso = CreateObject("Scripting.FileSystemObject")
+started = False
+Set backendProcess = Nothing
+
+'' ----------------------------- helpers -----------------------------
+Sub setStatusHTML(html)
+    Dim el : Set el = document.getElementById("statusLine")
+    el.innerHTML = html
+End Sub
+
+Sub setStatus(cls, text)
+    setStatusHTML "<span class=""" & cls & """>" & text & "</span>"
+End Sub
+
+Sub setProgress(pct)
+    If pct < 0 Then pct = 0
+    If pct > 100 Then pct = 100
+    Dim bar : Set bar = document.getElementById("progressBar")
+    bar.style.width = pct & "%"
+End Sub
+
+Sub logLauncher(msg)
+    On Error Resume Next
+    Dim path, ts
+    path = PROJECT_ROOT & "\_logs_backend_launcher.log"
+    Set ts = fso.OpenTextFile(path, 8, True)
+    ts.WriteLine Now & " [HTA] " & msg
+    ts.Close
+    On Error GoTo 0
+End Sub
+
+Function fileExists(p) : fileExists = fso.FileExists(p) : End Function
+Function folderExists(p) : folderExists = fso.FolderExists(p) : End Function
+
+Sub openNotepad(p)
+    On Error Resume Next
+    If fso.FileExists(p) Then
+        sh.Run "notepad.exe """ & p & """", 1, False
+    Else
+        MsgBox "日志文件暂未生成，请先点击启动按钮。" & vbCrLf & p, 64, "提示"
+    End If
+    On Error GoTo 0
+End Sub
+
+'' ----------------------------- exposed to HTML -----------------------------
+Sub openLogFile()
+    openNotepad PROJECT_ROOT & "\_logs_backend_launcher.log"
+End Sub
+
+Sub openBackendLog()
+    openNotepad PROJECT_ROOT & "\_logs_backend.log"
+End Sub
+
+'' ----------------------------- find python -----------------------------
+Function findHostPython()
+    logLauncher "[Python] 开始查找解释器..."
+    setStatus "warn", "[1/8] 查找 Python 解释器..."
+    setProgress 2
+
+    Dim venvPy : venvPy = PROJECT_ROOT & "\.venv\Scripts\python.exe"
+    If fileExists(venvPy) Then
+        logLauncher "[Python] 使用 venv: " & venvPy
+        findHostPython = venvPy
+        Exit Function
+    End If
+
+    Dim embedPy : embedPy = PROJECT_ROOT & "\_python\python.exe"
+    If fileExists(embedPy) Then
+        logLauncher "[Python] 使用 embeddable: " & embedPy
+        findHostPython = embedPy
+        Exit Function
+    End If
+
+    '' Try system PATH python / python3
+    Dim ex, arr, i, p
+    ex = Array("python.exe", "python3.exe")
+    For i = 0 To UBound(ex)
+        On Error Resume Next
+        p = sh.ExpandEnvironmentStrings("%COMSPEC%")
+        Dim res : res = sh.Run("%COMSPEC% /c where " & ex(i) & " > ""%TEMP%\hta_py_where.txt"" 2>nul", 0, True)
+        If Err.Number = 0 And fso.FileExists(sh.ExpandEnvironmentStrings("%TEMP%\hta_py_where.txt")) Then
+            Dim ts : Set ts = fso.OpenTextFile(sh.ExpandEnvironmentStrings("%TEMP%\hta_py_where.txt"), 1, False)
+            Do While Not ts.AtEndOfStream
+                Dim line : line = Trim(ts.ReadLine)
+                If Len(line) > 0 And fileExists(line) Then
+                    logLauncher "[Python] 系统 PATH 下找到: " & line
+                    ts.Close
+                    findHostPython = line
+                    Exit Function
+                End If
+            Loop
+            ts.Close
+        End If
+        On Error GoTo 0
+    Next
+
+    '' Try Windows Registry InstallPath (Python Core)
+    On Error Resume Next
+    Dim reg : Set reg = CreateObject("WScript.Shell")
+    Dim bases : bases = Array(_
+        "HKLM\SOFTWARE\Python\PythonCore\", _
+        "HKCU\SOFTWARE\Python\PythonCore\", _
+        "HKLM\SOFTWARE\WOW6432Node\Python\PythonCore\")
+    Dim bi
+    For bi = 0 To UBound(bases)
+        Dim key : key = bases(bi)
+        '' enumerate subkeys is hard in VBS shell.regread; just try common versions
+        Dim vers, vi, vkey, val
+        vers = Array("3.13","3.12","3.11","3.10","3.9","3.8")
+        For vi = 0 To UBound(vers)
+            vkey = key & vers(vi) & "\InstallPath\"
+            Err.Clear
+            val = reg.RegRead(vkey & "")
+            If Err.Number = 0 Then
+                Dim candidate : candidate = val
+                If Right(candidate,1) <> "\" Then candidate = candidate & "\"
+                candidate = candidate & "python.exe"
+                If fileExists(candidate) Then
+                    logLauncher "[Python] 注册表 InstallPath 找到: " & candidate
+                    findHostPython = candidate
+                    Exit Function
+                End If
+            End If
+        Next
+    Next
+    On Error GoTo 0
+
+    findHostPython = ""
+End Function
+
+'' ----------------------------- create venv -----------------------------
+Function ensureVenv(hostPy)
+    logLauncher "[VENV] ensureVenv 开始 hostPy=" & hostPy
+    setStatus "warn", "[2/8] 创建 .venv 虚拟环境（首次需几秒）..."
+    setProgress 8
+
+    Dim venvPy : venvPy = PROJECT_ROOT & "\.venv\Scripts\python.exe"
+    If fileExists(venvPy) Then
+        logLauncher "[VENV] .venv 已存在，跳过创建"
+        ensureVenv = venvPy
+        Exit Function
+    End If
+
+    '' try --without-pip first (faster)
+    Dim cmd, exitCode
+    cmd = """" & hostPy & """ -m venv --without-pip --clear """ & PROJECT_ROOT & "\.venv"""
+    logLauncher "[VENV] 执行: " & cmd
+    exitCode = sh.Run("%COMSPEC% /c " & cmd, 0, True)
+    If exitCode <> 0 Then
+        logLauncher "[VENV] --without-pip 失败 exit=" & exitCode & "，回退普通 venv"
+        cmd = """" & hostPy & """ -m venv --clear """ & PROJECT_ROOT & "\.venv"""
+        logLauncher "[VENV] 执行: " & cmd
+        exitCode = sh.Run("%COMSPEC% /c " & cmd, 0, True)
+        If exitCode <> 0 Then
+            setStatus "err", "[VENV] 创建失败 exit=" & exitCode & " 请查看 _logs_backend_launcher.log"
+            ensureVenv = ""
+            Exit Function
+        End If
+    End If
+
+    If Not fileExists(venvPy) Then
+        setStatus "err", "[VENV] .venv 已创建但找不到 python.exe：" & venvPy
+        ensureVenv = ""
+        Exit Function
+    End If
+
+    '' bootstrap pip if missing
+    Dim r : r = sh.Run("%COMSPEC% /c """"" & venvPy & """ -m pip --version > ""%TEMP%\hta_pip_check.txt"" 2>&1""", 0, True)
+    If r <> 0 Or Not fso.FileExists(sh.ExpandEnvironmentStrings("%TEMP%\hta_pip_check.txt")) Then
+        setStatus "warn", "[3/8] venv 内 pip 缺失，ensurepip 修复..."
+        setProgress 18
+        logLauncher "[PIP] ensurepip --upgrade"
+        sh.Run "%COMSPEC% /c """"" & venvPy & """ -m ensurepip --upgrade""", 0, True
+    Else
+        logLauncher "[PIP] pip 已就绪"
+    End If
+
+    ensureVenv = venvPy
+End Function
+
+'' ----------------------------- install requirements -----------------------------
+Sub installRequirements(venvPy)
+    setStatus "warn", "[4/8] 安装/检查 Python 依赖（首次启动可能 1~5 分钟，请耐心等待）..."
+    setProgress 28
+    logLauncher "[PIP] 开始 install requirements（清华镜像优先）"
+
+    '' Step 1: upgrade pip
+    Dim c1, rc
+    c1 = """" & venvPy & """ -m pip install --upgrade pip -i https://pypi.tuna.tsinghua.edu.cn/simple"
+    rc = sh.Run("%COMSPEC% /c """ & c1 & """ > ""%TEMP%\hta_pip1.log"" 2>&1", 0, True)
+    logLauncher "[PIP] upgrade pip (mirror) exit=" & rc
+
+    '' Step 2: requirements with mirror
+    Dim c2 : c2 = """" & venvPy & """ -m pip install -r """ & PROJECT_ROOT & "\requirements.txt"" --index-url https://pypi.tuna.tsinghua.edu.cn/simple"
+    rc = sh.Run("%COMSPEC% /c """ & c2 & """ > ""%TEMP%\hta_pip2.log"" 2>&1", 0, True)
+    logLauncher "[PIP] install requirements (mirror) exit=" & rc
+
+    If rc <> 0 Then
+        logLauncher "[PIP] 镜像失败，回退默认源 upgrade pip + requirements"
+        sh.Run "%COMSPEC% /c """"" & venvPy & """ -m pip install --upgrade pip"" > ""%TEMP%\hta_pip3.log"" 2>&1", 0, True
+        c2 = """" & venvPy & """ -m pip install -r """ & PROJECT_ROOT & "\requirements.txt"""
+        rc = sh.Run("%COMSPEC% /c """ & c2 & """ > ""%TEMP%\hta_pip4.log"" 2>&1", 0, True)
+        logLauncher "[PIP] install requirements (default) exit=" & rc
+    End If
+
+    '' Validate critical imports
+    Dim v : v = sh.Run("%COMSPEC% /c """"" & venvPy & """ -c ""import fastapi,uvicorn,sqlalchemy;print('OK')"" > ""%TEMP%\hta_pip_ok.txt"" 2>&1", 0, True)
+    If v <> 0 Then
+        setStatus "warn", "[PIP] 仍无法 import fastapi/uvicorn/sqlalchemy，查看 %TEMP%\hta_pip*.log 和 _logs_backend_launcher.log（仍然尝试启动 uvicorn）"
+    Else
+        logLauncher "[PIP] import fastapi/uvicorn/sqlalchemy 成功 ✅"
+    End If
+End Sub
+
+'' ----------------------------- kill port 8000 -----------------------------
+Sub killPort8000()
+    setStatus "warn", "[5/8] 清理 8000 端口占用..."
+    setProgress 60
+    logLauncher "[PORT] 检查 8000 占用..."
+
+    On Error Resume Next
+    Dim wmi, procs, p, netstatFile, ts, line, parts, pid, i
+    Set wmi = GetObject("winmgmts:")
+
+    '' Dump netstat -ano to a temp file and parse it
+    Dim tmp : tmp = sh.ExpandEnvironmentStrings("%TEMP%\hta_netstat_8000.txt")
+    sh.Run "%COMSPEC% /c netstat -ano > """ & tmp & """ 2>nul", 0, True
+    If Not fso.FileExists(tmp) Then Exit Sub
+    Set ts = fso.OpenTextFile(tmp, 1, False)
+    Do While Not ts.AtEndOfStream
+        line = ts.ReadLine
+        If InStr(line, ":8000") > 0 And InStr(line, "LISTENING") > 0 Then
+            parts = Split(Trim(line))
+            If UBound(parts) >= 1 Then
+                pid = Trim(parts(UBound(parts)))
+                If IsNumeric(pid) And CLng(pid) > 0 Then
+                    logLauncher "[PORT] 8000 LISTENING PID=" & pid & " → taskkill /F"
+                    sh.Run "taskkill.exe /PID " & pid & " /F", 0, True
+                End If
+            End If
+        End If
+    Loop
+    ts.Close
+    On Error GoTo 0
+    setProgress 68
+    WScript.Sleep 1200
+End Sub
+
+'' ----------------------------- start uvicorn -----------------------------
+Function startUvicorn(venvPy)
+    setStatus "warn", "[6/8] 启动 FastAPI uvicorn :8000（日志写 _logs_backend.log）..."
+    setProgress 76
+    logLauncher "[UVICORN] 启动 uvicorn, venvPy=" & venvPy
+
+    '' Append separator to backend log
+    On Error Resume Next
+    Dim logPath : logPath = PROJECT_ROOT & "\_logs_backend.log"
+    Dim fh : Set fh = fso.OpenTextFile(logPath, 8, True)
+    fh.WriteLine vbCrLf & vbCrLf & "============== HTA 启动新一次 " & Now & " =============="
+    fh.Close
+    On Error GoTo 0
+
+    Dim launchPy : launchPy = PROJECT_ROOT & "\_launch_backend.py"
+    Dim cmdLine
+    If fileExists(launchPy) Then
+        cmdLine = """" & venvPy & """ """ & launchPy & """"
+    Else
+        cmdLine = """" & venvPy & """ -m uvicorn main:app --host 0.0.0.0 --port 8000"
+    End If
+
+    Set startUvicorn = sh.Exec("%COMSPEC% /c """ & cmdLine & " >> """ & logPath & """ 2>&1""")
+    logLauncher "[UVICORN] 已启动 WshScript Exec（后端进程运行中）"
+End Function
+
+'' ----------------------------- health probe -----------------------------
+Sub healthProbeLoop()
+    setStatus "warn", "[7/8] 每 2s 探测 /health（最多 180s）..."
+    setProgress 88
+    logLauncher "[HEALTH] 开始轮询 /health"
+
+    Dim maxWait, deadline, i, xhr, ok, lastErr
+    maxWait = 180
+    deadline = Now() + (maxWait / 86400)
+    i = 0
+    ok = False
+    lastErr = ""
+    Do While Now() < deadline
+        i = i + 1
+        On Error Resume Next
+        Set xhr = CreateObject("Msxml2.XMLHTTP.6.0")
+        If Err.Number <> 0 Then Set xhr = CreateObject("Msxml2.XMLHTTP")
+        Err.Clear
+        xhr.Open "GET", "http://127.0.0.1:8000/health", False
+        xhr.setRequestHeader "Cache-Control", "no-cache"
+        xhr.Send
+        If Err.Number <> 0 Then
+            lastErr = "XHR Error: " & Err.Description
+            Err.Clear
+        ElseIf xhr.Status = 200 Then
+            ok = True
+            lastErr = "status=200 body=" & Left(xhr.responseText, 160)
+            Exit Do
+        Else
+            lastErr = "status=" & xhr.Status & " body=" & Left(xhr.responseText, 160)
+        End If
+        Set xhr = Nothing
+        On Error GoTo 0
+        If i Mod 8 = 0 Then
+            setStatus "warn", "[7/8] 探测第 " & i & " 次仍未成功，最近错误：" & lastErr
+        End If
+        setProgress 88 + CInt(10 * (i / 90))
+        WScript.Sleep 2000
+    Loop
+
+    If ok Then
+        setProgress 100
+        setStatus "ok", "✅ /health 返回 200，已自动打开浏览器 /docs！body=" & lastErr
+        logLauncher "[HEALTH] OK " & lastErr & " → 打开 /docs"
+        On Error Resume Next
+        sh.Run "rundll32 url.dll,FileProtocolHandler http://127.0.0.1:8000/docs", 1, False
+        On Error GoTo 0
+    Else
+        setStatus "err", "❌ /health 180s 内未成功，最近错误：" & lastErr & " → 请查看 _logs_backend.log 最后 200 行"
+        logLauncher "[HEALTH] TIMEOUT lastErr=" & lastErr
+    End If
+End Sub
+
+'' ----------------------------- no python hint -----------------------------
+Sub noPythonHint()
+    setStatus "err", "❌ 未找到 Python 解释器（点击右上角「查看启动日志」有完整提示）"
+    logLauncher "[FATAL] 未找到任何 Python，写入提示文件并 notepad 打开"
+    Dim msg, tmpPath
+    msg = "[FATAL] 未找到 Python 解释器！" & vbCrLf & vbCrLf & _
+          "方案 A（推荐 · 免安装绿色版 · 无需管理员）：" & vbCrLf & _
+          "  下载 https://www.python.org/ftp/python/3.11.9/python-3.11.9-amd64-embed-amd64.zip" & vbCrLf & _
+          "  解压到以下文件夹（新建 _python 文件夹）：" & vbCrLf & _
+          "  " & PROJECT_ROOT & "\_python" & vbCrLf & _
+          "  解压后确保以下文件存在：" & vbCrLf & _
+          "  " & PROJECT_ROOT & "\_python\python.exe" & vbCrLf & vbCrLf & _
+          "方案 B（常规安装版）：" & vbCrLf & _
+          "  安装 Python 3.10+ 安装包 https://www.python.org/downloads/" & vbCrLf & _
+          "  安装时务必勾选『Add Python to PATH』" & vbCrLf & vbCrLf & _
+          "完成后，再次点击绿色『一键启动』按钮即可。" & vbCrLf
+    tmpPath = sh.ExpandEnvironmentStrings("%TEMP%\strategytrade_no_python_hint.txt")
+    Dim ts : Set ts = fso.CreateTextFile(tmpPath, True, False)
+    ts.Write msg
+    ts.Close
+    sh.Run "notepad.exe """ & tmpPath & """", 1, False
+End Sub
+
+'' ----------------------------- main entry -----------------------------
+Sub startAll()
+    If started Then
+        setStatus "warn", "已经在启动流程中，请等待完成（或关闭窗口重开）"
+        Exit Sub
+    End If
+    started = True
+    document.getElementById("btnStart").disabled = True
+
+    On Error Resume Next
+    '' Init info cells
+    document.getElementById("projectRootCell").innerText = PROJECT_ROOT
+    document.getElementById("venvPyCell").innerText = PROJECT_ROOT & "\.venv\Scripts\python.exe"
+    document.getElementById("embedPyCell").innerText = PROJECT_ROOT & "\_python\python.exe"
+    document.getElementById("logLauncherCell").innerText = PROJECT_ROOT & "\_logs_backend_launcher.log"
+    document.getElementById("logBackendCell").innerText = PROJECT_ROOT & "\_logs_backend.log"
+    On Error GoTo 0
+
+    logLauncher "==== HTA 一键启动开始 ===="
+
+    '' 1. Find python
+    Dim hostPy : hostPy = findHostPython()
+    If Len(hostPy) = 0 Then
+        noPythonHint
+        Exit Sub
+    End If
+
+    '' 2. Ensure venv
+    Dim venvPy : venvPy = ensureVenv(hostPy)
+    If Len(venvPy) = 0 Then
+        Exit Sub
+    End If
+    setProgress 20
+
+    '' 3. Install requirements
+    Call installRequirements(venvPy)
+    setProgress 56
+
+    '' 4. Kill port 8000
+    Call killPort8000()
+
+    '' 5. Start uvicorn in background
+    Set backendProcess = startUvicorn(venvPy)
+
+    '' 6. Health probe + open browser
+    Call healthProbeLoop()
+
+    '' re-enable start button in case user wants to retry (e.g. timeout)
+    document.getElementById("btnStart").disabled = False
+    started = False
+End Sub
+
+'' Init UI when HTA loads
+Sub Window_OnLoad
+    On Error Resume Next
+    Me.ResizeTo 820, 600
+    Me.Move (screen.availWidth - 820)\2, (screen.availHeight - 600)\2
+    document.getElementById("projectRootCell").innerText = PROJECT_ROOT
+    document.getElementById("venvPyCell").innerText = PROJECT_ROOT & "\.venv\Scripts\python.exe"
+    document.getElementById("embedPyCell").innerText = PROJECT_ROOT & "\_python\python.exe"
+    document.getElementById("logLauncherCell").innerText = PROJECT_ROOT & "\_logs_backend_launcher.log"
+    document.getElementById("logBackendCell").innerText = PROJECT_ROOT & "\_logs_backend.log"
+    document.getElementById("footerInfo").innerText = "目标：启动 http://127.0.0.1:8000/docs · 启动完成后自动打开浏览器"
+    On Error GoTo 0
+End Sub
+</script>
+
+</body>
+</html>

@@ -1,0 +1,39 @@
+fastapi==0.111.0
+uvicorn[standard]==0.30.1
+sqlalchemy==2.0.30
+pymysql==1.1.0
+cryptography==42.0.7
+alembic==1.13.1
+python-dotenv==1.0.1
+pydantic==2.7.1
+pydantic-settings==2.2.1
+pyjwt==2.8.0
+passlib[bcrypt]==1.7.4
+python-multipart==0.0.9
+redis==5.0.4
+celery==5.4.0
+apscheduler==3.10.4
+aiofiles==23.2.1
+httpx==0.27.0
+requests==2.32.2
+websockets==12.0
+pandas==2.2.2
+numpy==1.26.4
+# TA-Lib 可选，不强制；未安装时指标引擎自动退化到 NumPy 自研实现
+# TA-Lib==0.4.28
+# ccxt 可选；自带币安/OKX 封装（有 TP/SL 子账号支持），缺省也能运营
+# ccxt==4.3.54
+# python-binance 可选；不装也能走自封装 REST
+# python-binance==1.0.19
+openpyxl==3.1.2
+openai==1.30.1
+beautifulsoup4==4.12.3
+lxml==5.2.2
+textblob==0.18.0.post0
+schedule==1.2.2
+loguru==0.7.2
+email-validator==2.1.1
+# 国际新闻情绪 VADER（轻量级，专门针对金融/新闻标题英文语料）
+vaderSentiment==3.3.2
+# feedparser：RSS/Atom 解析
+feedparser==6.0.11

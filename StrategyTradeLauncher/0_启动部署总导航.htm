@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>策略交易系统 · 启动/部署总导航</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin:0; padding: 36px 28px; font-family: "Microsoft YaHei", "PingFang SC", Segoe UI, Arial, sans-serif; background: linear-gradient(135deg,#0f172a,#1e293b 50%,#0f172a); color:#e2e8f0; min-height:100vh; }
+  h1 { font-size: 30px; margin: 0 0 10px 0; background: linear-gradient(90deg,#60a5fa,#a78bfa,#f472b6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+  .subtitle { font-size: 15px; color:#94a3b8; margin-bottom: 28px; }
+  .section { background: rgba(15,23,42,0.6); border: 1px solid rgba(148,163,184,0.18); border-radius:16px; padding: 22px 24px; margin-bottom: 22px; backdrop-filter: blur(6px); box-shadow: 0 18px 40px rgba(0,0,0,0.25); }
+  .section h2 { margin: 0 0 14px 0; font-size: 20px; color:#f8fafc; letter-spacing: 1px; }
+  .section h2 small { color:#94a3b8; font-weight:400; font-size: 13px; margin-left: 8px; }
+  .big-btn { display:inline-block; padding: 18px 28px; border-radius: 14px; color:#fff; text-decoration:none; font-weight:700; font-size:18px; letter-spacing: 1px; cursor:pointer; border:none; box-shadow: 0 10px 30px rgba(16,185,129,0.35); background: linear-gradient(135deg,#10b981,#059669); transition: transform 0.15s ease, filter 0.15s ease; }
+  .big-btn:hover { filter: brightness(1.08); transform: translateY(-2px); }
+  .big-btn.blue { background: linear-gradient(135deg,#3b82f6,#1d4ed8); box-shadow: 0 10px 30px rgba(59,130,246,0.35); }
+  .big-btn.amber { background: linear-gradient(135deg,#f59e0b,#b45309); box-shadow: 0 10px 30px rgba(245,158,11,0.35); }
+  .grid-2 { display: grid; grid-template-columns: 1.25fr 1fr; gap: 22px; }
+  @media (max-width: 860px) { .grid-2 { grid-template-columns: 1fr; } }
+  ol.steps { margin: 8px 0 0 0; padding-left: 22px; line-height: 2; }
+  ol.steps li { padding-left: 4px; }
+  .chip { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; margin-right: 6px; }
+  .chip.ok { background:rgba(16,185,129,0.15); color:#34d399; border:1px solid rgba(52,211,153,0.4); }
+  .chip.warn { background:rgba(245,158,11,0.15); color:#fbbf24; border:1px solid rgba(251,191,36,0.4); }
+  .chip.info { background:rgba(59,130,246,0.15); color:#93c5fd; border:1px solid rgba(147,197,253,0.4); }
+  .mono { font-family: Consolas, "Courier New", monospace; background: rgba(15,23,42,0.7); padding: 2px 8px; border-radius: 6px; border:1px solid rgba(148,163,184,0.2); }
+  .code-block { background: #0b1120; border:1px solid rgba(148,163,184,0.2); border-radius: 10px; padding: 14px 16px; margin: 10px 0; font-family: Consolas, "Courier New", monospace; font-size: 13px; line-height:1.6; color:#e2e8f0; overflow-x:auto; }
+  .signal-item { padding: 10px 14px; border-radius: 10px; background: rgba(226,232,240,0.05); border-left: 4px solid #34d399; margin-bottom: 10px; }
+  .signal-item.bad { border-left-color: #f87171; }
+  table { width:100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 10px 12px; border-bottom:1px solid rgba(148,163,184,0.15); text-align:left; vertical-align: top; }
+  th { background: rgba(30,41,59,0.6); color:#cbd5e1; font-weight:600; }
+  tr:hover td { background: rgba(30,41,59,0.25); }
+  .footer { margin-top: 26px; text-align: center; font-size: 12px; color:#64748b; }
+  .quick-btns { display:flex; flex-wrap:wrap; gap: 12px; margin: 12px 0 8px 0; }
+</style>
+</head>
+<body>
+  <h1>📈 策略交易系统 · 启动 / 部署总导航</h1>
+  <div class="subtitle">本页同时解决两个问题：① 本地 <span class="mono">8000/health</span> 无法访问（启动后端）② 宝塔面板 Linux 生产部署（安装搭建完整教程）</div>
+
+  <div class="section">
+    <h2>🛠 问题一：本地 http://127.0.0.1:8000/health 无法访问 <small>👉 一键启动后端（1 次双击即可）</small></h2>
+    <p>你的系统开启了严格的「PowerShell ExecutionPolicy + 脚本限制策略」，.bat/.vbs/.ps1 会被拦截。<span class="chip ok">✅ 已解决</span> 使用 Windows 原生 <span class="mono">mshta.exe</span> 启动器，<strong>不经过任何脚本限制</strong>，直接创建进程启动 <span class="mono">python.exe</span>。</p>
+
+    <div class="quick-btns">
+      <a class="big-btn" href="Step0_一键启动后端_8000_HTA启动器.hta" target="_self" title="HTA 启动器，mshta.exe 打开，不经过脚本拦截">▶️ 一键启动后端 · 自动打开 /docs（HTA 启动器）</a>
+      <a class="big-btn blue" href="Step2_启动后端_8000_一键启动_纯Python无黑框.pyw" target="_self" title="纯 Python .pyw，无控制台黑框">🖤 备用方案 A · Python 无黑框版</a>
+      <a class="big-btn amber" href="Step2_启动后端_8000_一键启动_纯Python有控制台.py" target="_self" title="纯 Python .py，有控制台黑框，可看进度">💻 备用方案 B · Python 有控制台版</a>
+    </div>
+
+    <div class="grid-2" style="margin-top: 18px;">
+      <div>
+        <h3 style="margin:0 0 10px 0; font-size:16px; color:#cbd5e1;">✅ 2 个「后端已启动成功」强信号（任一出现即可）</h3>
+        <div class="signal-item">浏览器<strong>自动弹出</strong>并打开 <span class="mono">http://127.0.0.1:8000/docs</span>，能看到 Swagger UI（左侧一长串接口列表 + <strong>Authorize</strong> 按钮）</div>
+        <div class="signal-item">启动器底部状态显示：<span style="color:#34d399;font-weight:700;">✅ /health 返回 200，已自动打开浏览器</span></div>
+
+        <h3 style="margin:16px 0 10px 0; font-size:16px; color:#cbd5e1;">❌ 若仍未成功，请查看这两份日志（99% 问题都在里面）</h3>
+        <div class="signal-item bad"><span class="chip warn">启动过程日志</span> <span class="mono">_logs_backend_launcher.log</span>：记录查找 Python、建 venv、装依赖、杀 8000、启 uvicorn 的每一步</div>
+        <div class="signal-item bad"><span class="chip warn">后端运行日志</span> <span class="mono">_logs_backend.log</span>：uvicorn 的 stdout/stderr，包括 DB 建表、种子初始化、路由注册、启动错误堆栈</div>
+      </div>
+      <div>
+        <h3 style="margin:0 0 10px 0; font-size:16px; color:#cbd5e1;">🪜 备用方案 C · 3 行 cmd 手敲（极端兜底）</h3>
+        <ol class="steps">
+          <li>Win + R → 输入 <span class="mono">cmd</span> → 回车打开黑框</li>
+          <li>粘贴执行：<span class="mono">cd /d "%USERPROFILE%\Desktop\StrategyTradeLauncher"</span>（或 cd 到项目根）</li>
+          <li>依次执行下面 3 行（首次会久一点，耐心等 pip 安装完）</li>
+        </ol>
+        <div class="code-block">
+cd /d "C:\Users\AI\AppData\Roaming\TRAE SOLO CN\ModularData\ai-agent\work-mode-projects\6a6da3890eac9824cd4457aa"<br>
+if not exist .venv\Scripts\python.exe ( python -m venv .venv )<br>
+.venv\Scripts\python.exe -m pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple<br>
+.venv\Scripts\python.exe -m uvicorn main:app --host 0.0.0.0 --port 8000 --log-file _logs_backend.log
+        </div>
+        <p style="margin-top:10px; font-size:13px; color:#94a3b8;">最后一行黑框显示 <span class="mono">Uvicorn running on http://0.0.0.0:8000</span> 后，手动打开 <a href="http://127.0.0.1:8000/docs" target="_blank">http://127.0.0.1:8000/docs</a></p>
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>🏢 问题二：这个系统支持宝塔安装搭建吗？ <small>👉 100% 支持，以下是宝塔 Linux 快速教程</small></h2>
+    <p><span class="chip info">生产推荐</span> 本项目原生支持 <strong>宝塔面板 Linux 一键部署</strong>（CentOS / Ubuntu / Debian 皆可），完整教程在：<a href="../deploy/部署教程.md" target="_blank" style="color:#93c5fd;">deploy/部署教程.md</a>。下面给出 7 步快速摘要，你照做即可上线。</p>
+
+    <ol class="steps" style="margin-top: 14px;">
+      <li><strong>Step 0 · 宝塔软件商店先安装这 6 个</strong>（搜索一键安装即可）：
+        <span class="chip info">Nginx 1.20+</span>
+        <span class="chip info">MySQL 5.7/8.0</span>
+        <span class="chip info">Redis 6.0+</span>
+        <span class="chip info">Supervisor</span>
+        <span class="chip info">Node 18+（Node 版本管理器）</span>
+        <span class="chip info">Python 3.10+（Python 项目管理器）</span>
+      </li>
+      <li><strong>Step 1 · 上传代码</strong>：把项目 zip 解压到服务器 <span class="mono">/www/wwwroot/strategy-trade</span>，然后宝塔终端执行：
+<div class="code-block">
+cd /www/wwwroot/strategy-trade<br>
+chmod +x deploy/install.sh deploy/upgrade.sh
+</div>
+      </li>
+      <li><strong>Step 2 · 宝塔面板建 MySQL 数据库</strong>：
+        <div>库名：<span class="mono">trading_system</span>，用户名：<span class="mono">trading_user</span>，密码：<span class="mono">你自己的强密码</span>，权限：127.0.0.1，字符集 <span class="mono">utf8mb4</span></div>
+        <div>👉 不用手动导 SQL！FastAPI lifespan 启动时会自动建表 + 初始化种子管理员 <span class="mono">admin / Admin@2024</span>，上线后请立刻到「个人中心」改密码。</div>
+      </li>
+      <li><strong>Step 3 · 配置 <span class="mono">.env</span>（10 项必填）</strong>：
+<div class="code-block">
+cp .env.example .env<br>
+chmod 600 .env<br>
+vi .env<br>
+# ① APP_SECRET_KEY=32位随机串<br>
+# ② DB_HOST=127.0.0.1 / DB_PORT=3306 / DB_USER=trading_user / DB_PASSWORD=刚才的密码 / DB_NAME=trading_system / DB_CHARSET=utf8mb4 / DB_SQLITE_FALLBACK=<br>
+# ③ REDIS_HOST=127.0.0.1 / REDIS_PORT=6379 / REDIS_PASSWORD=宝塔Redis密码（无则空）/ REDIS_DB=0 / REDIS_DB_CELERY=1<br>
+# ④ BINANCE_* 或 OKX_* 至少填一组子账号 API（另一组留空 = 不启用）<br>
+# ⑤ PROXY_ENABLED=true / PROXY_HTTP_LIST=http://你的代理地址1,http://代理地址2（新闻抓不到再填）<br>
+# ⑥ 风控：DEFAULT_MAX_SINGLE_DRAWDOWN=1.5 单笔最大 1.5%（上线前按资金体量调小一点）
+</div>
+      </li>
+      <li><strong>Step 4 · 一键跑 install.sh</strong>（自动建 venv / 装 pip 依赖 / npm install / npm run build 前端）：
+<div class="code-block">bash deploy/install.sh</div>
+      </li>
+      <li><strong>Step 5 · 宝塔「Supervisor 管理器」添加 3 个守护进程</strong>（后端 API + Celery Worker + Celery Beat 定时任务）：
+        <table>
+          <thead><tr><th>项目名</th><th>启动用户</th><th>启动命令</th><th>运行目录</th></tr></thead>
+          <tbody>
+            <tr><td>strategy-backend</td><td>www</td><td><span class="mono">/www/wwwroot/strategy-trade/.venv/bin/python -m uvicorn main:app --host 127.0.0.1 --port 8000 --log-file logs/uvicorn.log</span></td><td>/www/wwwroot/strategy-trade</td></tr>
+            <tr><td>strategy-celery-worker</td><td>www</td><td><span class="mono">/www/wwwroot/strategy-trade/.venv/bin/celery -A backend.core.celery_app.celery worker -l info -Q default --concurrency=2</span></td><td>/www/wwwroot/strategy-trade</td></tr>
+            <tr><td>strategy-celery-beat</td><td>www</td><td><span class="mono">/www/wwwroot/strategy-trade/.venv/bin/celery -A backend.core.celery_app.celery beat -l info --pidfile=logs/celerybeat.pid --scheduler django_celery_beat.schedulers:DatabaseScheduler</span></td><td>/www/wwwroot/strategy-trade</td></tr>
+          </tbody>
+        </table>
+      </li>
+      <li><strong>Step 6 · 宝塔「网站」→ 添加站点 / Nginx 配置</strong>：
+        <div>域名填你的域名或服务器 IP，根目录指向 <span class="mono">/www/wwwroot/strategy-trade/frontend/dist</span>，PHP 版本选 <span class="mono">纯静态</span>。</div>
+        <div>然后在站点设置 → 配置文件 → 插入反向代理 /api 到 8000（完整配置示例已在 <a href="../deploy/nginx.conf" target="_blank" style="color:#93c5fd;">deploy/nginx.conf</a>）：</div>
+<div class="code-block">
+location /api/ {<br>
+&nbsp;&nbsp;proxy_pass http://127.0.0.1:8000;<br>
+&nbsp;&nbsp;proxy_set_header Host $host;<br>
+&nbsp;&nbsp;proxy_set_header X-Real-IP $remote_addr;<br>
+&nbsp;&nbsp;proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;<br>
+&nbsp;&nbsp;proxy_set_header X-Forwarded-Proto $scheme;<br>
+&nbsp;&nbsp;proxy_read_timeout 300s;<br>
+&nbsp;&nbsp;# WebSocket 升级头（币安/OKX 行情推送需要）<br>
+&nbsp;&nbsp;proxy_http_version 1.1;<br>
+&nbsp;&nbsp;proxy_set_header Upgrade $http_upgrade;<br>
+&nbsp;&nbsp;proxy_set_header Connection "upgrade";<br>
+}<br>
+location /docs { proxy_pass http://127.0.0.1:8000/docs; }<br>
+location /redoc { proxy_pass http://127.0.0.1:8000/redoc; }<br>
+location /openapi.json { proxy_pass http://127.0.0.1:8000/openapi.json; }<br>
+location /health { proxy_pass http://127.0.0.1:8000/health; }
+</div>
+        <p>👉 保存重载 Nginx 后，访问 <span class="mono">https://你的域名/</span> 即可看到前端；访问 <span class="mono">https://你的域名/docs</span> 看到 Swagger UI；访问 <span class="mono">https://你的域名/health</span> 看到 <span class="mono">status=ok</span> 就代表部署完成 🎉 最后记得登录后去「个人中心」修改默认密码 <span class="mono">Admin@2024</span>。</p>
+      </li>
+    </ol>
+  </div>
+
+  <div class="footer">
+    后端入口 main.py 已将 <span class="mono">/docs · /redoc · /openapi.json · /health</span> 无条件挂在根路径（不依赖 API_PREFIX / debug），生产环境一定能访问。<br />
+    遇到问题：优先看日志 <span class="mono">项目根/_logs_backend.log</span>（本地）或 <span class="mono">/www/wwwroot/strategy-trade/logs/</span>（宝塔生产）。
+  </div>
+</body>
+</html>

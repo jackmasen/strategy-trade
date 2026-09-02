@@ -1,0 +1,37 @@
+策略交易系统 · 本地开发日常启动速记
+========================================
+
+项目根：C:\\Users\\AI\\AppData\\Roaming\\TRAE SOLO CN\\ModularData\\ai-agent\\work-mode-projects\\6a6da3890eac9824cd4457aa
+
+一、启动后端（端口 8000，每次开发开一个窗口）
+  方式A：命令行（有日志，推荐）
+    cd /d C:\\Users\\AI\\AppData\\Roaming\\TRAE SOLO CN\\ModularData\\ai-agent\\work-mode-projects\\6a6da3890eac9824cd4457aa
+    .venv\Scripts\activate.bat
+    set PYTHONPATH=C:\\Users\\AI\\AppData\\Roaming\\TRAE SOLO CN\\ModularData\\ai-agent\\work-mode-projects\\6a6da3890eac9824cd4457aa
+    uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  方式B：无黑框（后台常驻）
+    双击 StrategyTradeLauncher\Step2_启动后端_8000_一键启动_纯Python无黑框.pyw
+
+二、启动前端（端口 5173，另开一个窗口）
+    cd /d C:\\Users\\AI\\AppData\\Roaming\\TRAE SOLO CN\\ModularData\\ai-agent\\work-mode-projects\\6a6da3890eac9824cd4457aa\frontend
+    npm run dev
+
+三、快速自检
+  · 后端健康： http://127.0.0.1:8000/health
+  · 接口文档： http://127.0.0.1:8000/docs
+  · 安装向导： http://127.0.0.1:8000/install   （首次）
+  · 前端页面： http://127.0.0.1:5173
+  · 默认账号： admin    密码： Admin@2024   （务必立刻改！）
+
+四、环境诊断
+    py -3 local_env_diagnose.py
+    （跑完看项目根 _local_env_diagnosis.json/.log）
+
+五、新版本 → 打 zip → 上传宝塔
+    双击桌面 / 项目根：0_一键打包_双击我→zip自动出现在桌面.pyw
+
+六、新版本归档到 releases/ （推荐每次发版做一次）
+  1) git tag -a v0.1.1 -m "发布 v0.1.1 xxx"
+  2) 桌面 zip 拷到 releases/v0.1.1_YYYYMMDD/
+  3) git archive -o releases/v0.1.1_YYYYMMDD/源代码快照_v0.1.1.zip HEAD

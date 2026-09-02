@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>策略交易系统 - 综合测试分析报告</title>
+<style>
+:root {
+  --bg: #0F1A24; --card: #152330; --border: #1E2E41;
+  --green: #25D07D; --red: #F87171; --yellow: #FBBF24;
+  --blue: #60A5FA; --text: #D8E2EC; --text-dim: #6B7C90;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: -apple-system, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); padding: 24px; }
+h1 { color: var(--green); font-size: 24px; margin-bottom: 8px; }
+h2 { color: var(--blue); font-size: 18px; margin: 24px 0 12px; border-bottom: 1px solid var(--border); padding-bottom: 8px; }
+.subtitle { color: var(--text-dim); font-size: 13px; margin-bottom: 24px; }
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.stat { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 16px; text-align: center; }
+.stat-val { font-size: 28px; font-weight: 700; }
+.stat-label { font-size: 12px; color: var(--text-dim); margin-top: 4px; }
+.green { color: var(--green); } .red { color: var(--red); } .yellow { color: var(--yellow); } .blue { color: var(--blue); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { background: #1A2B3C; padding: 10px; text-align: left; color: var(--text-dim); border-bottom: 1px solid var(--border); }
+td { padding: 10px; border-bottom: 1px solid var(--border); }
+tr:hover td { background: #1A2B3C; }
+.tag { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.tag-ok { background: rgba(37,208,125,0.15); color: var(--green); }
+.tag-fix { background: rgba(251,191,36,0.15); color: var(--yellow); }
+.tag-fail { background: rgba(248,113,113,0.15); color: var(--red); }
+.bar-chart { margin: 8px 0; }
+.bar-bg { background: var(--border); border-radius: 4px; height: 20px; overflow: hidden; }
+.bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; padding: 0 8px; font-size: 11px; color: #fff; }
+ul { padding-left: 20px; } li { margin: 6px 0; line-height: 1.6; }
+.section { margin-bottom: 32px; }
+.footer { text-align: center; color: var(--text-dim); font-size: 12px; margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border); }
+</style>
+</head>
+<body>
+
+<h1>策略交易系统 - 综合测试分析报告</h1>
+<p class="subtitle">测试时间: 2026-09-01 | 测试环境: Windows 11 + Python + Vue3 + FastAPI + SQLite</p>
+
+<div class="section">
+<h2>一、修复的问题汇总</h2>
+<div class="grid">
+<div class="stat"><div class="stat-val green">9</div><div class="stat-label">已修复问题</div></div>
+<div class="stat"><div class="stat-val blue">11</div><div class="stat-label">回测组数</div></div>
+<div class="stat"><div class="stat-val yellow">3</div><div class="stat-label">待优化项</div></div>
+<div class="stat"><div class="stat-val green">14</div><div class="stat-label">API端点正常</div></div>
+</div>
+
+<table style="margin-top:16px;">
+<tr><th>#</th><th>问题</th><th>严重程度</th><th>状态</th><th>修复说明</th></tr>
+<tr><td>1</td><td>回测引擎0交易</td><td><span class="tag tag-fail">严重</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>SMA索引对齐错误: <code>_calc_sma()</code>返回紧凑列表但循环按完整K线索引访问，导致金叉/死叉永远不触发</td></tr>
+<tr><td>2</td><td>K线时间戳解析失败</td><td><span class="tag tag-fail">严重</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>Candle对象有<code>open_time_ms</code>但代码检查<code>timestamp</code>，导致所有K线被日期范围过滤掉</td></tr>
+<tr><td>3</td><td>权益曲线MaxDD=0</td><td><span class="tag tag-fail">高</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>权益曲线在交易结束后用最终capital构建，改为从交易记录逐笔计算</td></tr>
+<tr><td>4</td><td>EMV策略capital未初始化</td><td><span class="tag tag-fail">高</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>EMV分支使用<code>capital</code>变量但未初始化，且只扣手续费不扣保证金</td></tr>
+<tr><td>5</td><td>快速切换页面报错</td><td><span class="tag tag-fix">中</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>组件卸载后异步请求仍执行，添加全局错误过滤器+Vue errorHandler+onErrorCaptured</td></tr>
+<tr><td>6</td><td>ResizeObserver错误弹窗</td><td><span class="tag tag-fix">中</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>ECharts/Element Plus布局变化触发的无害错误被全屏显示</td></tr>
+<tr><td>7</td><td>Xray状态不同步</td><td><span class="tag tag-fix">中</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>API返回<code>xray_available</code>但前端检查<code>data.installed</code>，字段名不匹配</td></tr>
+<tr><td>8</td><td>回测参数未自动填充</td><td><span class="tag tag-fix">中</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>创建回测时未从策略配置加载TP/SL/杠杆/仓位比例等参数</td></tr>
+<tr><td>9</td><td>MA/RSI策略硬编码参数</td><td><span class="tag tag-fix">低</span></td><td><span class="tag tag-ok">已修复</span></td>
+<td>杠杆固定3x、止损5%硬编码，改为从策略参数读取</td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>二、综合回测结果</h2>
+
+<h3 style="color:var(--green); margin:16px 0 8px;">1年期回测 (2025-09 ~ 2026-09)</h3>
+<table>
+<tr><th>ID</th><th>配置</th><th>交易数</th><th>收益率</th><th>胜率</th><th>最大回撤</th><th>夏普</th><th>评价</th></tr>
+<tr><td>29</td><td>BTC 4h 策略1</td><td>71</td><td class="red">-0.80%</td><td>40.8%</td><td>2.72%</td><td>-0.51</td><td><span class="tag tag-fail">不佳</span></td></tr>
+<tr><td>20</td><td>ETH 4h 策略1</td><td>71</td><td class="green">+5.15%</td><td>53.5%</td><td>-</td><td>-</td><td><span class="tag tag-ok">良好</span></td></tr>
+<tr><td>21</td><td>BTC 1h 策略5</td><td>267</td><td class="red">-11.99%</td><td>35.2%</td><td>-</td><td>-</td><td><span class="tag tag-fail">过度交易</span></td></tr>
+<tr><td>22</td><td>SOL 4h 策略6</td><td>76</td><td class="red">-0.65%</td><td>42.1%</td><td>-</td><td>-</td><td><span class="tag tag-fail">不佳</span></td></tr>
+<tr><td>23</td><td>BTC 1d 策略1</td><td>14</td><td class="green">+1.39%</td><td>50.0%</td><td>-</td><td>-</td><td><span class="tag tag-ok">稳定</span></td></tr>
+<tr style="background:rgba(37,208,125,0.05);"><td>28</td><td><b>多币种 4h 策略2</b></td><td>216</td><td class="green"><b>+8.90%</b></td><td>47.2%</td><td>9.83%</td><td>0.13</td><td><span class="tag tag-ok">最佳</span></td></tr>
+</table>
+
+<h3 style="color:var(--blue); margin:16px 0 8px;">6个月回测 (2026-03 ~ 2026-09)</h3>
+<table>
+<tr><th>ID</th><th>配置</th><th>交易数</th><th>收益率</th><th>胜率</th><th>评价</th></tr>
+<tr><td>24</td><td>BTC 4h 策略1</td><td>39</td><td class="green">+0.84%</td><td>51.3%</td><td><span class="tag tag-ok">稳定</span></td></tr>
+<tr><td>25</td><td>ETH 4h 策略1</td><td>39</td><td class="green">+0.43%</td><td>48.7%</td><td><span class="tag tag-ok">稳定</span></td></tr>
+</table>
+
+<h3 style="color:var(--yellow); margin:16px 0 8px;">3个月回测 (2026-06 ~ 2026-09)</h3>
+<table>
+<tr><th>ID</th><th>配置</th><th>交易数</th><th>收益率</th><th>胜率</th><th>评价</th></tr>
+<tr><td>26</td><td>BTC 4h 策略1</td><td>18</td><td class="red">-0.16%</td><td>50.0%</td><td><span class="tag tag-fix">持平</span></td></tr>
+<tr><td>27</td><td>ETH 1h 策略2</td><td>67</td><td class="red">-2.81%</td><td>43.3%</td><td><span class="tag tag-fail">不佳</span></td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>三、关键发现</h2>
+<div class="card">
+<h3 style="color:var(--green); margin-bottom:12px;">表现最佳</h3>
+<ul>
+<li><b>多币种分散策略(策略2, 4h, 1年) +8.9%</b> — BTC+ETH+SOL分散投资显著降低单一品种风险</li>
+<li><b>ETH 4h 策略1 +5.15%</b> — ETH在4h周期表现优于BTC，胜率53.5%</li>
+<li><b>BTC 1d 策略1 +1.39%</b> — 日线交易频率低但稳定，适合保守型运营</li>
+</ul>
+</div>
+
+<div class="card">
+<h3 style="color:var(--red); margin-bottom:12px;">表现最差</h3>
+<ul>
+<li><b>BTC 1h 策略5 -11.99%</b> — 1h周期过度交易(267笔)，手续费侵蚀严重，胜率仅35.2%</li>
+<li><b>ETH 1h 策略2(3月) -2.81%</b> — 短周期在震荡市中频繁假突破</li>
+</ul>
+</div>
+
+<div class="card">
+<h3 style="color:var(--blue); margin-bottom:12px;">规律总结</h3>
+<ul>
+<li><b>4h周期是最佳平衡点</b> — 交易频率适中(39-76笔/6月-1年)，胜率40-53%</li>
+<li><b>1h周期过度交易</b> — 短期信号噪音大，手续费占比过高</li>
+<li><b>1d周期适合保守运营</b> — 交易少但胜率稳定(50%)</li>
+<li><b>多币种分散有效</b> — 组合收益(+8.9%)远优于单币种(-0.8%~+5.15%)</li>
+<li><b>ETH整体优于BTC</b> — 4h周期ETH胜率(53.5%)高于BTC(40.8%)</li>
+</ul>
+</div>
+</div>
+
+<div class="section">
+<h2>四、API端点测试</h2>
+<table>
+<tr><th>菜单</th><th>API路径</th><th>状态</th></tr>
+<tr><td>交易所子账号</td><td>/api/v1/exchange/accounts</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>策略管理</td><td>/api/v1/strategies</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>当前持仓</td><td>/api/v1/trades/positions</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>交易订单</td><td>/api/v1/trades/orders</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>新闻情绪</td><td>/api/v1/news</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>AI分析记录</td><td>/api/v1/ai/records</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>历史回测</td><td>/api/v1/backtests</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>风控摘要</td><td>/api/v1/risk/summary</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>财务报表</td><td>/api/v1/reports/dashboard</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>用户管理</td><td>/api/v1/users</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>系统信息</td><td>/api/v1/system/info</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>爬虫健康</td><td>/api/v1/news/crawler-health</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>Xray状态</td><td>/api/v1/settings/xray/status</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>AI预测</td><td>/api/v1/analytics/prediction</td><td><span class="tag tag-ok">OK</span></td></tr>
+<tr><td>账户余额</td><td>/api/v1/exchange/accounts/1/balance</td><td><span class="tag tag-ok">OK</span></td></tr>
+</table>
+</div>
+
+<div class="section">
+<h2>五、优化建议</h2>
+<div class="card">
+<h3 style="color:var(--green);">推荐运营方案</h3>
+<table>
+<tr><th>维度</th><th>推荐</th><th>原因</th></tr>
+<tr><td>交易周期</td><td><b>4h</b></td><td>交易频率适中，信号噪音低，胜率最高(40-53%)</td></tr>
+<tr><td>币种组合</td><td><b>BTC + ETH + SOL</b></td><td>多币种分散，1年收益+8.9%远优于单币种</td></tr>
+<tr><td>策略选择</td><td><b>策略2 (动态杠杆)</b></td><td>低分3x/中分5x/高分8x，兼顾安全与收益</td></tr>
+<tr><td>仓位比例</td><td><b>10%单仓</b></td><td>策略2的10%比策略1的5%收益更高，回撤可控(9.83%)</td></tr>
+<tr><td>避免</td><td><b>1h周期</b></td><td>267笔交易亏损-11.99%，手续费侵蚀严重</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3 style="color:var(--yellow);">系统优化项</h3>
+<ul>
+<li><b>AI分析配置</b> — 当前为离线模式(AI API未配置)，20-30%评分权重降级。建议配置AI API以提升预测准确性</li>
+<li><b>Polymarket集成</b> — 预测模型中10%的Polymarket权重未生效，建议接入以增强预测</li>
+<li><b>策略8杠杆异常</b> — 高分杠杆上限5x与中分相同，高分档位形同虚设</li>
+<li><b>SOL预测不稳定</b> — 方向在neutral/bullish间波动(34-38%置信度)，建议增加置信度阈值</li>
+<li><b>回测引擎增强</b> — 建议加入更多策略类型(布林带、MACD背离)和滑点模型</li>
+</ul>
+</div>
+
+<div class="card">
+<h3 style="color:var(--blue);">前端优化项</h3>
+<ul>
+<li>已添加<code>useSafeRequest</code>组合式函数，组件卸载时自动取消请求</li>
+<li>已添加全局错误过滤器，快速切换页面不再弹全屏错误</li>
+<li>建议后续逐步将各页面API调用迁移到<code>useSafeRequest</code></li>
+<li>建议添加<code>&lt;keep-alive&gt;</code>缓存常用页面，减少重复请求</li>
+</ul>
+</div>
+</div>
+
+<div class="footer">
+  策略交易系统 v1.2.0 | 综合测试报告 | 生成时间: 2026-09-01 02:00
+</div>
+
+</body>
+</html>

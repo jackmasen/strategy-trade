@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>策略交易系统 · 宝塔 WordPress 式一键搭建说明（Famous 5 分钟版）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:36px 26px 80px;font-family:"Microsoft YaHei","PingFang SC",Segoe UI,Arial,sans-serif;background:linear-gradient(135deg,#0b1220,#132039 55%,#0b1220);color:#e2e8f0}
+  .wrap{max-width:1080px;margin:0 auto}
+  h1{margin:0 0 8px;font-size:34px;background:linear-gradient(90deg,#60a5fa,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{color:#94a3b8;margin-bottom:30px;font-size:15px}
+  .card{background:rgba(15,23,42,.7);border:1px solid rgba(148,163,184,.18);border-radius:18px;padding:26px 30px;margin-bottom:24px;backdrop-filter:blur(8px);box-shadow:0 18px 50px rgba(0,0,0,.3)}
+  h2{margin:0 0 14px;font-size:22px;letter-spacing:.5px;color:#e0f2fe}
+  h3{font-size:17px;color:#93c5fd;margin:18px 0 10px}
+  p,.li,li{line-height:1.9;font-size:14.5px}
+  .li{display:flex;align-items:flex-start;gap:12px;margin:10px 0}
+  .li b{flex:0 0 auto;background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:4px 11px;border-radius:999px;font-size:13px;font-weight:700;letter-spacing:.4px;box-shadow:0 8px 20px rgba(16,185,129,.3)}
+  code,.mono{font-family:Consolas,"Courier New",monospace;background:#0b1120;border:1px solid rgba(148,163,184,.22);padding:2px 9px;border-radius:8px;color:#fde68a;word-break:break-all}
+  pre,.pre{font-family:Consolas,"Courier New",monospace;background:#050816;border:1px solid rgba(59,130,246,.3);border-radius:14px;padding:18px 20px;line-height:1.7;color:#cbd5e1;overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin:12px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+  .tip{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-left:5px solid #fbbf24;border-radius:12px;padding:14px 18px;margin:14px 0;color:#fde68a}
+  .ok{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.35);border-left:5px solid #10b981;border-radius:12px;padding:14px 18px;margin:14px 0;color:#a7f3d0}
+  .danger{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.35);border-left:5px solid #ef4444;border-radius:12px;padding:14px 18px;margin:14px 0;color:#fecaca}
+  .chip{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12px;font-weight:600;margin-right:6px}
+  .chip.ok{background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(52,211,153,.5)}
+  .chip.err{background:rgba(239,68,68,.2);color:#fca5a5;border:1px solid rgba(252,165,165,.5)}
+  .chip.info{background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid rgba(147,197,253,.5)}
+  .stepbox{counter-reset:step}
+  .step{counter-increment:step;position:relative;padding:18px 22px 18px 72px;border:1px solid rgba(148,163,184,.18);border-radius:16px;margin:14px 0;background:rgba(30,41,59,.55)}
+  .step::before{content:counter(step);position:absolute;left:18px;top:16px;width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,#3b82f6,#8b5cf6);color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;box-shadow:0 8px 24px rgba(59,130,246,.4)}
+  .btn{display:inline-block;padding:12px 22px;border-radius:14px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:700;letter-spacing:.5px;text-decoration:none;box-shadow:0 10px 28px rgba(16,185,129,.4)}
+  .btn2{display:inline-block;padding:12px 22px;border-radius:14px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.28);color:#fff;font-weight:600;text-decoration:none}
+  footer{margin-top:30px;text-align:center;font-size:12px;color:#64748b}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:8px}
+  th,td{padding:10px 12px;border-bottom:1px solid rgba(148,163,184,.18);text-align:left;vertical-align:top}
+  th{background:rgba(30,41,59,.7);color:#cbd5e1}
+  .kbd{background:#0b1120;border:1px solid #334155;border-bottom-width:3px;border-radius:8px;padding:2px 8px;font-family:Consolas,monospace;color:#fde68a;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>🏁 策略交易系统 · 宝塔 WordPress 式一键搭建</h1>
+<div class="sub">像装 WordPress 一样傻瓜：宝塔加网站 → 传 zip → 解压 → 访问域名自动进 <code>/install</code> 向导。<span class="chip info">Famous 5 分钟</span></div>
+
+<div class="ok">
+  ✅ 前置准备（一次性，之前装过就跳过）：<br>
+  宝塔面板 → 软件商店，确保已经安装：
+  <b>Nginx 任意版本</b> +
+  <b>Python 项目管理器</b>（或单独装 Python 3.10 / 3.11 / 3.12 任意）。<br>
+  （MySQL 8.x / 5.7 可选，第一次推荐直接勾选 <b>SQLite 零依赖</b>，不用建库。）
+</div>
+
+<!-- =========================================================== -->
+<div class="card">
+<h2>🔹 第一部分：宝塔 4 步把代码跑起来</h2>
+<div class="stepbox">
+
+<div class="step">
+  <h3 style="margin-top:0">添加站点（1 分钟）</h3>
+  <ul>
+    <li>宝塔左侧菜单 → <b>网站</b> → <b>添加站点</b></li>
+    <li>域名：填你的域名，例如 <code>trade.xxx.com</code>（没域名就填服务器公网 IP）</li>
+    <li>根目录：默认就行，如 <code>/www/wwwroot/trade.xxx.com</code></li>
+    <li>FTP / 数据库 / PHP：<span class="chip info">全关</span>—— PHP 选『不创建』，数据库选『不创建』。我们用 Python + FastAPI。</li>
+    <li>点 <b>提交</b>，站点就建好啦。</li>
+  </ul>
+</div>
+
+<div class="step">
+  <h3 style="margin-top:0">上传 onepress zip → 解压（1 分钟）</h3>
+  <ul>
+    <li>网站列表里找到刚加的站点，点击 <b>根目录</b> 进入文件管理</li>
+    <li>点 <b>上传</b> → 选打包好的 <code>strategy-trade-onepress-v1.0.0-xxxxxxxx.zip</code></li>
+    <li>上传完后 <b>右键 zip → 解压到当前目录</b>。解压后 <b>main.py 必须在站点根下</b>，不能嵌在二级目录里！</li>
+  </ul>
+  <div class="tip">
+    📌 验证解压对不对：站点根路径下，你应该能直接看到：<code>main.py</code>、<code>requirements.txt</code>、<code>backend/</code>、<code>frontend/</code>、<code>deploy/</code>、<code>.env.example</code>。
+    <br>如果你看到的是一个二级目录（例如 <code>strategy-trade-onepress-v1.0.0-xxx/main.py</code>），就<b>把二级目录里的所有文件剪切/移动到站根</b>。
+  </div>
+</div>
+
+<div class="step">
+  <h3 style="margin-top:0">启动后端（2 分钟，二选一，推荐 A）</h3>
+
+  <div class="grid2">
+    <div>
+      <h3>方案 A · 1 行 bash 脚本（最稳，宝塔新手推荐）</h3>
+      <p>点击站点 <b>终端</b> 按钮，或宝塔左侧 <b>终端</b>，进入站点根后粘贴：</p>
+<pre>cd /www/wwwroot/trade.xxx.com
+bash deploy/onepress-install.sh</pre>
+      <p>脚本会自动：找 Python 3.10+ → 建 venv → 清华源 pip install → 后台 nohup 起 uvicorn（端口 8000）→ 探测 /health。</p>
+      <p>看到最后一行的 <span class="chip ok">/health 探测返回 200</span> 就成功。</p>
+    </div>
+    <div>
+      <h3>方案 B · 宝塔「Python 项目管理器」GUI 启动</h3>
+      <p>适合不想用终端的朋友，全图形化：</p>
+      <table>
+        <thead><tr><th>字段</th><th>填什么</th></tr></thead>
+        <tbody>
+          <tr><td>项目名称</td><td><code>strategy-trade</code></td></tr>
+          <tr><td>项目路径</td><td><code>/www/wwwroot/trade.xxx.com</code></td></tr>
+          <tr><td>Python 版本</td><td>3.10 / 3.11 / 3.12 任意（没有就先装）</td></tr>
+          <tr><td>框架</td><td>FastAPI / uvicorn</td></tr>
+          <tr><td>启动方式</td><td>模块方式：<code>uvicorn main:app --host 127.0.0.1 --port 8000 --log-file logs/uvicorn.log</code></td></tr>
+          <tr><td>安装依赖</td><td>✅ 勾选（会自动跑 <code>pip install -r requirements.txt</code>）</td></tr>
+          <tr><td>启动用户</td><td><code>www</code>（避免 root）</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="step">
+  <h3 style="margin-top:0">贴 Nginx 反代片段（30 秒）</h3>
+  <p>宝塔 → 网站 → 设置 → 配置文件：</p>
+  <ol>
+    <li><b>千万不要</b>删掉原有 <code>server { ... }</code> 里的 <code>listen / server_name / ssl_certificate</code> 等行！</li>
+    <li>只在 <code>server {</code> 内部、现有 location 之外，粘贴 <code>deploy/onepress-nginx-snippet.conf</code> 里的内容。</li>
+    <li>把文件里两处占位路径 <code>/www/wwwroot/trade.xxx.com</code> 改成你实际的站点根。</li>
+    <li>保存。</li>
+  </ol>
+</div>
+
+</div>
+</div>
+
+<!-- =========================================================== -->
+<div class="card">
+<h2>🔹 第二部分：浏览器 /install 向导 3 步（WordPress famous 5 秒安装）</h2>
+
+<div class="ok">
+  现在访问你的域名：<code>https://trade.xxx.com/</code>（或 http://服务器IP）。<br>
+  因为还没安装，系统会 <b>自动 307 跳转到 <code>/install</code></b>，进入漂亮的安装向导。
+</div>
+
+<div class="grid2">
+
+<div>
+  <div class="step"><h3 style="margin-top:0">① 环境预检</h3>
+    <p>向导自动检测：Python 版本 / 磁盘 / 内存 / DB / Redis / 缺失的 Py 包 / requirements.txt 是否存在 / frontend dist 是否构建。</p>
+    <p>🚀 <b>第一次安装最佳实践：</b>预检表里数据库 ✅ 不通过没关系——下面第 ② 步勾选 <span class="chip.ok">先用 SQLite</span>，秒过。Redis 红了也不影响后端启动（后续在系统设置里配）。</p>
+    <p>看到 ① 里所有检查项之后，点下一步 <span class="kbd">▶️ 运行安装</span>。</p>
+  </div>
+</div>
+
+<div>
+  <div class="step"><h3 style="margin-top:0">② 填写配置 &amp; 安装</h3>
+    <p>就像 WordPress 填 <code>wp-config.php</code> 一样：</p>
+    <ul>
+      <li>站点标题 / 运行环境：默认就行</li>
+      <li><b>管理员账号</b>：建议改掉默认 admin，例如 <code>boss_zhangsan</code></li>
+      <li><b>管理员密码</b>：至少 8 位，字母 + 数字（加符号更安全）——<b>记得存到密码管理器</b></li>
+      <li>APP_SECRET_KEY：留空，系统自动生成 64 位（JWT 秘钥，换服务器记得同步）</li>
+      <li>✅ 勾选 <b>先试用 SQLite</b>（强烈建议首次勾上，省去建 MySQL 的麻烦）</li>
+      <li>Redis 主机 / 密码：没有 Redis 就默认，没关系</li>
+      <li>更多配置（币安 / OKX / 代理 / AI 模型）：都留空就行，装好以后在前端或 <code>.env</code> 里随时改。</li>
+    </ul>
+    <p>点绿色大按钮 <span class="kbd">▶️ 运行安装（写入 .env → 建表 → 创建管理员）</span>——2~5 秒完成。</p>
+  </div>
+</div>
+
+</div>
+
+<div class="step" style="margin-top:20px">
+  <h3 style="margin-top:0">③ 安装完成，Famous 5 秒结束！复制 2 个配置即可</h3>
+  <p>成功后，/install 第 ③ 步会自动弹出 3 套方案，复制任意一套都行：</p>
+  <table>
+    <thead><tr><th>方案</th><th>适合人群</th><th>做什么</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>方案 A（宝塔最快）</td>
+        <td>不想动终端的用户</td>
+        <td>打开宝塔「Python 项目管理器」→ 按页面表格填 → 启动</td>
+      </tr>
+      <tr>
+        <td><b>方案 B（最推荐 ⭐）</b></td>
+        <td>有终端粘贴习惯的，最稳</td>
+        <td>点击 <b>📋 复制 1 行启动命令</b> → 宝塔站点根终端粘贴 → 回车</td>
+      </tr>
+      <tr>
+        <td>方案 C（反代片段）</td>
+        <td>所有用户都建议执行</td>
+        <td>点击 <b>📋 复制 Nginx 反代片段</b> → 宝塔站点配置文件 server{ } 内粘贴 → 保存</td>
+      </tr>
+    </tbody>
+  </table>
+  <div class="tip">
+    💡 如果你刚才已经在第一部分第 3、4 步执行过启动命令和 Nginx 片段，那这一步就<b>什么都不用再做</b>——直接验收下面 3 个信号。
+  </div>
+</div>
+</div>
+
+<!-- =========================================================== -->
+<div class="card">
+<h2>🔹 第三部分：验收 · 出现这 3 个信号 = 全部完成 🎉</h2>
+<div class="grid2">
+  <div class="ok">
+    <h3 style="margin-top:0">✅ /health 存活</h3>
+    <p>浏览器打开：<code>https://trade.xxx.com/health</code></p>
+    <pre>{
+  "status": "ok",
+  "installed": true,
+  "installed_at": "2025-xx-xx xx:xx:xx"
+}</pre>
+  </div>
+  <div class="ok">
+    <h3 style="margin-top:0">✅ /docs Swagger 能打开 + 登录能调通</h3>
+    <p>浏览器打开：<code>https://trade.xxx.com/docs</code></p>
+    <ol>
+      <li>左侧接口列表能看到 <code>/api/v1/auth/*</code>、<code>/api/v1/strategy/*</code> 等一组分组</li>
+      <li>找到 <code>POST /api/v1/auth/login</code> → <b>Try it out</b> → 填入你安装向导第 ② 步设置的管理员账号密码 → Execute</li>
+      <li>返回里出现 <code>access_token</code>（JWT）就 OK。</li>
+      <li>点页面右上角 <b>Authorize</b> → Bearer 里粘贴刚才的 token → 后面所有接口就都能调用啦。</li>
+    </ol>
+  </div>
+</div>
+<div class="ok" style="margin-top:14px">
+  <h3 style="margin-top:0">✅ 前端 SPA 首页正常</h3>
+  <p>浏览器打开：<code>https://trade.xxx.com/</code>。两种情况都算正常：</p>
+  <ul>
+    <li>如果 onepress zip 里已经包含 <code>frontend/dist</code>：<b>看到登录页</b>（用你刚才建的管理员账号登录）。</li>
+    <li>如果 zip 里没带前端 dist：看到本站的引导页（写着「后端已启动 ✅ 常用入口 /install /docs /health」），说明一切工作正常。<b>后续要前端的话，进入 <code>frontend/</code> 目录 <code>npm install &amp;&amp; npm run build</code>，把生成的 <code>dist/</code> 放到 <code>frontend/dist</code>，刷新浏览器即可。</b></li>
+  </ul>
+</div>
+</div>
+
+<!-- =========================================================== -->
+<div class="card">
+<h2>🔹 常见坑 &amp; FAQ（遇到问题先看这一节）</h2>
+
+<div class="danger">
+  <h3 style="margin-top:0;color:#fecaca">Q1：访问域名显示 403 Forbidden / 目录列表 / 502 Bad Gateway</h3>
+  <p>
+    90% 的概率是 Nginx 片段没贴 / 贴错位置：<br>
+    ① 重新检查 <b>第二部分第 ③ 步 / 第一部分第 4 步</b>。<br>
+    ② 确认站点根路径和 Nginx 片段里的 <code>/www/wwwroot/trade.xxx.com</code> 完全一致（多一个斜杠都不行）。<br>
+    ③ 502 说明 uvicorn 没起起来：站点根跑 <code>tail -n 200 logs/uvicorn.log</code> 看堆栈，90% 是端口 8000 被占或依赖没装全 → 重跑 <code>bash deploy/onepress-install.sh</code>。
+  </p>
+</div>
+
+<div class="tip">
+  <h3 style="margin-top:0">Q2：我想重装（换管理员密码 / 换数据库）</h3>
+  <p>
+    先备份配置：<code>cp -a .env .env.bak.$(date +%s)</code><br>
+    然后删除安装标记：<code>rm -f .installed</code><br>
+    浏览器重新访问 <code>/install</code>，就会重新进入向导。<br>
+    （注意：删 <code>.installed</code> 不会自动删数据库；要完全干净，再手动删 <code>trading_system.db</code> 或 DROP MySQL 库。）
+  </p>
+</div>
+
+<div class="tip">
+  <h3 style="margin-top:0">Q3：安装向导里我勾了 SQLite，现在想切 MySQL</h3>
+  <p>① 宝塔建一个 MySQL 数据库（utf8mb4），记好 host/port/user/pass/dbname。<br>
+     ② 直接用向导生成的 <code>.env</code>：把 <code>DB_SQLITE_FALLBACK=</code> 那行清空、下面 MySQL 6 行填上。<br>
+     ③ 重启 uvicorn（<code>kill $(cat logs/uvicorn.pid) ; bash deploy/onepress-install.sh</code>）。<br>
+     ④ 第一次启动会自动 <code>CREATE TABLE</code>，管理员账号要重建（因为你换了 DB）；不想重建就把 SQLite 的库用 DBeaver 迁过去。
+  </p>
+</div>
+
+<div class="tip">
+  <h3 style="margin-top:0">Q4：Celery / Redis 要不要现在开？</h3>
+  <p>
+    最小可用不用：策略模板、回测、手动下单都能跑。<br>
+    要开 AI 新闻推送 / 定时策略 / 心跳告警：再开 Redis + 跑 <code>deploy/supervisor.conf</code> 里的 3 个进程（uvicorn / celery worker / celery beat）。
+  </p>
+</div>
+
+<div class="tip">
+  <h3 style="margin-top:0">Q5：本地 Windows 也要像这样一键跑？</h3>
+  <p>解压 zip 后双击 <code>StrategyTradeLauncher/Step0_一键启动后端_8000_HTA启动器.hta</code> 即可（绕过 ExecutionPolicy / AppLocker）。浏览器自动跳 <code>http://127.0.0.1:8000/install</code> 也是同样的 WordPress 式体验。</p>
+</div>
+</div>
+
+<!-- =========================================================== -->
+<div class="card">
+<h2>🔹 速查命令卡（宝塔终端里随时复制执行）</h2>
+<pre>
+# 站点根（请改成你的真实路径）
+cd /www/wwwroot/trade.xxx.com
+
+# 1) 一键启动后端（venv + pip install + uvicorn 后台；自带旧 PID 清理）
+bash deploy/onepress-install.sh
+
+# 2) 看实时日志
+tail -f logs/uvicorn.log            # 后端访问 / 应用日志
+tail -f logs/nohup.log              # 启动期 stdout/stderr
+
+# 3) 手动停 / 重启
+kill $(cat logs/uvicorn.pid) 2>/dev/null ; rm -f logs/uvicorn.pid
+bash deploy/onepress-install.sh     # 重启（脚本会 kill 旧的）
+
+# 4) 探活
+curl -s http://127.0.0.1:8000/health | python3 -m json.tool
+
+# 5) 重新进入安装向导（重装）
+cp -a .env ".env.bak.$(date +%s)"   # 先备份配置
+rm -f .installed                    # 删除安装标记
+# 然后浏览器打开 /install
+
+# 6) 前端构建（需要 Node.js 18+，宝塔软件商店搜「Node 版本管理器」）
+cd frontend
+npm install
+npm run build
+cd ..
+# 构建完刷新域名 / 即可看到 SPA 首页，不需要重启后端
+</pre>
+<div class="actions" style="margin-top:18px;">
+  <a class="btn" href="/install" target="_blank">🔗 立即打开 /install 向导</a>
+  <a class="btn2" href="/docs" target="_blank" style="margin-left:10px">📘 去 Swagger /docs</a>
+  <a class="btn2" href="/health" target="_blank" style="margin-left:10px">❤️ 测 /health 存活</a>
+</div>
+</div>
+
+<footer>
+  © 策略交易系统 onepress · WordPress 式一键部署 · 源码安装零门槛 ·<br>
+  文件索引：<code>deploy/onepress-install.sh</code> · <code>deploy/onepress-nginx-snippet.conf</code> · <code>deploy/make_onepress_zip.py</code>
+</footer>
+
+</div>
+</body>
+</html>
