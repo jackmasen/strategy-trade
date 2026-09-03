@@ -22,6 +22,10 @@ request.interceptors.request.use(
     if (user.token) {
       config.headers.Authorization = `Bearer ${user.token}`
     }
+    // FormData: let browser set Content-Type with correct multipart boundary
+    if (config.data instanceof FormData) {
+      delete config.headers['Content-Type']
+    }
     if (isDev()) {
       console.log(`[REQ] ${config.method?.toUpperCase()} ${config.url}`, config.params || config.data)
     }
@@ -100,9 +104,7 @@ export const http = {
     const fd = new FormData()
     fd.append(filename, file)
     Object.entries(extra).forEach(([k, v]) => fd.append(k, v))
-    return request.post(url, fd, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    })
+    return request.post(url, fd)
   },
   download: (url, params, filename) =>
     request.get(url, { params, responseType: 'blob' }).then((blob) => {
