@@ -83,8 +83,9 @@
                     <div class="svc-name">数据库</div>
                     <div class="svc-desc">{{ status.database?.connection === 'ok' ? '连接正常' : (status.database?.error || '未知') }}</div>
                   </div>
-                  <div class="svc-status">
-                    <el-tag :type="status.database?.connection === 'ok' ? 'success' : 'danger'" effect="dark">
+                  <div class="svc-status" style="display:flex;align-items:center;gap:6px;">
+                    <span class="status-light" :class="status.database?.connection === 'ok' ? 'ok' : 'error'"></span>
+                    <el-tag :type="status.database?.connection === 'ok' ? 'success' : 'danger'" effect="dark" size="small">
                       {{ status.database?.connection === 'ok' ? '运行中' : '异常' }}
                     </el-tag>
                   </div>
@@ -95,8 +96,9 @@
                     <div class="svc-name">Redis</div>
                     <div class="svc-desc">{{ status.redis?.host }}:{{ status.redis?.port }}</div>
                   </div>
-                  <div class="svc-status">
-                    <el-tag :type="status.redis?.status === 'ok' ? 'success' : (status.redis?.status === 'unavailable' ? 'info' : 'warning')" effect="dark">
+                  <div class="svc-status" style="display:flex;align-items:center;gap:6px;">
+                    <span class="status-light" :class="status.redis?.status === 'ok' ? 'ok' : (status.redis?.status === 'unavailable' ? 'idle' : 'error')"></span>
+                    <el-tag :type="status.redis?.status === 'ok' ? 'success' : (status.redis?.status === 'unavailable' ? 'info' : 'warning')" effect="dark" size="small">
                       {{ status.redis?.status === 'ok' ? '运行中' : (status.redis?.status === 'unavailable' ? '未启用' : '异常') }}
                     </el-tag>
                   </div>
@@ -107,8 +109,9 @@
                     <div class="svc-name">定时任务</div>
                     <div class="svc-desc">{{ status.scheduler?.mode || '未知' }} 模式</div>
                   </div>
-                  <div class="svc-status">
-                    <el-tag :type="status.scheduler?.enabled ? 'success' : 'warning'" effect="dark">
+                  <div class="svc-status" style="display:flex;align-items:center;gap:6px;">
+                    <span class="status-light" :class="status.scheduler?.enabled ? 'ok' : 'warn'"></span>
+                    <el-tag :type="status.scheduler?.enabled ? 'success' : 'warning'" effect="dark" size="small">
                       {{ status.scheduler?.enabled ? '运行中' : '未启用' }}
                     </el-tag>
                   </div>
@@ -116,10 +119,10 @@
               </div>
               <div class="task-list" v-if="status.scheduler?.tasks?.length">
                 <div class="task-item" v-for="t in status.scheduler.tasks" :key="t.name">
-                  <span class="task-dot"></span>
-                  <span class="task-name">{{ t.name }}</span>
-                  <span class="task-interval">{{ t.interval }}</span>
-                  <el-tag size="small" type="success" effect="dark">运行中</el-tag>
+                    <span class="status-light ok"></span>
+                    <span class="task-name">{{ t.name }}</span>
+                    <span class="task-interval">{{ t.interval }}</span>
+                    <el-tag size="small" type="success" effect="dark">运行中</el-tag>
                 </div>
               </div>
             </div>
@@ -299,7 +302,7 @@
           <!-- 顶部状态条 -->
           <div class="engine-top-bar">
             <div class="engine-status-badge" :class="{ running: engineData?.score_engine?.is_running }">
-              <span class="status-dot"></span>
+              <span class="status-light" :class="engineData?.score_engine?.is_running ? 'ok' : 'idle'"></span>
               <span>{{ engineData?.score_engine?.is_running ? '引擎运行中' : '引擎未启动' }}</span>
             </div>
             <div class="engine-refresh">
@@ -386,7 +389,8 @@
                         <div class="st-interval">{{ task.interval }}</div>
                       </div>
                       <div class="st-status">
-                        <el-tag size="small" effect="dark" type="success">运行中</el-tag>
+                        <span class="status-light ok" title="运行中"></span>
+                        <span class="st-next-run" v-if="task.next_run_time">下次: {{ formatTime(task.next_run_time) }}</span>
                       </div>
                     </div>
                   </div>
@@ -400,6 +404,7 @@
               <div class="panel-card">
                 <div class="panel-card__header">
                   <span class="panel-card__title">🎯 策略运行模式</span>
+                  <span class="status-light ok" style="margin:0;"></span>
                 </div>
                 <div class="panel-card__body">
                   <div class="strategy-mode-bars">
@@ -435,6 +440,7 @@
               <div class="panel-card">
                 <div class="panel-card__header">
                   <span class="panel-card__title">💼 当前持仓</span>
+                  <span class="status-light" :class="engineData?.positions?.open_count > 0 ? 'ok' : 'idle'" style="margin:0;"></span>
                   <span class="panel-card__subtitle">{{ engineData?.positions?.open_count || 0 }} 个持仓</span>
                 </div>
                 <div class="panel-card__body">
@@ -504,6 +510,7 @@
           <div class="panel-card">
             <div class="panel-card__header">
               <span class="panel-card__title">📋 最近交易记录</span>
+              <span class="status-light ok" style="margin:0;"></span>
               <span class="panel-card__subtitle">最近10笔</span>
             </div>
             <div class="panel-card__body">
@@ -1686,6 +1693,8 @@ onBeforeUnmount(() => {
 .st-info { flex: 1; }
 .st-name { font-size: 13px; color: #E6EDF3; font-weight: 500; }
 .st-interval { font-size: 11px; color: #5A6A7A; margin-top: 2px; }
+.st-status { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.st-next-run { font-size: 10px; color: #5A6A7A; white-space: nowrap; }
 
 .strategy-mode-bars { display: flex; flex-direction: column; gap: 14px; }
 .smb-item { display: flex; flex-direction: column; gap: 6px; }

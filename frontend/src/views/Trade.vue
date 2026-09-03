@@ -34,6 +34,7 @@
         <el-table-column label="方向" width="80" align="center">
           <template #default="{ row }">
             <el-tag size="small" effect="dark" :type="row.side===1?'success':'danger'">
+              <span class="status-light" :class="row.side===1?'ok':'error'" style="margin-right:2px;"></span>
               {{ row.side === 1 ? '多' : '空' }}
             </el-tag>
           </template>
@@ -41,6 +42,7 @@
         <el-table-column label="类型" width="80" align="center">
           <template #default="{ row }">
             <el-tag size="small" effect="plain" :type="['success','info','danger'][row.order_type-1]">
+              <span class="status-light" :class="row.order_type===1?'ok':(row.order_type===3?'error':'idle')" style="margin-right:2px;"></span>
               {{ ['开仓','平仓','强平'][row.order_type-1] }}
             </el-tag>
           </template>
@@ -66,9 +68,12 @@
         </el-table-column>
         <el-table-column label="状态" width="110" align="center">
           <template #default="{ row }">
-            <el-tag size="small" effect="dark" :type="ORDER_STATUS_META[row.status]?.type">
-              {{ ORDER_STATUS_META[row.status]?.name }}
-            </el-tag>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="row.status===2?'ok':(row.status===3?'error':(row.status===1?'warn':'idle'))"></span>
+              <el-tag size="small" effect="dark" :type="ORDER_STATUS_META[row.status]?.type">
+                {{ ORDER_STATUS_META[row.status]?.name }}
+              </el-tag>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="触发原因" width="120" align="center">
@@ -90,15 +95,51 @@
   <el-dialog
     v-model="dialogVisible"
     title="手动下单（市价开仓 + TP/SL）"
-    width="640px"
+    width="700px"
     :close-on-click-modal="false"
     destroy-on-close
+    @open="onDialogOpen"
   >
     <el-form :model="orderForm" :rules="rules" ref="formRef" label-width="130px">
+      <!-- 实时价格显示区 -->
+      <el-card shadow="never" class="price-panel" :class="{ 'price-long': orderForm.side === 1, 'price-short': orderForm.side === 2 }">
+        <template #header>
+          <div class="price-panel__header">
+            <span class="price-panel__symbol">{{ orderForm.symbol || 'BTC' }}</span>
+            <span class="price-panel__label">实时行情</span>
+            <span v-if="tickerLoading" class="text-dim" style="font-size:12px;">加载中...</span>
+            <span v-else-if="tickerData" class="price-panel__change" :class="tickerData.change_pct>=0?'text-profit':'text-loss'">
+              {{ tickerData.change_pct>=0?'+':'' }}{{ tickerData.change_pct?.toFixed(2) || '0.00' }}%
+            </span>
+          </div>
+        </template>
+        <div class="price-panel__body">
+          <div class="price-item">
+            <span class="price-item__label">最新价</span>
+            <span class="price-item__value">{{ tickerData?.last_price ? fmtMoney(tickerData.last_price, getPrecision(orderForm.symbol)) : '---' }}</span>
+          </div>
+          <div class="price-item">
+            <span class="price-item__label">买一价 (Bid)</span>
+            <span class="price-item__value price-bid">{{ tickerData?.bid_price ? fmtMoney(tickerData.bid_price, getPrecision(orderForm.symbol)) : '---' }}</span>
+          </div>
+          <div class="price-item">
+            <span class="price-item__label">卖一价 (Ask)</span>
+            <span class="price-item__value price-ask">{{ tickerData?.ask_price ? fmtMoney(tickerData.ask_price, getPrecision(orderForm.symbol)) : '---' }}</span>
+          </div>
+          <div class="price-item price-highlight">
+            <span class="price-item__label">{{ orderForm.side === 1 ? '做多成交参考价' : '做空成交参考价' }}</span>
+            <span class="price-item__value price-execution" :class="orderForm.side===1?'text-profit':'text-loss'">
+              {{ executionPrice ? fmtMoney(executionPrice, getPrecision(orderForm.symbol)) : '---' }}
+            </span>
+            <span class="price-item__tag" :class="orderForm.side===1?'tag-long':'tag-short'">{{ orderForm.side===1?'以卖价买入':'以买价卖出' }}</span>
+          </div>
+        </div>
+      </el-card>
+
       <el-row :gutter="16">
         <el-col :span="12">
           <el-form-item label="交易所子账号" prop="exchange_account_id">
-            <el-select v-model="orderForm.exchange_account_id" placeholder="选择子账号" style="width:100%;" filterable>
+            <el-select v-model="orderForm.exchange_account_id" placeholder="选择子账号" style="width:100%;" filterable @change="onAccountChange">
               <el-option
                 v-for="a in accounts"
                 :key="a.id"
@@ -110,7 +151,7 @@
         </el-col>
         <el-col :span="12">
           <el-form-item label="交易品种" prop="symbol">
-            <el-select v-model="orderForm.symbol" style="width:100%;">
+            <el-select v-model="orderForm.symbol" style="width:100%;" @change="onSymbolChange">
               <el-option v-for="(m,k) in SYMBOL_META" :key="k" :label="`${m.icon} ${k} ${m.name}`" :value="k" />
             </el-select>
           </el-form-item>
@@ -120,7 +161,7 @@
       <el-row :gutter="16">
         <el-col :span="8">
           <el-form-item label="方向" prop="side">
-            <el-radio-group v-model="orderForm.side">
+            <el-radio-group v-model="orderForm.side" @change="onSideChange">
               <el-radio-button :value="1">
                 <span style="color:#4ADE80;">买入 / 做多</span>
               </el-radio-button>
@@ -149,7 +190,7 @@
       <el-row :gutter="16">
         <el-col :span="12">
           <el-form-item label="下单金额(USDT)" prop="quantity_usdt">
-            <el-input-number v-model="orderForm.quantity_usdt" :min="10" :max="100000" :step="50" style="width:100%;" />
+            <el-input-number v-model="orderForm.quantity_usdt" :min="10" :max="100000" :step="50" style="width:100%;" @change="onAmountChange" />
           </el-form-item>
         </el-col>
         <el-col :span="12">
@@ -160,37 +201,39 @@
         </el-col>
       </el-row>
 
-      <el-divider>止盈止损（优先用绝对价格，没填则按%自动计算）</el-divider>
+      <el-divider>止盈止损</el-divider>
       <el-row :gutter="16">
         <el-col :span="12">
           <el-form-item label="止盈比例 (%)">
-            <el-input-number v-model="orderForm.tp_ratio_pct" :min="0.5" :max="50" :step="0.5" style="width:100%;" />
-            <div class="text-dim" style="font-size:12px;">预期盈利 ≈ <span class="text-profit">+${{ estimateTpPnl }}</span></div>
+            <el-input-number v-model="orderForm.tp_ratio_pct" :min="0.5" :max="50" :step="0.5" style="width:100%;" @change="onTpSlChange" />
+            <div class="text-dim" style="font-size:12px;">止盈价 ≈ <span class="text-profit">{{ estimateTpPrice }}</span></div>
+            <div class="text-dim" style="font-size:11px;">预期盈利 ≈ <span class="text-profit">+${{ estimateTpPnl }}</span></div>
           </el-form-item>
         </el-col>
         <el-col :span="12">
           <el-form-item label="止损比例 (%)">
-            <el-input-number v-model="orderForm.sl_ratio_pct" :min="0.3" :max="30" :step="0.5" style="width:100%;" />
-            <div class="text-dim" style="font-size:12px;">最大亏损 ≈ <span class="text-loss">${{ estimateSlPnl }}</span></div>
+            <el-input-number v-model="orderForm.sl_ratio_pct" :min="0.3" :max="30" :step="0.5" style="width:100%;" @change="onTpSlChange" />
+            <div class="text-dim" style="font-size:12px;">止损价 ≈ <span class="text-loss">{{ estimateSlPrice }}</span></div>
+            <div class="text-dim" style="font-size:11px;">最大亏损 ≈ <span class="text-loss">${{ estimateSlPnl }}</span></div>
           </el-form-item>
         </el-col>
       </el-row>
       <el-row :gutter="16">
         <el-col :span="12">
           <el-form-item label="止盈价 (绝对)">
-            <el-input-number v-model="orderForm.tp_price" :precision="4" :controls="false" placeholder="留空则按比例计算" style="width:100%;" />
+            <el-input-number v-model="orderForm.tp_price" :precision="getPrecision(orderForm.symbol)" :controls="false" placeholder="留空则按比例自动计算" style="width:100%;" />
           </el-form-item>
         </el-col>
         <el-col :span="12">
           <el-form-item label="止损价 (绝对)">
-            <el-input-number v-model="orderForm.sl_price" :precision="4" :controls="false" placeholder="留空则按比例计算" style="width:100%;" />
+            <el-input-number v-model="orderForm.sl_price" :precision="getPrecision(orderForm.symbol)" :controls="false" placeholder="留空则按比例自动计算" style="width:100%;" />
           </el-form-item>
         </el-col>
       </el-row>
 
       <el-alert
         title="风险提示" type="warning" :closable="false" show-icon
-        description="合约交易具有极高风险，下单前请确保交易所API已开通期货交易权限、已划转保证金到合约账户；所有盈亏由账户实际成交为准。"
+        description="合约交易具有极高风险，下单前请确保交易所API已开通期货交易权限、已划转保证金到合约账户；所有盈亏由账户实际成交为准。做多参考卖价(Ask)，做空参考买价(Bid)。"
         style="margin-top:8px;"
       />
     </el-form>
@@ -240,6 +283,49 @@ const loadAccounts = async () => {
   } catch {}
 }
 
+// ---------- 实时行情 ----------
+const tickerData = ref(null)
+const tickerLoading = ref(false)
+const tickerTimer = ref(null)
+
+function getPrecision(symbol) {
+  const p = { BTC: 2, ETH: 2, SOL: 2, XAU: 2, XAG: 2, WTI: 2, TSLA: 2, NVDA: 2, AAPL: 2, MSFT: 2, TCEHY: 2 }
+  return p[symbol] || 4
+}
+
+async function fetchTicker(symbol, silent = false) {
+  if (!symbol) return
+  tickerLoading.value = true
+  try {
+    const data = await http.get(`${API_PREFIX}/exchange/ticker/${symbol}`)
+    // normalize change_pct_24h → change_pct for template compatibility
+    if (data.change_pct_24h !== undefined && data.change_pct === undefined) {
+      data.change_pct = data.change_pct_24h
+    }
+    tickerData.value = data
+    if (!silent) ElMessage.success(`${symbol} 行情已更新`)
+  } catch (e) {
+    if (!silent) console.warn('[Trade] 行情获取失败:', e)
+    tickerData.value = null
+  } finally {
+    tickerLoading.value = false
+  }
+}
+
+function startTickerPoll(symbol) {
+  stopTickerPoll()
+  if (!symbol) return
+  fetchTicker(symbol, true)
+  tickerTimer.value = setInterval(() => fetchTicker(symbol, true), 5000)
+}
+
+function stopTickerPoll() {
+  if (tickerTimer.value) {
+    clearInterval(tickerTimer.value)
+    tickerTimer.value = null
+  }
+}
+
 // ---------- 手动下单对话框 ----------
 const dialogVisible = ref(false)
 const submitting = ref(false)
@@ -265,21 +351,74 @@ const rules = {
   ],
   leverage: [{ required: true, type: 'number', min: 1, message: '杠杆至少 1 倍', trigger: 'blur' }],
 }
+
+// 执行价格（做多=ask，做空=bid）
+const executionPrice = computed(() => {
+  if (!tickerData.value) return null
+  if (orderForm.side === 1) {
+    return tickerData.value.ask_price || tickerData.value.last_price
+  } else {
+    return tickerData.value.bid_price || tickerData.value.ask_price || tickerData.value.last_price
+  }
+})
+
+// 保证金
 const estimateMargin = computed(() => {
   const q = Number(orderForm.quantity_usdt || 0)
   const lv = Number(orderForm.leverage || 1)
   return (q / lv).toFixed(2)
 })
+
+// 止盈止损价格（基于执行价格）
+const rawExecPrice = computed(() => executionPrice.value || 0)
+
+function calcTpPrice() {
+  const exec = rawExecPrice.value
+  if (!exec) return null
+  const tpAbs = orderForm.tp_price
+  if (tpAbs && tpAbs > 0) return tpAbs
+  if (orderForm.side === 1) {
+    return exec * (1 + orderForm.tp_ratio_pct / 100)
+  } else {
+    return exec * (1 - orderForm.tp_ratio_pct / 100)
+  }
+}
+
+function calcSlPrice() {
+  const exec = rawExecPrice.value
+  if (!exec) return null
+  const slAbs = orderForm.sl_price
+  if (slAbs && slAbs > 0) return slAbs
+  if (orderForm.side === 1) {
+    return exec * (1 - orderForm.sl_ratio_pct / 100)
+  } else {
+    return exec * (1 + orderForm.sl_ratio_pct / 100)
+  }
+}
+
+const estimateTpPrice = computed(() => {
+  const p = calcTpPrice()
+  return p ? fmtMoney(p, getPrecision(orderForm.symbol)) : '---'
+})
+
+const estimateSlPrice = computed(() => {
+  const p = calcSlPrice()
+  return p ? fmtMoney(p, getPrecision(orderForm.symbol)) : '---'
+})
+
+// 预估盈亏（基于执行价格）
 const estimateTpPnl = computed(() => {
   const q = Number(orderForm.quantity_usdt || 0)
   const tp = Number(orderForm.tp_ratio_pct || 0)
   return (q * tp / 100).toFixed(2)
 })
+
 const estimateSlPnl = computed(() => {
   const q = Number(orderForm.quantity_usdt || 0)
   const sl = Number(orderForm.sl_ratio_pct || 0)
   return (- q * sl / 100).toFixed(2)
 })
+
 // 选择子账号后，自动设置杠杆为子账号最大值
 watch(() => orderForm.exchange_account_id, (id) => {
   const acc = accounts.value.find(a => a.id === id)
@@ -287,6 +426,47 @@ watch(() => orderForm.exchange_account_id, (id) => {
     orderForm.leverage = acc.leverage_max || 10
   }
 })
+
+// 品种变化 → 刷新行情
+watch(() => orderForm.symbol, (newSym) => {
+  startTickerPoll(newSym)
+})
+
+// 方向变化 → 重新计算TP/SL价格提示
+watch(() => orderForm.side, () => {
+  // 价格面板会自动更新
+})
+
+function onDialogOpen() {
+  if (!tickerData.value && orderForm.symbol) {
+    startTickerPoll(orderForm.symbol)
+  }
+}
+
+function onSymbolChange() {
+  startTickerPoll(orderForm.symbol)
+  orderForm.tp_price = null
+  orderForm.sl_price = null
+}
+
+function onSideChange() {
+  orderForm.tp_price = null
+  orderForm.sl_price = null
+}
+
+function onAccountChange() {
+  const acc = accounts.value.find(a => a.id === orderForm.exchange_account_id)
+  if (acc) orderForm.leverage = acc.leverage_max || 10
+}
+
+function onAmountChange() {
+  // 金额变化不直接影响TP/SL
+}
+
+function onTpSlChange() {
+  // TP/SL比例变化，价格提示自动更新
+}
+
 const manualOrder = () => {
   if (!accounts.value.length) loadAccounts()
   Object.assign(orderForm, emptyOrder())
@@ -303,7 +483,7 @@ const submitOrder = async () => {
       if (!payload.tp_price) delete payload.tp_price
       if (!payload.sl_price) delete payload.sl_price
       const r = await http.post(`${API_PREFIX}/trades/orders/manual`, payload)
-      ElMessage.success(`下单成功：订单号 #${r.order_id}，方向${payload.side===1?'多':'空'} ${orderForm.symbol} ${payload.quantity_usdt}U`)
+      ElMessage.success(`下单成功：订单号 #${r.order_id}，方向${payload.side===1?'多':'空'} ${orderForm.symbol}，参考价${fmtMoney(r.execution_price || r.entry_price, getPrecision(orderForm.symbol))}，止损${fmtMoney(r.sl, getPrecision(orderForm.symbol))}`)
       dialogVisible.value = false
       load()
     } finally {
@@ -324,3 +504,89 @@ const cancel = async (row) => {
 }
 onMounted(() => { load(); loadAccounts() })
 </script>
+
+<style scoped>
+.price-panel {
+  margin-bottom: 16px;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #0f172a;
+}
+.price-panel.price-long {
+  border-color: #16a34a;
+}
+.price-panel.price-short {
+  border-color: #dc2626;
+}
+.price-panel__header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.price-panel__symbol {
+  font-size: 18px;
+  font-weight: 700;
+  color: #f1f5f9;
+}
+.price-panel__label {
+  font-size: 13px;
+  color: #94a3b8;
+}
+.price-panel__change {
+  margin-left: auto;
+  font-size: 14px;
+  font-weight: 600;
+}
+.price-panel__body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 24px;
+  padding: 4px 0;
+}
+.price-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+}
+.price-item.price-highlight {
+  grid-column: 1 / -1;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.1);
+}
+.price-item__label {
+  font-size: 12px;
+  color: #94a3b8;
+  white-space: nowrap;
+  min-width: 90px;
+}
+.price-item__value {
+  font-size: 15px;
+  font-weight: 600;
+  font-family: 'Courier New', monospace;
+}
+.price-bid { color: #60a5fa; }
+.price-ask { color: #f472b6; }
+.price-execution {
+  font-size: 18px;
+  font-weight: 700;
+}
+.price-item__tag {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+.tag-long {
+  background: rgba(74,222,128,0.15);
+  color: #4ade80;
+  border: 1px solid rgba(74,222,128,0.3);
+}
+.tag-short {
+  background: rgba(248,113,113,0.15);
+  color: #f87171;
+  border: 1px solid rgba(248,113,113,0.3);
+}
+</style>

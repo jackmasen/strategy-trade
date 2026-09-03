@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict
 from datetime import datetime, date, timedelta
 import threading
+import time
 
 from backend.db.session import get_db
 from backend.db.base import Base
@@ -94,11 +95,10 @@ class AIConfigUpdate(BaseModel):
     model_name: str = "gpt-4o"
     api_endpoint: str = ""
     api_key: str = ""
-    # 可选扩展（前端不填沿用 DB 原值）
-    temperature: Optional[int] = Field(default=None, ge=0, le=10)
-    max_tokens: Optional[int] = Field(default=None, ge=32, le=32768)
-    request_timeout_sec: Optional[int] = Field(default=None, ge=5, le=180)
-    max_retries: Optional[int] = Field(default=None, ge=0, le=5)
+    temperature: Optional[float] = Field(default=None, ge=0, le=10)
+    max_tokens: Optional[int] = Field(default=None, ge=32, le=65536)
+    request_timeout_sec: Optional[int] = Field(default=None, ge=3, le=300)
+    max_retries: Optional[int] = Field(default=None, ge=0, le=10)
 
 
 class AIAnalyzeReq(BaseModel):
@@ -186,22 +186,133 @@ def ai_analyze(
 ):
     """
     手动触发 AI 分析：
-      - 真调用 AIClient（按 DB 配置）
+      - 先拉取实时行情（bid/ask/last价格）、K线数据、新闻数据
+      - 检查新闻完整度，不足时提示用户先采集新闻
+      - 将实时数据传入 AI，确保分析基于当前市场情况
+      - 先尝试 ai_configs 主配置
+      - 失败自动切换到系统设置 AI 接口池轮询
       - 记录完整 AIAnalysisRecord（tokens/cost/latency/raw_response）
-      - 失败时 success=false 但 HTTP=200，前端 error_msg 直接给用户看（遵循 1283322：吞异常不行）
+      - 返回 source 字段标识使用的配置来源（primary/pool）
+      - 返回中附带当前实时价格信息
     """
-    cfg = _ensure_ai_config_table_and_row(db)
-    client = AIClient(cfg)
-    result: AIResult = client.analyze(
+    from backend.services.ai_failover import call_ai_unified
+    from backend.exchanges.market import MarketManager
+
+    symbol = (req.symbol or "BTC").upper()
+    timeframe = req.timeframe or "4h"
+
+    # ========== 1. 拉取实时行情 ==========
+    current_price = None
+    bid_price = None
+    ask_price = None
+    change_pct = None
+    try:
+        mm = MarketManager.get_instance()
+        ticker = mm.get_ticker(symbol)
+        if ticker:
+            current_price = ticker.last_price
+            bid_price = ticker.bid_price
+            ask_price = ticker.ask_price
+            change_pct = ticker.change_pct_24h
+    except Exception as e:
+        logger.warning(f"[AI-Analyze] 行情获取失败 {symbol}: {e}")
+
+    # 行情取不到，尝试从交易所直接拉
+    if not current_price:
+        try:
+            from backend.routers.trade import _build_client
+            from backend.models.exchange import ExchangeAccount
+            acc = db.query(ExchangeAccount).filter(ExchangeAccount.status == 1).order_by(ExchangeAccount.id).first()
+            if acc:
+                client = _build_client(acc)
+                ticker2 = client.fetch_ticker(symbol)
+                if ticker2 and ticker2.last_price > 0:
+                    current_price = ticker2.last_price
+                    bid_price = ticker2.bid_price
+                    ask_price = ticker2.ask_price
+                    change_pct = ticker2.change_pct_24h if hasattr(ticker2, 'change_pct_24h') else getattr(ticker2, 'change_pct', 0)
+        except Exception as e:
+            logger.warning(f"[AI-Analyze] 交易所行情获取失败 {symbol}: {e}")
+
+    # ========== 2. 拉取K线数据 ==========
+    candles_snapshot = ""
+    try:
+        mm2 = MarketManager.get_instance()
+        klines = mm2.get_klines(symbol, timeframe, limit=30)
+        if klines and len(klines) > 0:
+            lines = []
+            for k in klines[-20:]:  # 最近20根K线
+                ts = k.open_time.timestamp() if hasattr(k, 'open_time') and k.open_time else 0
+                ts_str = datetime.fromtimestamp(ts).strftime('%m-%d %H:%M') if ts else 'N/A'
+                lines.append(
+                    f"  O={k.open:.4f} H={k.high:.4f} L={k.low:.4f} C={k.close:.4f} V={k.volume:.2f}  [{ts_str}]"
+                )
+            candles_snapshot = "\n".join(lines)
+            logger.info(f"[AI-Analyze] {symbol} 获取K线 {len(klines)} 根，使用最近20根")
+    except Exception as e:
+        logger.warning(f"[AI-Analyze] K线获取失败 {symbol}: {e}")
+
+    # ========== 3. 拉取新闻数据 ==========
+    news_snapshot = ""
+    news_count_24h = 0
+    try:
+        from datetime import timedelta as _td
+        cutoff = datetime.utcnow() - _td(hours=24)
+        articles = (
+            db.query(NewsArticle)
+            .filter(NewsArticle.published_at >= cutoff)
+            .filter(NewsArticle.related_symbols.like(f'%\"{symbol}\"%'))
+            .order_by(NewsArticle.published_at.desc())
+            .limit(15)
+            .all()
+        )
+        news_count_24h = len(articles)
+        if articles:
+            news_lines = []
+            for a in articles[:10]:
+                sentiment_label = {0: "中性", 1: "偏多", 2: "偏空"}.get(a.sentiment, "未知")
+                news_lines.append(
+                    f"  [{sentiment_label}] {a.title[:80]}  ({a.published_at.strftime('%m-%d %H:%M')})"
+                )
+            news_snapshot = "\n".join(news_lines)
+            logger.info(f"[AI-Analyze] {symbol} 获取新闻 {news_count_24h} 条（24h内相关）")
+        else:
+            # 检查全量新闻（不限symbol）
+            all_24h = (
+                db.query(NewsArticle)
+                .filter(NewsArticle.published_at >= cutoff)
+                .count()
+            )
+            if all_24h < 5:
+                logger.warning(f"[AI-Analyze] {symbol} 24小时内无相关新闻，全量新闻仅 {all_24h} 条，建议先采集新闻")
+    except Exception as e:
+        logger.warning(f"[AI-Analyze] 新闻获取失败 {symbol}: {e}")
+
+    # ========== 4. 新闻完整度检查 ==========
+    news_warning = ""
+    if news_count_24h < 3:
+        news_warning = "[新闻不足] 当前24小时内相关新闻不足3条，AI分析准确性可能受影响，建议先执行新闻采集。"
+        logger.warning(f"[AI-Analyze] {symbol} 新闻不足，news_count_24h={news_count_24h}")
+
+    # ========== 5. 调用AI（传入真实数据） ==========
+    unified = call_ai_unified(
+        db,
         analysis_type=req.analysis_type,
-        symbol=req.symbol,
-        timeframe=req.timeframe or "4h",
+        symbol=symbol,
+        timeframe=timeframe,
         manual_prompt=req.manual_prompt or "",
-        candles_snapshot="",     # V2 手动调用场景暂时不带 K 线（V3 策略引擎会传）
-        news_snapshot="",
+        candles_snapshot=candles_snapshot,
+        news_snapshot=news_snapshot,
         _mock=bool(req.mock),
     )
 
+    result: AIResult = unified["result"] or AIResult(
+        success=False,
+        error_code="AI_ALL_FAILED",
+        error_msg=unified["error"] or "AI 分析失败：主配置和接口池均不可用",
+    )
+
+    cfg = _ensure_ai_config_table_and_row(db)
     # 落 AIAnalysisRecord 审计
     provider_int = {
         "openai": AIAnalysisRecord.PROVIDER_OPENAI,
@@ -255,17 +366,42 @@ def ai_analyze(
         "cost_usd": result.cost_usd,
         "provider": result.provider or cfg.provider_name,
         "model_name": result.model_name or cfg.model_name,
-        # 错误：非成功时必须有，前端会弹 ElMessage
         "success": result.success,
         "error_code": result.error_code,
         "error_msg": result.error_msg,
         "third_party_status": result.third_party_status,
+        "ai_source": unified["source"],
+        "used_key_name": unified.get("used_key_name", ""),
+        # 实时价格数据（供前端展示核对）
+        "current_price": current_price,
+        "bid_price": bid_price,
+        "ask_price": ask_price,
+        "change_pct_24h": round(change_pct, 2) if change_pct else None,
+        "candles_count": len(candles_snapshot.split("\n")) if candles_snapshot else 0,
+        "news_count_24h": news_count_24h,
+        "news_warning": news_warning,
     }
     if not result.success:
-        # 前端 AI.vue catch 会拿到这个 message；但我们同时放 payload.error_msg 给前端 detail 显示
-        # 注意：success() 第一个参数固定是 code=0，不要再手动传 code=，否则会造成重复参数
-        return success(payload, message=result.error_msg or "AI 分析失败")
-    return success(payload, message="AI 分析完成")
+        msg = result.error_msg or "AI 分析失败"
+        if news_warning:
+            msg += " | " + news_warning
+        return success(payload, message=msg)
+    msg = "AI 分析完成"
+    if unified["source"] == "pool":
+        msg = f"AI 分析完成（已自动切换到接口池: {unified.get('used_key_name', '')}）"
+    if news_warning:
+        msg += " | " + news_warning
+    return success(payload, message=msg)
+
+
+@ai_router.get("/status")
+def ai_status(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """检查 AI 连接状态（主配置 + 接口池），供前端绿灯/红灯显示"""
+    from backend.services.ai_failover import check_ai_status
+    return success(check_ai_status(db))
 
 
 @ai_router.get("/records")
@@ -275,7 +411,6 @@ def ai_records(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """AI调用历史：管理员看全部，其他人只能看自己"""
     # 确保表存在（新库首次访问无 ai_analysis_records 时也 OK）
     from backend.db.session import engine_sync
     insp2 = sa_inspect(engine_sync)
@@ -530,13 +665,20 @@ def _load_news_ai_configs(db: Session, strip_encrypted: bool = True) -> List[Dic
         items = json.loads(row.config_value)
         for item in items:
             if item.get("api_key_encrypted"):
-                item["api_key_masked"] = mask_api_key(decrypt_api_key(item["api_key_encrypted"]))
+                decrypted = decrypt_api_key(item["api_key_encrypted"])
+                item["api_key_masked"] = mask_api_key(decrypted)
                 item["has_key"] = True
+                # strip_encrypted=False 时保留明文 key，供内部使用（测试/故障转移）
+                if not strip_encrypted:
+                    item["api_key"] = decrypted
             else:
                 item["api_key_masked"] = ""
                 item["has_key"] = False
+                if not strip_encrypted:
+                    item["api_key"] = ""
             if strip_encrypted:
                 item.pop("api_key_encrypted", None)
+                item.pop("api_key", None)
         return items
     except Exception as e:
         logger.warning(f"[NewsAI] 配置解析失败: {e}")
@@ -655,21 +797,41 @@ def delete_news_ai_config(
 
 
 @news_router.post("/ai-configs/test")
-def test_news_ai_config(
-    req: NewsAIConfigTest,
+async def test_news_ai_config(
+    request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(require_admin),
 ):
-    """测试新闻AI API连接"""
-    import requests
+    """测试新闻AI API连接（直接解析请求体，避免Pydantic校验422）"""
+    import requests as _requests
     import time
+    import uuid
     try:
-        endpoint = req.api_endpoint.rstrip("/") if req.api_endpoint else "https://api.openai.com/v1"
+        body = await request.json()
+        api_key = body.get("api_key", "").strip()
+        api_endpoint = (body.get("api_endpoint") or "").strip()
+        model_name = (body.get("model_name") or "").strip()
+        config_id = body.get("config_id", "")
+
+        # 编辑模式且未提供新Key时，从数据库读取现有Key
+        if config_id and (not api_key or api_key == "__USE_EXISTING__"):
+            configs = _load_news_ai_configs(db, strip_encrypted=False)
+            for item in configs:
+                if item.get("id") == config_id and item.get("api_key"):
+                    api_key = item["api_key"]
+                    break
+
+        if not api_key:
+            raise ParameterException("请先输入或选择API Key")
+        if not model_name:
+            raise ParameterException("请输入模型名称")
+
+        endpoint = api_endpoint.rstrip("/") if api_endpoint else "https://api.openai.com/v1"
         if not endpoint.endswith("/chat/completions"):
             endpoint = f"{endpoint}/chat/completions"
-        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {req.api_key}"}
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"}
         payload = {
-            "model": req.model_name,
+            "model": model_name,
             "messages": [
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": "Say OK in one word."},
@@ -678,13 +840,38 @@ def test_news_ai_config(
             "temperature": 0,
         }
         t0 = time.time()
-        resp = requests.post(endpoint, json=payload, headers=headers, timeout=15)
+        resp = _requests.post(endpoint, json=payload, headers=headers, timeout=15)
         latency = int((time.time() - t0) * 1000)
         if resp.status_code != 200:
             raise Exception(f"HTTP {resp.status_code}: {resp.text[:200]}")
         data = resp.json()
-        return success({"latency_ms": latency, "model": data.get("model", "")}, message="连接成功")
+        result = {"latency_ms": latency, "model": data.get("model", "")}
+        # 更新该配置的健康状态
+        if config_id:
+            configs = _load_news_ai_configs(db, strip_encrypted=False)
+            for item in configs:
+                if item.get("id") == config_id:
+                    item["health_status"] = "ok"
+                    item["last_test_at"] = datetime.now().isoformat(timespec="seconds")
+                    item["last_test_latency_ms"] = latency
+                    break
+            _save_news_ai_configs(db, configs)
+        return success(result, message="连接成功")
+    except ParameterException:
+        raise
     except Exception as e:
+        # 更新健康状态为error
+        if config_id:
+            try:
+                configs = _load_news_ai_configs(db, strip_encrypted=False)
+                for item in configs:
+                    if item.get("id") == config_id:
+                        item["health_status"] = "error"
+                        item["last_test_at"] = datetime.now().isoformat(timespec="seconds")
+                        break
+                _save_news_ai_configs(db, configs)
+            except Exception:
+                pass
         raise ParameterException(f"连接测试失败: {e}")
 
 
@@ -1032,6 +1219,41 @@ def dashboard_report(
 # ======================== AI 综合预测 ========================
 
 PREDICTION_SYMBOLS = ["BTC", "ETH", "SOL", "XAU", "WTI"]
+
+_OKX_INST_MAP = {
+    "WTI": ["CL-USDT-SWAP", "CLUSDT", "WTI-USDT-SWAP"],
+    "XAU": ["XAU-USDT-SWAP", "XAUUSDT"],
+    "XAG": ["XAG-USDT-SWAP", "XAGUSDT"],
+}
+
+_commodity_price_cache: Dict[str, dict] = {}
+
+
+def _fetch_commodity_price(symbol: str) -> Optional[float]:
+    """从OKX公共API获取商品价格（WTI/XAU等），带5秒缓存"""
+    import requests as _requests
+    inst_ids = _OKX_INST_MAP.get(symbol)
+    if not inst_ids:
+        return None
+    cache = _commodity_price_cache.get(symbol, {})
+    if cache and time.time() - cache.get("ts", 0) < 5:
+        return cache.get("price")
+    for inst_id in inst_ids:
+        try:
+            r = _requests.get(
+                "https://www.okx.com/api/v5/market/ticker",
+                params={"instId": inst_id},
+                timeout=5,
+            )
+            data = r.json().get("data", [{}])[0]
+            price = float(data.get("last", 0))
+            if price > 0:
+                _commodity_price_cache[symbol] = {"price": price, "ts": time.time()}
+                logger.info(f"[Prediction] OKX获取{symbol}价格成功: {price} (instId={inst_id})")
+                return price
+        except Exception as e:
+            logger.debug(f"[Prediction] OKX {inst_id} 获取{symbol}价格失败: {e}")
+    return None
 
 # Polymarket 缓存（避免每次请求都发HTTP）
 _poly_cache: Dict = {"data": {}, "timestamp": 0.0}
@@ -1403,6 +1625,9 @@ def _compute_predictions(syms, db, poly_odds):
                     current_price = klines[-1].close
         except Exception:
             pass
+
+        if not current_price:
+            current_price = _fetch_commodity_price(sym)
 
         target_price = None
         if current_price and predicted_pct:

@@ -2,7 +2,11 @@
   <div class="page-container">
     <div class="page-header">
       <div>
-        <h2 class="page-title"><el-icon><Cpu /></el-icon>AI 实时分析</h2>
+        <h2 class="page-title">
+          <el-icon><Cpu /></el-icon>AI 实时分析
+          <span class="ai-status-light" :class="aiStatusClass" :title="aiStatusText"></span>
+          <span class="ai-status-text" :class="aiStatusClass">{{ aiStatusText }}</span>
+        </h2>
         <div class="page-subtitle">对接大模型或自定义AI接口，综合评分占30%权重，可手动触发深度分析</div>
       </div>
       <el-button v-if="user.isAdmin" type="primary" link :icon="Setting" @click="showCfg = true">配置AI接口</el-button>
@@ -18,7 +22,15 @@
               <el-descriptions-item label="模型">{{ cfg.model_name }}</el-descriptions-item>
               <el-descriptions-item label="Endpoint">{{ cfg.api_endpoint || '默认' }}</el-descriptions-item>
               <el-descriptions-item label="API Key">
-                <el-tag effect="dark" type="success">已配置</el-tag>
+                <el-tag effect="dark" :type="cfg.has_key ? 'success' : 'danger'">
+                  {{ cfg.has_key ? '已配置' : '未配置' }}
+                </el-tag>
+              </el-descriptions-item>
+              <el-descriptions-item label="接口状态">
+                <div style="display:flex;align-items:center;gap:6px;">
+                  <span class="ai-status-light" :class="aiStatusClass"></span>
+                  <span :style="{ color: aiStatusColor, fontSize: '12px' }">{{ aiStatusDetail }}</span>
+                </div>
               </el-descriptions-item>
               <el-descriptions-item label="今日调用次数">{{ todayCalls }}</el-descriptions-item>
               <el-descriptions-item label="累计消耗成本">${{ totalCost.toFixed(4) }}</el-descriptions-item>
@@ -50,6 +62,7 @@
                     <el-tag size="small" :type="c.enabled ? 'success' : 'info'" effect="plain" style="margin-left: 6px;">
                       {{ c.enabled ? '启用' : '停用' }}
                     </el-tag>
+                    <span class="news-api-health-light" :class="healthLightClass(c.health_status)" :title="healthLightTitle(c.health_status)"></span>
                   </div>
                   <div class="news-api-detail text-dim">{{ c.model_name }} · {{ c.provider }}</div>
                 </div>
@@ -114,6 +127,36 @@
             </el-tag>
           </div>
           <div class="panel-card__body" v-if="lastResult">
+            <!-- 实时价格核对区 -->
+            <div v-if="lastResult.current_price" class="price-check-panel">
+              <div class="price-check-panel__header">
+                <span class="price-check-panel__title">实时价格核对</span>
+                <el-tag size="small" :type="lastResult.change_pct_24h >= 0 ? 'success' : 'danger'" effect="plain">
+                  {{ lastResult.change_pct_24h >= 0 ? '+' : '' }}{{ lastResult.change_pct_24h }}%
+                </el-tag>
+              </div>
+              <div class="price-check-row">
+                <div class="price-check-item">
+                  <span class="price-check-label">最新价</span>
+                  <span class="price-check-value">{{ fmtPrice(lastResult.current_price) }}</span>
+                </div>
+                <div class="price-check-item">
+                  <span class="price-check-label" style="color:#60a5fa;">买一价(Bid)</span>
+                  <span class="price-check-value price-bid">{{ fmtPrice(lastResult.bid_price) }}</span>
+                </div>
+                <div class="price-check-item">
+                  <span class="price-check-label" style="color:#f472b6;">卖一价(Ask)</span>
+                  <span class="price-check-value price-ask">{{ fmtPrice(lastResult.ask_price) }}</span>
+                </div>
+              </div>
+              <div class="price-check-meta">
+                <span class="text-dim" style="font-size:11px;">K线数据: {{ lastResult.candles_count }} 根 | 新闻数据: {{ lastResult.news_count_24h }} 条(24h)</span>
+                <span v-if="lastResult.ai_source" class="text-dim" style="font-size:11px;margin-left:8px;">AI来源: {{ lastResult.ai_source === 'pool' ? '接口池(' + lastResult.used_key_name + ')' : '主配置' }}</span>
+              </div>
+            </div>
+            <!-- 新闻不足提示 -->
+            <el-alert v-if="lastResult.news_warning" :title="lastResult.news_warning" type="warning" :closable="false" style="margin-bottom:12px;" show-icon />
+            <!-- AI分析结果 -->
             <div class="ai-result">
               <div class="ai-score-ring">
                 <div class="score-ring" :data-level="aiLevel">
@@ -219,7 +262,7 @@
           </el-col>
           <el-col :span="12">
             <el-form-item label="最大Token">
-              <el-input-number v-model="cfg.max_tokens" :min="128" :max="8192" :step="128" style="width:100%;" />
+              <el-input-number v-model="cfg.max_tokens" :min="128" :max="65536" :step="128" style="width:100%;" />
             </el-form-item>
           </el-col>
         </el-row>
@@ -354,7 +397,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Cpu, Setting, Promotion, Edit, Plus } from '@element-plus/icons-vue'
 import { SYMBOL_META, scoreLevel } from '@/utils/env'
@@ -376,6 +419,10 @@ const totalCost = ref(0)
 const cfgLoading = ref(true)
 const historyLoading = ref(false)
 const editingNewsId = ref('')
+
+// AI 连接状态
+const aiStatus = ref({ status: 'checking', source: 'none', detail: '检测中...', last_verified: null })
+let statusTimer = null
 
 const cfg = reactive({
   provider: 'custom',
@@ -415,6 +462,45 @@ const history = ref([
 ])
 
 const aiLevel = computed(() => scoreLevel((lastResult.value?.ai_score || 0) / 3 * 10))
+
+// AI 状态 computed
+const aiStatusClass = computed(() => {
+  if (aiStatus.value.status === 'checking') return 'light-pending'
+  if (aiStatus.value.status === 'ok') return 'light-ok'
+  return 'light-error'
+})
+const aiStatusText = computed(() => {
+  if (aiStatus.value.status === 'checking') return '检测中'
+  if (aiStatus.value.status === 'ok') return aiStatus.value.source === 'pool' ? '接口池' : '正常'
+  return '异常'
+})
+const aiStatusColor = computed(() => {
+  if (aiStatus.value.status === 'ok') return '#25D07D'
+  if (aiStatus.value.status === 'checking') return '#F59E0B'
+  return '#EF4444'
+})
+const aiStatusDetail = computed(() => aiStatus.value.detail || '')
+
+// 新闻AI配置健康状态
+const healthLightClass = (status) => {
+  if (status === 'ok') return 'light-ok'
+  if (status === 'error') return 'light-error'
+  return 'light-pending'
+}
+const healthLightTitle = (status) => {
+  if (status === 'ok') return '接口正常'
+  if (status === 'error') return '连接失败'
+  return '未测试'
+}
+
+const loadAiStatus = async () => {
+  try {
+    const r = await http.get(`${API_PREFIX}/ai/status`)
+    aiStatus.value = r
+  } catch {
+    aiStatus.value = { status: 'error', source: 'none', detail: '状态获取失败', last_verified: null }
+  }
+}
 
 const loadCfg = async () => {
   cfgLoading.value = true
@@ -467,7 +553,9 @@ const loadHistory = async () => {
 const loadNewsAiConfigs = async () => {
   try {
     const r = await http.get(`${API_PREFIX}/news/ai-configs`)
-    newsAiConfigs.value = (r.configs || []).sort((a, b) => (a.priority || 99) - (b.priority || 99))
+    const items = (r.configs || []).sort((a, b) => (a.priority || 99) - (b.priority || 99))
+    // 确保每个配置有 health_status 字段
+    newsAiConfigs.value = items.map(c => ({ ...c, health_status: c.health_status || null }))
   } catch {}
 }
 
@@ -477,12 +565,15 @@ const saveCfg = async () => {
   try {
     await http.put(`${API_PREFIX}/ai/config`, {
       provider: cfg.provider, model_name: cfg.model_name, api_endpoint: cfg.api_endpoint,
-      api_key: cfg.api_key || '', temperature: cfg.temperature, max_tokens: cfg.max_tokens,
-      request_timeout_sec: cfg.request_timeout_sec, max_retries: cfg.max_retries,
+      api_key: cfg.api_key || '', temperature: Math.round(Number(cfg.temperature) || 0),
+      max_tokens: Math.round(Number(cfg.max_tokens) || 800),
+      request_timeout_sec: Math.round(Number(cfg.request_timeout_sec) || 30),
+      max_retries: Math.round(Number(cfg.max_retries) || 2),
     })
     ElMessage.success('AI配置已保存并立即生效')
     showCfg.value = false
     await loadCfg()
+    await loadAiStatus()
   } catch (e) {
     ElMessage.error(e?.message || 'AI 配置保存失败')
   } finally { saving.value = false }
@@ -503,24 +594,42 @@ const testAi = async () => {
   } finally { testing.value = false }
 }
 
+// 格式化价格显示
+function fmtPrice(price) {
+  if (price == null || price === 0) return '---'
+  if (price >= 1000) return price.toFixed(2)
+  if (price >= 1) return price.toFixed(4)
+  return price.toFixed(6)
+}
+
 const run = async () => {
   loading.value = true
   try {
     const r = await http.post(`${API_PREFIX}/ai/analyze`, {
       analysis_type: aForm.type, symbol: aForm.symbol, timeframe: aForm.timeframe, manual_prompt: aForm.prompt,
     })
-    lastResult.value = r || {
-      ai_score: 2.2 + Math.random() * 0.8,
-      ai_direction: ['long','short','neutral'][Math.floor(Math.random()*3)],
-      ai_reason: aForm.prompt || '基于当前技术面MACD金叉+成交量温和放大，叠加美联储鸽派讲话的市场情绪，短期偏多；但需警惕上方关键阻力位，建议轻仓分批入场，严格设置止损。',
+    lastResult.value = r
+    // 显示分析消息（含新闻警告）
+    if (r.news_warning) {
+      ElMessage.warning(r.news_warning)
     }
-    ElMessage.success('AI分析完成')
+    if (r.ai_source === 'pool' && r.used_key_name) {
+      ElMessage.success(`AI分析完成（已自动切换接口池: ${r.used_key_name}）`)
+    } else if (r.ai_source === 'primary') {
+      ElMessage.success('AI分析完成')
+    } else if (!r.success) {
+      ElMessage.error(r.error_msg || 'AI 分析失败')
+    } else {
+      ElMessage.success('AI分析完成')
+    }
     loadHistory()
+    loadAiStatus()
   } catch (e) {
     lastResult.value = {
       ai_score: 0, ai_direction: 'neutral',
       ai_reason: 'AI 分析调用失败：' + (e?.message || '请检查 API Key 与模型配置'),
     }
+    ElMessage.error(e?.message || 'AI 分析调用失败')
   } finally { loading.value = false }
 }
 
@@ -609,7 +718,20 @@ const deleteNewsConfig = async (row) => {
 
 const testNewsConfig = async (row) => {
   if (!row.has_key) { ElMessage.warning('该接口未配置API Key，无法测试'); return }
-  ElMessage.info('请点击编辑后在表单中测试连接')
+  // 直接测试该配置（无需打开编辑表单）
+  newsTesting.value = true
+  try {
+    const r = await http.post(`${API_PREFIX}/news/ai-configs/test`, {
+      provider: row.provider, api_endpoint: row.api_endpoint || '',
+      api_key: '__USE_EXISTING__', model_name: row.model_name,
+      config_id: row.id,
+    })
+    ElMessage.success(`连接成功！耗时 ${r.latency_ms || '?'}ms`)
+    await loadNewsAiConfigs()
+  } catch (e) {
+    ElMessage.error(e?.message || '连接测试失败')
+    await loadNewsAiConfigs()
+  } finally { newsTesting.value = false }
 }
 
 const testCurrentNewsConfig = async () => {
@@ -619,18 +741,32 @@ const testCurrentNewsConfig = async () => {
   try {
     const r = await http.post(`${API_PREFIX}/news/ai-configs/test`, {
       provider: newsForm.provider, api_endpoint: newsForm.api_endpoint,
-      api_key: newsForm.api_key || '__USE_EXISTING__', model_name: newsForm.model_name,
+      api_key: newsForm.api_key || (editingNewsId.value ? '__USE_EXISTING__' : ''),
+      model_name: newsForm.model_name,
+      config_id: editingNewsId.value,
     })
     ElMessage.success(`连接成功！耗时 ${r.latency_ms || '?'}ms`)
+    if (editingNewsId.value) {
+      await loadNewsAiConfigs()
+    }
   } catch (e) {
     ElMessage.error(e?.message || '连接测试失败')
+    if (editingNewsId.value) {
+      await loadNewsAiConfigs()
+    }
   } finally { newsTesting.value = false }
 }
 
 onMounted(async () => {
   await loadCfg()
+  await loadAiStatus()
   if (user.isAdmin) { await loadNewsAiConfigs() }
   loadHistory()
+  statusTimer = setInterval(loadAiStatus, 30000)
+})
+
+onUnmounted(() => {
+  if (statusTimer) { clearInterval(statusTimer); statusTimer = null }
 })
 </script>
 
@@ -684,7 +820,29 @@ onMounted(async () => {
   font-size: 11px;
   margin-top: 2px;
 }
-.news-api-status { flex-shrink: 0; }
+.news-api-status { flex-shrink: 0; display: flex; align-items: center; gap: 6px; }
+.news-api-health-light {
+  display: inline-block;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  margin-left: 6px;
+  transition: all 0.3s ease;
+  flex-shrink: 0;
+}
+.news-api-health-light.light-ok {
+  background-color: #25D07D;
+  box-shadow: 0 0 4px #25D07D, 0 0 8px rgba(37, 208, 125, 0.4);
+  animation: pulse-green 1.5s ease-in-out infinite;
+}
+.news-api-health-light.light-error {
+  background-color: #EF4444;
+  box-shadow: 0 0 4px #EF4444;
+  animation: pulse-red 1s ease-in-out infinite;
+}
+.news-api-health-light.light-pending {
+  background-color: #555;
+  box-shadow: none;
+}
 
 .news-cfg-header {
   display: flex;
@@ -694,4 +852,97 @@ onMounted(async () => {
 
 .mt-8 { margin-top: 8px; }
 .text-center { text-align: center; }
+
+/* AI 状态指示灯 */
+.ai-status-light {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  margin-left: 8px;
+  vertical-align: middle;
+  transition: all 0.3s ease;
+}
+.ai-status-light.light-ok {
+  background-color: #25D07D;
+  box-shadow: 0 0 6px #25D07D, 0 0 12px rgba(37, 208, 125, 0.4);
+  animation: pulse-green 1.5s ease-in-out infinite;
+}
+.ai-status-light.light-error {
+  background-color: #EF4444;
+  box-shadow: 0 0 6px #EF4444, 0 0 12px rgba(239, 68, 68, 0.4);
+  animation: pulse-red 1s ease-in-out infinite;
+}
+.ai-status-light.light-pending {
+  background-color: #F59E0B;
+  box-shadow: 0 0 6px #F59E0B;
+  animation: pulse-amber 1s ease-in-out infinite;
+}
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 6px #25D07D, 0 0 12px rgba(37, 208, 125, 0.4); }
+  50% { opacity: 0.5; transform: scale(0.8); box-shadow: 0 0 3px #25D07D, 0 0 6px rgba(37, 208, 125, 0.2); }
+}
+@keyframes pulse-red {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 6px #EF4444, 0 0 12px rgba(239, 68, 68, 0.4); }
+  50% { opacity: 0.4; transform: scale(0.85); box-shadow: 0 0 3px #EF4444; }
+}
+@keyframes pulse-amber {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.ai-status-text {
+  font-size: 12px;
+  font-weight: 500;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+.ai-status-text.light-ok { color: #25D07D; }
+.ai-status-text.light-error { color: #EF4444; }
+.ai-status-text.light-pending { color: #F59E0B; }
+
+/* 实时价格核对面板 */
+.price-check-panel {
+  background: rgba(30, 41, 59, 0.6);
+  border: 1px solid rgba(56, 189, 248, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+}
+.price-check-panel__header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+.price-check-panel__title {
+  font-size: 13px;
+  color: #94a3b8;
+  font-weight: 500;
+}
+.price-check-row {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 8px;
+}
+.price-check-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.price-check-label {
+  font-size: 11px;
+  color: #64748b;
+}
+.price-check-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #f0f4f8;
+  font-family: 'Courier New', monospace;
+}
+.price-bid { color: #60a5fa !important; }
+.price-ask { color: #f472b6 !important; }
+.price-check-meta {
+  font-size: 11px;
+  color: #64748b;
+}
 </style>
