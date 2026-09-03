@@ -21,7 +21,12 @@
     <el-row :gutter="16" class="mb-16">
       <el-col :span="4" v-for="m in summaryList" :key="m.key">
         <div class="stat-card">
-          <div class="stat-card__label">{{ m.label }}</div>
+          <div class="stat-card__label">
+            <span style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="m.lightStatus || 'ok'"></span>
+              {{ m.label }}
+            </span>
+          </div>
           <div class="stat-card__value" :class="m.cls">
             <span v-if="m.money">$</span>{{ m.value }}<span v-if="m.pct">%</span>
           </div>
@@ -107,9 +112,12 @@
             <el-table-column label="交易笔数" width="100" align="center">
               <template #default="{ row }">{{ row.trade_count }}</template>
             </el-table-column>
-            <el-table-column label="胜率" width="90" align="center">
+            <el-table-column label="胜率" width="100" align="center">
               <template #default="{ row }">
-                <el-tag size="small" :type="row.win_rate>=50?'success':'danger'" effect="plain">{{ row.win_rate }}%</el-tag>
+                <span style="display:inline-flex;align-items:center;gap:4px;">
+                  <span class="status-light" :class="row.win_rate>=50?'ok':'error'"></span>
+                  <el-tag size="small" :type="row.win_rate>=50?'success':'danger'" effect="plain">{{ row.win_rate }}%</el-tag>
+                </span>
               </template>
             </el-table-column>
             <el-table-column label="盈亏比" width="90" align="center">
@@ -118,10 +126,13 @@
             <el-table-column label="当日最大回撤" width="130" align="center">
               <template #default="{ row }"><span class="text-loss">-{{ row.max_drawdown_daily }}%</span></template>
             </el-table-column>
-            <el-table-column label="风控事件" width="100" align="center">
+            <el-table-column label="风控事件" width="110" align="center">
               <template #default="{ row }">
-                <el-tag size="small" v-if="row.risk_event_count>0" type="danger" effect="plain">{{ row.risk_event_count }}</el-tag>
-                <span v-else class="text-dim">0</span>
+                <span style="display:inline-flex;align-items:center;gap:4px;">
+                  <span class="status-light" :class="row.risk_event_count>0?'error':'ok'"></span>
+                  <el-tag size="small" v-if="row.risk_event_count>0" type="danger" effect="plain">{{ row.risk_event_count }}</el-tag>
+                  <span v-else class="text-dim">0</span>
+                </span>
               </template>
             </el-table-column>
             <el-table-column label="手续费" width="110" align="right">
@@ -231,11 +242,11 @@ const account_id = ref(null)
 const chartType = ref('daily')
 
 const summaryList = computed(() => [
-  { key:'pnl',    label:'区间总盈亏', value:'12,846.25', money:true, cls:'text-profit', sub:'较基准BTC +5,230 USDT' },
-  { key:'wr',     label:'综合胜率',     value:'62.3',     pct:true,   cls:'text-profit', sub:'目标 ≥ 55% ✓' },
-  { key:'pf',     label:'整体盈亏比',   value:'2.14',                cls:'text-info',   sub:'≥2:1 合格 ✓' },
-  { key:'mdd',    label:'最大回撤',     value:'8.6',      pct:true,   cls:'text-loss',   sub:'可容忍上限 15%' },
-  { key:'count',  label:'交易总笔数',   value:'1,256',               cls:'text-strong', sub:'今日 5 / 本月 84' },
+  { key:'pnl',    label:'区间总盈亏', value:'12,846.25', money:true, cls:'text-profit', sub:'较基准BTC +5,230 USDT', lightStatus:'ok' },
+  { key:'wr',     label:'综合胜率',     value:'62.3',     pct:true,   cls:'text-profit', sub:'目标 ≥ 55% ✓', lightStatus:'ok' },
+  { key:'pf',     label:'整体盈亏比',   value:'2.14',                cls:'text-info',   sub:'≥2:1 合格 ✓', lightStatus:'ok' },
+  { key:'mdd',    label:'最大回撤',     value:'8.6',      pct:true,   cls:'text-loss',   sub:'可容忍上限 15%', lightStatus:'warn' },
+  { key:'count',  label:'交易总笔数',   value:'1,256',               cls:'text-strong', sub:'今日 5 / 本月 84', lightStatus:'ok' },
 ])
 
 const dailyRows = ref([

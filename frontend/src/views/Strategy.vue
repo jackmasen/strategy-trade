@@ -29,7 +29,8 @@
       <el-table :data="rows" v-loading="loading" :header-cell-style="{ background:'#192738' }">
         <el-table-column prop="strategy_name" label="策略" width="200">
           <template #default="{ row }">
-            <div class="flex gap-8">
+            <div class="flex gap-8" style="align-items:center;">
+              <span class="status-light" :class="row.is_active ? 'ok' : 'idle'"></span>
               <el-tag :type="row.is_active ? 'success' : 'info'" effect="dark" round size="small">
                 {{ row.is_active ? '启用' : '停用' }}
               </el-tag>
@@ -124,7 +125,7 @@
         </el-form-item>
         <el-form-item label="启用品种" prop="symbols">
           <el-checkbox-group v-model="form.symbols">
-            <el-checkbox v-for="(m,k) in SYMBOL_META" :key="k" :label="k" border>
+            <el-checkbox v-for="(m,k) in SYMBOL_META" :key="k" :value="k" border>
               {{ m.icon }} {{ k }} {{ m.name }}
             </el-checkbox>
           </el-checkbox-group>

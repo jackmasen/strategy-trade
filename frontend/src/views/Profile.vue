@@ -18,15 +18,16 @@
             <div class="text-dim">@{{ user.userInfo?.username }}</div>
             <el-tag style="margin-top: 10px;" size="default" effect="dark"
               :type="['success','warning','info'][user.userInfo?.role-1]">
+              <span class="status-light" :class="user.userInfo?.role===1?'ok':(user.userInfo?.role===2?'warn':'idle')" style="margin-right:2px;"></span>
               {{ ['超级管理员','运营','访客'][user.userInfo?.role-1] }}
             </el-tag>
             <el-divider />
             <div class="text-left" style="color:#B6C2CF; font-size:13px; line-height:2;">
-              <div>📧 邮箱: {{ user.userInfo?.email || '-' }}</div>
-              <div>📱 手机: {{ user.userInfo?.phone || '-' }}</div>
-              <div>🔐 2FA: {{ user.userInfo?.two_factor_enabled ? '已启用' : '未启用' }}</div>
-              <div>🕐 上次登录: {{ user.userInfo?.last_login_at || '-' }}</div>
-              <div>📅 账号创建: {{ user.userInfo?.created_at }}</div>
+              <div><span class="status-light" :class="user.userInfo?.email?'ok':'error'"></span>📧 邮箱: {{ user.userInfo?.email || '-' }}</div>
+              <div><span class="status-light" :class="user.userInfo?.phone?'ok':'warn'"></span>📱 手机: {{ user.userInfo?.phone || '-' }}</div>
+              <div><span class="status-light" :class="user.userInfo?.two_factor_enabled?'ok':'warn'"></span>🔐 2FA: {{ user.userInfo?.two_factor_enabled ? '已启用' : '未启用' }}</div>
+              <div><span class="status-light ok"></span>🕐 上次登录: {{ user.userInfo?.last_login_at || '-' }}</div>
+              <div><span class="status-light ok"></span>📅 账号创建: {{ user.userInfo?.created_at }}</div>
             </div>
           </div>
         </div>
@@ -60,6 +61,7 @@
         <div class="panel-card">
           <div class="panel-card__header"><span class="panel-card__title">谷歌双重认证 (2FA)</span>
             <el-tag :type="user.userInfo?.two_factor_enabled?'success':'info'" effect="dark" style="margin-left:10px;">
+              <span class="status-light" :class="user.userInfo?.two_factor_enabled?'ok':'warn'" style="margin-right:2px;"></span>
               {{ user.userInfo?.two_factor_enabled ? '已启用' : '未启用' }}
             </el-tag>
           </div>

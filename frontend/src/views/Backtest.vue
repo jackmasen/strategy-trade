@@ -13,7 +13,8 @@
         <div class="panel-card mb-16">
           <div class="flex-between mb-16">
             <div class="flex gap-12" style="flex-wrap:wrap;">
-              <div><el-tag effect="dark" :type="statusColor(current.status)" round>
+              <div style="display:flex;align-items:center;gap:6px;"><span class="status-light" :class="current.status===2?'ok':(current.status===3?'error':(current.status===1?'warn':'idle'))"></span>
+              <el-tag effect="dark" :type="statusColor(current.status)" round>
                 {{ ['待执行','执行中','成功','失败'][current.status] }}
               </el-tag></div>
               <div>
@@ -65,11 +66,14 @@
               </div>
             </template>
           </el-table-column>
-          <el-table-column label="状态" width="100" align="center">
+          <el-table-column label="状态" width="120" align="center">
             <template #default="{ row }">
-              <el-tag :type="statusColor(row.status)" effect="dark" round size="small">
-                {{ ['待执行','执行中','成功','失败'][row.status] }}
-              </el-tag>
+              <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+                <span class="status-light" :class="row.status===2?'ok':(row.status===3?'error':(row.status===1?'warn':'idle'))"></span>
+                <el-tag :type="statusColor(row.status)" effect="dark" round size="small">
+                  {{ ['待执行','执行中','成功','失败'][row.status] }}
+                </el-tag>
+              </div>
             </template>
           </el-table-column>
           <el-table-column label="总收益率" width="110" align="right">

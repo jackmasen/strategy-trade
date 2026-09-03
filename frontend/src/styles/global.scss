@@ -55,6 +55,49 @@ html, body, #app {
 .bg-warn     { background-color: rgba(251, 191, 36, 0.12) !important; }
 
 /* ============================================================
+   全局状态指示灯 - 绿灯闪烁=正常 红灯脉冲=异常 灰灯=停止
+   ============================================================ */
+.status-light {
+  display: inline-block !important;
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 50% !important;
+  margin-right: 6px !important;
+  vertical-align: middle !important;
+  flex-shrink: 0 !important;
+}
+.status-light.ok {
+  background-color: #25D07D !important;
+  box-shadow: 0 0 6px #25D07D, 0 0 10px rgba(37, 208, 125, 0.4) !important;
+  animation: sl-blink-green 1.5s ease-in-out infinite !important;
+}
+.status-light.error {
+  background-color: #EF4444 !important;
+  box-shadow: 0 0 6px #EF4444, 0 0 10px rgba(239, 68, 68, 0.4) !important;
+  animation: sl-pulse-red 1s ease-in-out infinite !important;
+}
+.status-light.warn {
+  background-color: #F59E0B !important;
+  box-shadow: 0 0 6px #F59E0B !important;
+  animation: sl-blink-amber 1s ease-in-out infinite !important;
+}
+.status-light.idle {
+  background-color: #6B7C90 !important;
+}
+@keyframes sl-blink-green {
+  0%, 100% { opacity: 1; transform: scale(1); box-shadow: 0 0 6px #25D07D, 0 0 10px rgba(37, 208, 125, 0.4); }
+  50% { opacity: 0.4; transform: scale(0.7); box-shadow: 0 0 3px #25D07D; }
+}
+@keyframes sl-pulse-red {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.8); }
+}
+@keyframes sl-blink-amber {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+/* ============================================================
    页面通用布局
    ============================================================ */
 .page-container {

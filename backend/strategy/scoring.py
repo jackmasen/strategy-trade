@@ -427,27 +427,33 @@ class AISentimentScorer:
             result.model = cached.model_name or ""
             return result
 
-        # 2) 无缓存 → 真调 AIClient（无 Key 时走离线降级，绝不抛异常）
+        # 2) 无缓存 → 真调 AI（主配置 + 接口池自动故障转移）
         try:
-            ai_cfg = self._get_or_init_ai_config(db)
-            client = AIClient(ai_cfg)
+            from backend.services.ai_failover import call_ai_unified
             candles_snap = self._build_candles_snapshot(symbol, timeframe, technical)
             news_snap = self._build_news_snapshot(news)
-            ai_ret: AIResult = client.analyze(
+            unified = call_ai_unified(
+                db,
                 analysis_type="score",
                 symbol=symbol,
                 timeframe=timeframe,
+                manual_prompt="",
                 candles_snapshot=candles_snap,
                 news_snapshot=news_snap,
-                manual_prompt="",
                 _mock=False,
             )
+            ai_ret = unified["result"]
+            if ai_ret and ai_ret.success:
+                from backend.core.logging_config import logger as _log
+                if unified["source"] == "pool":
+                    _log.info(f"[AIScorer] AI主配置失败，已自动切换接口池: {unified.get('used_key_name','')}")
+            elif not ai_ret or not ai_ret.success:
+                ai_ret = None
         except Exception as exc:
-            # 绝对兜底：任何异常都走离线合成，不影响评分主链路
             ai_ret = None
             import traceback
             from backend.core.logging_config import logger
-            logger.warning(f"[AIScorer] AIClient 调用异常，降级离线合成：{type(exc).__name__}: {exc}\n{traceback.format_exc()[:400]}")
+            logger.warning(f"[AIScorer] AI调用异常，降级离线合成：{type(exc).__name__}: {exc}\n{traceback.format_exc()[:400]}")
 
         # 3) 根据 AI 调用结果分支
         if ai_ret is not None and ai_ret.success:
@@ -469,11 +475,11 @@ class AISentimentScorer:
             try:
                 provider_int = {
                     "openai": 1, "anthropic": 2, "custom": 3, "local": 4,
-                }.get(ai_ret.provider or ai_cfg.provider_name, ai_cfg.provider or 3)
+                }.get(ai_ret.provider or "custom", 3)
                 rec = AIAnalysisRecord(
-                    user_id=0,  # 系统触发，无前台用户
+                    user_id=0,
                     provider=provider_int,
-                    model_name=ai_ret.model_name or ai_cfg.model_name or "",
+                    model_name=ai_ret.model_name or "",
                     analysis_type="score",
                     symbol=symbol,
                     timeframe=timeframe,

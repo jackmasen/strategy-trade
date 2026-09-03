@@ -36,14 +36,17 @@
               </div>
               <div>
                 <div class="text-strong" style="font-size:16px;">{{ a.sub_account_name }}</div>
-                <div class="text-dim" style="font-size:12px;">
+                <div class="text-dim" style="font-size:12px;display:flex;align-items:center;gap:4px;flex-wrap:wrap;">
                   <el-tag size="small" effect="dark">{{ EXCHANGE_META[a.exchange]?.name }}</el-tag>
                   <el-tag size="small" :type="a.testnet ? 'info' : 'warning'" effect="dark" style="margin-left:6px;">
                     {{ a.testnet ? '测试网' : '主网' }}
                   </el-tag>
-                  <el-tag size="small" :type="a.status===1?'success':(a.status===2?'danger':'info')" effect="dark" style="margin-left:6px;">
-                    {{ a.status===1 ? '启用' : a.status===2 ? 'API异常' : '禁用' }}
-                  </el-tag>
+                  <span style="display:flex;align-items:center;gap:4px;margin-left:6px;">
+                    <span class="status-light" :class="a.status===1?'ok':(a.status===2?'error':'idle')"></span>
+                    <el-tag size="small" :type="a.status===1?'success':(a.status===2?'danger':'info')" effect="dark">
+                      {{ a.status===1 ? '启用' : a.status===2 ? 'API异常' : '禁用' }}
+                    </el-tag>
+                  </span>
                 </div>
               </div>
             </div>

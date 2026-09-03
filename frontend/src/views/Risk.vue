@@ -12,7 +12,12 @@
     <el-row :gutter="16" class="mb-16">
       <el-col :span="4" v-for="k in kpiList" :key="k.key">
         <div class="stat-card risk-card" :class="k.cls">
-          <div class="stat-card__label">{{ k.label }}</div>
+          <div class="stat-card__label">
+            <span style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="k.lightStatus || 'ok'"></span>
+              {{ k.label }}
+            </span>
+          </div>
           <div class="stat-card__value" :class="k.valueCls">
             <span v-if="k.isPct">%</span>{{ k.value }}
           </div>
@@ -94,11 +99,14 @@
               <el-table-column label="时间" width="160">
                 <template #default="{ row }">{{ row.created_at }}</template>
               </el-table-column>
-              <el-table-column label="严重度" width="90" align="center">
+              <el-table-column label="严重度" width="100" align="center">
                 <template #default="{ row }">
-                  <el-tag size="small" :type="['info','warning','danger'][row.severity-1]" effect="dark" round>
-                    {{ ['提醒','警告','危险'][row.severity-1] }}
-                  </el-tag>
+                  <span style="display:inline-flex;align-items:center;gap:4px;">
+                    <span class="status-light" :class="row.severity===3?'error':(row.severity===2?'warn':'idle')"></span>
+                    <el-tag size="small" :type="['info','warning','danger'][row.severity-1]" effect="dark" round>
+                      {{ ['提醒','警告','危险'][row.severity-1] }}
+                    </el-tag>
+                  </span>
                 </template>
               </el-table-column>
               <el-table-column label="类型" width="130">
@@ -120,9 +128,12 @@
                   <span v-else class="text-dim">—</span>
                 </template>
               </el-table-column>
-              <el-table-column label="处置" width="110" align="center">
+              <el-table-column label="处置" width="120" align="center">
                 <template #default="{ row }">
-                  {{ ['记录','撤单','平仓','暂停策略'][row.action_taken] || '仅记录' }}
+                  <span style="display:inline-flex;align-items:center;gap:4px;">
+                    <span class="status-light" :class="row.action_taken>=2?'error':(row.action_taken===1?'warn':'idle')"></span>
+                    {{ ['记录','撤单','平仓','暂停策略'][row.action_taken] || '仅记录' }}
+                  </span>
                   <el-tag v-if="row.notified" size="small" type="success" effect="plain" style="margin-left:4px;">已通知</el-tag>
                 </template>
               </el-table-column>
@@ -150,10 +161,10 @@ const events = ref([])
 const loading = ref(true)
 
 const kpiList = computed(() => [
-  { key:'cur-dd',   label:'当前账户回撤',   value:'3.2',  isPct:true, cls:'r2', valueCls:'text-warn',   desc:'近30天峰值 vs 当前' },
-  { key:'daily',    label:'今日已实现盈亏', value:'+1,256', isPct:false, cls:'r1', valueCls:'text-profit', desc:'距离日亏损上限 -3.74%' },
-  { key:'position', label:'当前仓位使用率', value:'32',  isPct:true, cls:'r1', valueCls:'text-info',   desc:'上限 50%，安全' },
-  { key:'streak',   label:'连续亏损单数',   value:'1',   isPct:false, cls:'r1', valueCls:'text-strong', desc:'上限 3 单触发冷静期' },
+  { key:'cur-dd',   label:'当前账户回撤',   value:'3.2',  isPct:true, cls:'r2', valueCls:'text-warn',   desc:'近30天峰值 vs 当前', lightStatus:'warn' },
+  { key:'daily',    label:'今日已实现盈亏', value:'+1,256', isPct:false, cls:'r1', valueCls:'text-profit', desc:'距离日亏损上限 -3.74%', lightStatus:'ok' },
+  { key:'position', label:'当前仓位使用率', value:'32',  isPct:true, cls:'r1', valueCls:'text-info',   desc:'上限 50%，安全', lightStatus:'ok' },
+  { key:'streak',   label:'连续亏损单数',   value:'1',   isPct:false, cls:'r1', valueCls:'text-strong', desc:'上限 3 单触发冷静期', lightStatus:'warn' },
 ])
 
 const saveCfg = async () => {

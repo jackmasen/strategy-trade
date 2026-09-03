@@ -7,9 +7,11 @@
       </div>
       <div class="flex gap-12">
         <el-tag effect="dark" type="success">
+          <span class="status-light ok" style="margin-right:2px;"></span>
           持仓中: <b style="margin-left:6px;">{{ rows.filter(r=>r.status===1).length }}</b>
         </el-tag>
-        <el-tag effect="dark" type="info">
+        <el-tag effect="dark" :type="totalUnrealized>=0?'success':'danger'">
+          <span class="status-light" :class="totalUnrealized>=0?'ok':'error'" style="margin-right:2px;"></span>
           总浮动盈亏:
           <b :class="totalUnrealized>=0?'text-profit':'text-loss'" style="margin-left:6px;">
             {{ totalUnrealized>=0?'+':'' }}${{ fmtMoney(totalUnrealized) }}
@@ -44,6 +46,7 @@
         <el-table-column label="方向/杠杆" width="120" align="center">
           <template #default="{ row }">
             <el-tag :type="row.side===1?'success':'danger'" effect="dark">
+              <span class="status-light" :class="row.side===1?'ok':'error'" style="margin-right:2px;"></span>
               {{ row.side===1?'多':'空' }} {{ row.leverage }}x
             </el-tag>
           </template>

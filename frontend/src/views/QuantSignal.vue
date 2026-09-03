@@ -44,6 +44,7 @@
                 :type="dirType(sig.direction)"
                 class="signal-card__tag"
               >
+                <span class="status-light" :class="sig.direction==='bullish'?'ok':(sig.direction==='bearish'?'error':'idle')" style="margin-right:2px;"></span>
                 {{ sig.direction_cn }}
               </el-tag>
             </div>
@@ -62,11 +63,17 @@
             </div>
             <div class="signal-card__meta">
               <div class="meta-item">
-                <span class="meta-label">置信度</span>
+                <span class="meta-label">
+                  <span class="status-light" :class="(sig.confidence||0)>=70?'ok':(sig.confidence>=50?'warn':'error')"></span>
+                  置信度
+                </span>
                 <span class="meta-value">{{ sig.confidence?.toFixed(0) }}%</span>
               </div>
               <div class="meta-item">
-                <span class="meta-label">状态</span>
+                <span class="meta-label">
+                  <span class="status-light" :class="regimeClass(sig.market_regime)==='bullish'?'ok':(regimeClass(sig.market_regime)==='bearish'?'error':'idle')"></span>
+                  状态
+                </span>
                 <span class="meta-value regime-tag">{{ sig.market_regime_cn }}</span>
               </div>
             </div>
@@ -85,6 +92,7 @@
         <div class="panel-card__header">
           <span class="panel-card__title">{{ selectedSymbol }} 综合信号</span>
           <el-tag :type="dirType(selectedSignal.direction)" effect="dark" size="large">
+            <span class="status-light" :class="selectedSignal.direction==='bullish'?'ok':(selectedSignal.direction==='bearish'?'error':'idle')" style="margin-right:4px;"></span>
             {{ selectedSignal.direction_cn }}
           </el-tag>
         </div>
@@ -176,6 +184,7 @@
           <!-- 市场状态 -->
           <div class="regime-info">
             <div class="regime-badge" :class="`regime-badge--${regimeClass(selectedSignal.market_regime)}`">
+              <span class="status-light" :class="regimeClass(selectedSignal.market_regime)==='bullish'?'ok':(regimeClass(selectedSignal.market_regime)==='bearish'?'error':'idle')" style="margin-right:4px;"></span>
               {{ selectedSignal.market_regime_cn }}
             </div>
           </div>

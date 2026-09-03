@@ -47,7 +47,7 @@ class OKXFuturesClient(ExchangeClientBase):
         "XAU": "XAU-USDT-SWAP",  # OKX 有 XAU 合约
         "XAG": "XAG-USDT-SWAP",  # OKX 有 XAG 合约
         # 能源
-        "WTI": "WTI-USDT-SWAP",  # OKX 有 WTI 原油合约
+        "WTI": "CL-USDT-SWAP",  # OKX WTI原油合约 (ICE CL)
         # 美股-科技
         "TSLA": "TSLA-USDT-SWAP",  # 特斯拉
         "NVDA": "NVDA-USDT-SWAP",  # 英伟达

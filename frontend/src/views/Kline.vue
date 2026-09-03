@@ -7,6 +7,7 @@
       <div class="toolbar-row toolbar-row-top">
         <div class="toolbar-periods">
           <div v-for="(mp, key) in multiPeriod" :key="key" class="tp-item">
+            <span class="status-light ok" style="margin:0;"></span>
             <span class="tp-label">{{ periodLabel(key) }}</span>
             <span class="tp-high">H{{ fmtMoney(mp.high) }}</span>
             <span class="tp-low">L{{ fmtMoney(mp.low) }}</span>
@@ -38,7 +39,8 @@
           </el-radio-group>
           <div class="price-block">
             <span class="price-main" :class="priceDirection">${{ fmtMoney(ticker.last_price) }}</span>
-            <span class="price-change" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">
+            <span class="price-change" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'" style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="ticker.change_pct_24h >= 0 ? 'ok' : 'error'" style="margin:0;"></span>
               {{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ (ticker.change_pct_24h || 0).toFixed(2) }}%
             </span>
             <span class="price-hl"><span class="hl-label">24H高</span><span class="hl-high">{{ fmtMoney(ticker.high_24h) }}</span></span>
@@ -47,9 +49,18 @@
         </div>
         <div class="toolbar-right">
           <div class="toolbar-indicators">
-            <el-tag :type="trend.short_term === 'up' ? 'success' : trend.short_term === 'down' ? 'danger' : 'info'" size="small">短:{{ trendText(trend.short_term) }}</el-tag>
-            <el-tag :type="trend.mid_term === 'up' ? 'success' : trend.mid_term === 'down' ? 'danger' : 'info'" size="small">中:{{ trendText(trend.mid_term) }}</el-tag>
-            <el-tag type="warning" size="small">RSI:{{ trend.rsi }}</el-tag>
+            <el-tag :type="trend.short_term === 'up' ? 'success' : trend.short_term === 'down' ? 'danger' : 'info'" size="small">
+              <span class="status-light" :class="trend.short_term === 'up' ? 'ok' : (trend.short_term === 'down' ? 'error' : 'idle')" style="margin-right:2px;"></span>
+              短:{{ trendText(trend.short_term) }}
+            </el-tag>
+            <el-tag :type="trend.mid_term === 'up' ? 'success' : trend.mid_term === 'down' ? 'danger' : 'info'" size="small">
+              <span class="status-light" :class="trend.mid_term === 'up' ? 'ok' : (trend.mid_term === 'down' ? 'error' : 'idle')" style="margin-right:2px;"></span>
+              中:{{ trendText(trend.mid_term) }}
+            </el-tag>
+            <el-tag type="warning" size="small">
+              <span class="status-light" :class="trend.rsi > 70 ? 'error' : (trend.rsi < 30 ? 'ok' : 'warn')" style="margin-right:2px;"></span>
+              RSI:{{ trend.rsi }}
+            </el-tag>
           </div>
           <el-button-group v-if="layoutMode === 'custom'" size="small">
             <el-button :type="layoutEditMode ? 'warning' : ''" :icon="Edit" @click="toggleEditMode">
@@ -110,7 +121,7 @@
         <!-- 副图：MACD + RSI 并排 -->
         <div class="sub-charts-row">
           <div class="chart-card sub-chart">
-            <div class="chart-header"><span class="chart-title">MACD</span></div>
+            <div class="chart-header"><span class="status-light ok" style="margin:0;"></span><span class="chart-title">MACD</span></div>
             <div ref="macdChartRef" class="chart-sub"></div>
           </div>
           <div class="chart-card sub-chart">
@@ -123,7 +134,7 @@
         <div class="bottom-panels">
           <!-- 深度盘口 -->
           <div class="side-card bottom-panel compact-ob">
-            <div class="side-title">深度盘口</div>
+            <div class="side-title"><span class="status-light ok" style="margin:0;"></span>深度盘口</div>
             <div class="orderbook">
               <div class="ob-header">
                 <span>价格</span><span>数量</span><span>累计</span>
@@ -154,6 +165,7 @@
           <!-- 近期成交 -->
           <div class="side-card bottom-panel compact-trades">
             <div class="side-title">
+              <span class="status-light ok" style="margin:0;"></span>
               近期成交
               <span class="side-sub">实时更新</span>
             </div>
@@ -255,7 +267,7 @@
 
         <!-- 涨跌参数分析 -->
         <div class="info-card">
-          <div class="info-title">涨跌参数分析</div>
+          <div class="info-title"><span class="status-light ok" style="margin:0;"></span>涨跌参数分析</div>
           <div class="rf-grid">
             <div class="rf-item">
               <div class="rf-label">涨跌幅</div>
@@ -359,7 +371,7 @@
       <div class="kline-right">
         <!-- 深度盘口 -->
         <div class="side-card">
-          <div class="side-title">深度盘口</div>
+          <div class="side-title"><span class="status-light ok" style="margin:0;"></span>深度盘口</div>
           <div class="orderbook">
             <div class="ob-header">
               <span>价格</span><span>数量</span><span>累计</span>
@@ -390,18 +402,19 @@
         <!-- 近期成交 -->
         <div class="side-card">
           <div class="side-title">
+            <span class="status-light ok" style="margin:0;"></span>
             近期成交
             <span class="side-sub">实时更新</span>
           </div>
           <!-- 大单统计 -->
           <div class="trades-stats" v-if="bigTradeStats.buyCount > 0 || bigTradeStats.sellCount > 0">
             <div class="ts-item buy">
-              <div class="ts-label">大单买入</div>
+              <div class="ts-label"><span class="status-light ok" style="margin:0;width:6px;height:6px;"></span> 大单买入</div>
               <div class="ts-value">{{ bigTradeStats.buyCount }}笔</div>
               <div class="ts-amount">${{ formatBig(bigTradeStats.buyAmount) }}</div>
             </div>
             <div class="ts-item sell">
-              <div class="ts-label">大单卖出</div>
+              <div class="ts-label"><span class="status-light error" style="margin:0;width:6px;height:6px;"></span> 大单卖出</div>
               <div class="ts-value">{{ bigTradeStats.sellCount }}笔</div>
               <div class="ts-amount">${{ formatBig(bigTradeStats.sellAmount) }}</div>
             </div>
@@ -413,6 +426,7 @@
             <div v-for="(t, i) in recentTrades" :key="t.trade_id || i" class="trade-row"
                  :class="[t.side === 1 ? 'buy' : 'sell', { 'is-big': t.quote_qty >= whaleThreshold }]">
               <span class="trade-price">
+                <span class="status-light" :class="t.side === 1 ? 'ok' : 'error'" style="margin:0;width:6px;height:6px;"></span>
                 <span class="trade-arrow">{{ t.side === 1 ? '▲' : '▼' }}</span>
                 {{ fmtMoney(t.price, 4) }}
               </span>
@@ -432,6 +446,7 @@
         <!-- 清算热力图 & 爆仓预警 -->
         <div class="side-card">
           <div class="side-title">
+            <span class="status-light ok" style="margin:0;"></span>
             清算热力图
             <span class="side-sub">爆仓密集区估算</span>
           </div>
@@ -472,7 +487,7 @@
               暂无数据
             </div>
             <div v-for="(d, i) in liqHeatmap.danger_levels" :key="i" class="liq-danger-item" :class="d.side">
-              <span class="liq-danger-side">{{ d.side_cn }}</span>
+              <span class="liq-danger-side"><span class="status-light" :class="d.side === 'long' ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span> {{ d.side_cn }}</span>
               <span class="liq-danger-price">{{ d.price }}</span>
               <span class="liq-danger-dist">距当前 {{ d.distance_pct }}%</span>
               <div class="liq-danger-bar" :style="{width: (d.density * 100) + '%'}"></div>
@@ -485,27 +500,27 @@
           <div class="side-title">持仓量 & 资金信息</div>
           <div class="oi-info">
             <div class="oi-row">
-              <span class="oi-label">持仓量(币)</span>
+              <span class="oi-label"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span> 持仓量(币)</span>
               <span class="oi-value">{{ formatBig(openInterest.open_interest) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">持仓价值(USDT)</span>
+              <span class="oi-label"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span> 持仓价值(USDT)</span>
               <span class="oi-value">${{ formatBig(openInterest.open_interest_usdt) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">24h 最高</span>
+              <span class="oi-label"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span> 24h 最高</span>
               <span class="oi-value high">{{ fmtMoney(ticker.high_24h) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">24h 最低</span>
+              <span class="oi-label"><span class="status-light warn" style="margin:0;width:5px;height:5px;"></span> 24h 最低</span>
               <span class="oi-value low">{{ fmtMoney(ticker.low_24h) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">24h 成交量</span>
+              <span class="oi-label"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span> 24h 成交量</span>
               <span class="oi-value">{{ formatBig(ticker.volume_24h) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">24h 涨跌</span>
+              <span class="oi-label"><span class="status-light" :class="ticker.change_pct_24h >= 0 ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span> 24h 涨跌</span>
               <span class="oi-value" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">
                 {{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ ticker.change_pct_24h }}%
               </span>
@@ -516,6 +531,7 @@
         <!-- 大资金预警 -->
         <div class="side-card alert-card">
           <div class="side-title">
+            <span class="status-light ok" style="margin:0;"></span>
             <el-icon><Bell /></el-icon>
             大资金异动预警
           </div>
@@ -525,7 +541,7 @@
               <div class="alert-tip">单笔 > {{ whaleThreshold }} USDT 将触发提醒</div>
             </div>
             <div v-for="(a, i) in whaleAlerts" :key="i" class="alert-item" :class="a.side === 1 ? 'buy' : 'sell'">
-              <div class="alert-side">{{ a.side === 1 ? '大单买入' : '大单卖出' }}</div>
+              <div class="alert-side"><span class="status-light" :class="a.side === 1 ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span> {{ a.side === 1 ? '大单买入' : '大单卖出' }}</div>
               <div class="alert-price">{{ fmtMoney(a.price, 4) }}</div>
               <div class="alert-amount">${{ formatBig(a.quote_qty) }}</div>
               <div class="alert-time">{{ formatTime(a.timestamp_ms) }}</div>
@@ -594,12 +610,14 @@
         </div>
         <div class="kpb-summary">
           <span class="kpb-summary-item">
+            <span class="status-light" :class="totalUnrealizedPnl >= 0 ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span>
             <span class="kpb-sl">未实现盈亏</span>
             <span class="kpb-sv" :class="totalUnrealizedPnl >= 0 ? 'profit' : 'loss'">
               {{ totalUnrealizedPnl >= 0 ? '+' : '' }}${{ formatBig(totalUnrealizedPnl) }}
             </span>
           </span>
           <span class="kpb-summary-item">
+            <span class="status-light ok" style="margin:0;width:5px;height:5px;"></span>
             <span class="kpb-sl">保证金占用</span>
             <span class="kpb-sv">${{ formatBig(totalMarginUsed) }}</span>
           </span>
@@ -611,7 +629,10 @@
       <div class="kpb-body" v-if="myPositions.length > 0">
         <div v-for="pos in myPositions" :key="pos.id" class="pos-card" :class="pos.side === 1 ? 'long' : 'short'" @click="focusPosition(pos)">
           <div class="pos-card-header">
-            <span class="pos-symbol">{{ pos.symbol }}</span>
+            <span class="pos-symbol" style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="pos.side === 1 ? 'ok' : 'error'" style="margin:0;"></span>
+              {{ pos.symbol }}
+            </span>
             <el-tag size="small" effect="dark" :type="pos.side === 1 ? 'success' : 'danger'">
               {{ pos.side === 1 ? '多' : '空' }} {{ pos.leverage }}x
             </el-tag>
@@ -803,17 +824,17 @@
               </template>
               <!-- MACD -->
               <template v-else-if="item.i === 'macd'">
-                <div class="sub-title">MACD</div>
+                <div class="sub-title"><span class="status-light ok" style="margin:0;"></span>MACD</div>
                 <div ref="macdChartRef" class="chart-sub chart-full"></div>
               </template>
               <!-- RSI -->
               <template v-else-if="item.i === 'rsi'">
-                <div class="sub-title">RSI(14)</div>
+                <div class="sub-title"><span class="status-light ok" style="margin:0;"></span>RSI(14)</div>
                 <div ref="rsiChartRef" class="chart-sub chart-full"></div>
               </template>
               <!-- 深度盘口 -->
               <template v-else-if="item.i === 'orderbook'">
-                <div class="side-title-sm">深度盘口</div>
+                <div class="side-title-sm"><span class="status-light ok" style="margin:0;"></span>深度盘口</div>
                 <div class="orderbook-sm">
                   <div class="ob-header-sm"><span>价格</span><span>数量</span><span>累计</span></div>
                   <div class="ob-asks-sm">
@@ -850,7 +871,7 @@
               </template>
               <!-- 清算热力图 -->
               <template v-else-if="item.i === 'liqheatmap'">
-                <div class="side-title-sm">清算热力图</div>
+                <div class="side-title-sm"><span class="status-light ok" style="margin:0;"></span>清算热力图</div>
                 <div class="liq-chart-horizontal liq-chart-sm">
                   <div class="liq-h-side liq-h-long">
                     <div class="liq-h-title-sm">多头爆仓</div>
@@ -882,7 +903,7 @@
               </template>
               <!-- 主力位置分析 -->
               <template v-else-if="item.i === 'mainforce'">
-                <div class="info-title-sm">主力位置 <span class="info-badge-sm" :class="mainForce.pressure">{{ mainForce.pressure_cn || '均衡' }}</span></div>
+                <div class="info-title-sm">主力位置 <span class="info-badge-sm" :class="mainForce.pressure"><span class="status-light" :class="mainForce.pressure === 'bullish' ? 'ok' : (mainForce.pressure === 'bearish' ? 'error' : 'idle')" style="margin:0;width:4px;height:4px;"></span> {{ mainForce.pressure_cn || '均衡' }}</span></div>
                 <div class="mf-summary-sm">
                   <div class="mf-bar-sm">
                     <div class="mf-bar-buy-sm" :style="{width: mainForce.pressure_score + '%'}"></div>
@@ -896,7 +917,7 @@
               </template>
               <!-- 支撑阻力位 -->
               <template v-else-if="item.i === 'supportres'">
-                <div class="info-title-sm">支撑阻力位</div>
+                <div class="info-title-sm"><span class="status-light ok" style="margin:0;"></span>支撑阻力位</div>
                 <div class="sr-grid-sm">
                   <div class="sr-column-sm">
                     <div class="sr-label-sm">阻力</div>
@@ -922,28 +943,29 @@
               <template v-else-if="item.i === 'risefall'">
                 <div class="info-title-sm">涨跌参数</div>
                 <div class="rf-grid-sm">
-                  <div class="rf-item-sm"><div class="rf-label-sm">涨跌幅</div><div class="rf-value-sm" :class="riseFallParams.change_pct >= 0 ? 'profit' : 'loss'">{{ riseFallParams.change_pct >= 0 ? '+' : '' }}{{ riseFallParams.change_pct || '0' }}%</div></div>
-                  <div class="rf-item-sm"><div class="rf-label-sm">振幅</div><div class="rf-value-sm">{{ riseFallParams.amplitude || '0' }}%</div></div>
-                  <div class="rf-item-sm"><div class="rf-label-sm">ATR</div><div class="rf-value-sm">{{ riseFallParams.atr_14 || '0' }}</div></div>
-                  <div class="rf-item-sm"><div class="rf-label-sm">波动率</div><div class="rf-value-sm">{{ riseFallParams.volatility || '0' }}%</div></div>
-                  <div class="rf-item-sm"><div class="rf-label-sm">量比</div><div class="rf-value-sm">{{ riseFallParams.vol_ratio || '0' }}</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light" :class="riseFallParams.change_pct >= 0 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span> 涨跌幅</div><div class="rf-value-sm" :class="riseFallParams.change_pct >= 0 ? 'profit' : 'loss'">{{ riseFallParams.change_pct >= 0 ? '+' : '' }}{{ riseFallParams.change_pct || '0' }}%</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> 振幅</div><div class="rf-value-sm">{{ riseFallParams.amplitude || '0' }}%</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> ATR</div><div class="rf-value-sm">{{ riseFallParams.atr_14 || '0' }}</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light warn" style="margin:0;width:4px;height:4px;"></span> 波动率</div><div class="rf-value-sm">{{ riseFallParams.volatility || '0' }}%</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> 量比</div><div class="rf-value-sm">{{ riseFallParams.vol_ratio || '0' }}</div></div>
                 </div>
               </template>
               <!-- 持仓量 & 资金 -->
               <template v-else-if="item.i === 'openinterest'">
                 <div class="side-title-sm">持仓 &amp; 资金</div>
                 <div class="oi-stats-sm">
-                  <div class="oi-item-sm"><span class="oi-label-sm">持仓价值</span><span class="oi-value-sm">${{ formatBig(openInterest.open_interest_usdt) }}</span></div>
-                  <div class="oi-item-sm"><span class="oi-label-sm">24h最高</span><span class="oi-value-sm profit">{{ fmtMoney(ticker.high_24h) }}</span></div>
-                  <div class="oi-item-sm"><span class="oi-label-sm">24h最低</span><span class="oi-value-sm loss">{{ fmtMoney(ticker.low_24h) }}</span></div>
-                  <div class="oi-item-sm"><span class="oi-label-sm">24h涨跌</span><span class="oi-value-sm" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">{{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ ticker.change_pct_24h }}%</span></div>
+                  <div class="oi-item-sm"><span class="oi-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> 持仓价值</span><span class="oi-value-sm">${{ formatBig(openInterest.open_interest_usdt) }}</span></div>
+                  <div class="oi-item-sm"><span class="oi-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> 24h最高</span><span class="oi-value-sm profit">{{ fmtMoney(ticker.high_24h) }}</span></div>
+                  <div class="oi-item-sm"><span class="oi-label-sm"><span class="status-light warn" style="margin:0;width:4px;height:4px;"></span> 24h最低</span><span class="oi-value-sm loss">{{ fmtMoney(ticker.low_24h) }}</span></div>
+                  <div class="oi-item-sm"><span class="oi-label-sm"><span class="status-light" :class="ticker.change_pct_24h >= 0 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span> 24h涨跌</span><span class="oi-value-sm" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">{{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ ticker.change_pct_24h }}%</span></div>
                 </div>
               </template>
               <!-- 预警记录 -->
               <template v-else-if="item.i === 'alerts'">
-                <div class="side-title-sm">预警记录</div>
+                <div class="side-title-sm"><span class="status-light ok" style="margin:0;"></span>预警记录</div>
                 <div class="alert-list-sm">
                   <div v-for="(a, i) in whaleAlerts.slice(0, 6)" :key="i" class="alert-item-sm" :class="a.side === 1 ? 'buy' : 'sell'">
+                    <span class="status-light" :class="a.side === 1 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span>
                     <span class="alert-arrow-sm">{{ a.side === 1 ? '&#9650;' : '&#9660;' }}</span>
                     <span class="alert-sym-sm">{{ a.symbol }}</span>
                     <span class="alert-price-sm">{{ fmtMoney(a.price, 2) }}</span>
@@ -957,12 +979,16 @@
                   <span class="mp-sm-title">当前持仓</span>
                   <el-tag size="small" type="info" effect="dark" round>{{ myPositions.length }}个</el-tag>
                   <span class="mp-sm-pnl" :class="totalUnrealizedPnl >= 0 ? 'profit' : 'loss'">
+                    <span class="status-light" :class="totalUnrealizedPnl >= 0 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span>
                     {{ totalUnrealizedPnl >= 0 ? '+' : '' }}${{ formatBig(totalUnrealizedPnl) }}
                   </span>
                 </div>
                 <div class="mp-sm-list" v-if="myPositions.length > 0">
                   <div v-for="pos in myPositions.slice(0, 6)" :key="pos.id" class="mp-sm-item" :class="pos.side === 1 ? 'long' : 'short'" @click="focusPosition(pos)">
-                    <div class="mp-sm-sym">{{ pos.symbol }}</div>
+                    <div class="mp-sm-sym" style="display:flex;align-items:center;gap:2px;">
+                      <span class="status-light" :class="pos.side === 1 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span>
+                      {{ pos.symbol }}
+                    </div>
                     <el-tag size="small" effect="dark" :type="pos.side === 1 ? 'success' : 'danger'">{{ pos.side === 1 ? '多' : '空' }}{{ pos.leverage }}x</el-tag>
                     <div class="mp-sm-pnl" :class="pos.unrealized_pnl >= 0 ? 'profit' : 'loss'">
                       {{ pos.unrealized_pnl >= 0 ? '+' : '' }}${{ formatBig(pos.unrealized_pnl) }}

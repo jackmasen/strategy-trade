@@ -21,6 +21,8 @@ from dataclasses import dataclass, field, asdict
 from sqlalchemy.orm import Session
 from loguru import logger
 
+import redis as redis_lib
+
 from backend.config import get_settings
 
 settings = get_settings()
@@ -28,8 +30,22 @@ settings = get_settings()
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 LOG_DIR = BASE_DIR / "logs"
 
-# 内存中的分享令牌（重启失效；如需持久化可存DB）
-_share_tokens: Dict[str, dict] = {}
+# Redis客户端（多worker共享令牌状态）
+_redis_client = None
+SHARE_TOKEN_PREFIX = "monitor:share:token:"
+
+
+def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis_lib.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            password=settings.REDIS_PASSWORD,
+            db=settings.REDIS_DB,
+            decode_responses=True,
+        )
+    return _redis_client
 
 
 # ============================================================
