@@ -508,6 +508,17 @@ def apply_update_from_upload(db: Session, file_path: str, version: str = "",
         with zipfile.ZipFile(fp, "r") as zf:
             zf.extractall(temp_dir)
 
+        # 2.1) GitHub zip 可能有多一层根目录（如 strategy-trade-v1.2.1/），自动提升一层
+        has_direct_backend = (temp_dir / "backend").exists()
+        has_direct_frontend = (temp_dir / "frontend").exists() or (temp_dir / "frontend_dist").exists()
+        if not has_direct_backend and not has_direct_frontend:
+            children = [d for d in temp_dir.iterdir() if d.is_dir()]
+            if len(children) == 1:
+                root_child = children[0]
+                for item in root_child.iterdir():
+                    shutil.move(str(item), str(temp_dir / item.name))
+                shutil.rmtree(root_child, ignore_errors=True)
+
         # 3) 校验结构
         has_backend = (temp_dir / "backend").exists()
         has_frontend = (temp_dir / "frontend").exists() or (temp_dir / "frontend_dist").exists()
