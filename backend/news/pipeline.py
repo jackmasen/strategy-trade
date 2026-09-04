@@ -137,9 +137,17 @@ class NewsPipeline:
                     res.per_source.setdefault(src, {})["error"] = str(e)
         return out
 
+    def _match_source_code(self, source_name: str, display_to_code: Dict[str, int]) -> int:
+        """根据 source_name 匹配 source_code，支持前缀匹配（如 'Miniflux RSS/CoinDesk' → 70）"""
+        if source_name in display_to_code:
+            return display_to_code[source_name]
+        for display_name, code in display_to_code.items():
+            if source_name.startswith(display_name):
+                return code
+        return 99
+
     def _dedupe_against_db(self, db: Session, items: List[RawNews], res: PipelineRunResult) -> List[RawNews]:
         """NewsArticle 存在 (source, source_id) 的直接跳过"""
-        # 把 crawler.SOURCE_CODE 从 display 名反查出来（通过 crawler 类对象扫一遍）
         display_to_code: Dict[str, int] = {}
         for cls in self.crawlers_classes:
             display_to_code[cls.SOURCE_DISPLAY] = int(cls.SOURCE_CODE)
@@ -147,7 +155,7 @@ class NewsPipeline:
         # 生成 (source_code, source_id) 列表
         lookup_keys: List[tuple[int, str]] = []
         for r in items:
-            code = display_to_code.get(r.source_name, 99)
+            code = self._match_source_code(r.source_name, display_to_code)
             lookup_keys.append((code, r.source_id))
         if not lookup_keys:
             return items
@@ -166,7 +174,7 @@ class NewsPipeline:
 
         deduped: List[RawNews] = []
         for r in items:
-            code = display_to_code.get(r.source_name, 99)
+            code = self._match_source_code(r.source_name, display_to_code)
             key = (int(code), str(r.source_id))
             if key in existing:
                 res.total_skipped_dup += 1
@@ -184,7 +192,7 @@ class NewsPipeline:
         count = 0
         now = datetime.now()
         for raw, ar in pairs:
-            code = display_to_code.get(raw.source_name, 99)
+            code = self._match_source_code(raw.source_name, display_to_code)
             obj = NewsArticle(
                 source=code,
                 source_id=str(raw.source_id or ""),
@@ -217,7 +225,7 @@ class NewsPipeline:
                 count = 0
                 # 退回单条写入（SQLAlchemy flush 单条失败不会污染其余）
                 for raw, ar in pairs:
-                    code = display_to_code.get(raw.source_name, 99)
+                    code = self._match_source_code(raw.source_name, display_to_code)
                     try:
                         obj = NewsArticle(
                             source=code,
