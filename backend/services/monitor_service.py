@@ -493,10 +493,9 @@ def run_full_self_check(db: Session) -> Dict:
     
     # 3.4 新闻情绪分析
     try:
-        from backend.news.analyzer import NewsSentimentAnalyzer
-        analyzer = NewsSentimentAnalyzer()
-        result = analyzer.analyze_text("Bitcoin surges to new all-time high as ETF inflows increase.")
-        add_check("新闻情绪分析", True, {"score": result.get("compound", 0)})
+        from backend.news.analyzer import analyze as _analyze
+        result = _analyze("Bitcoin surges to new all-time high", "ETF inflows increase.")
+        add_check("新闻情绪分析", True, {"score": result.sentiment_score})
     except Exception as e:
         add_check("新闻情绪分析", False, error=f"{e.__class__.__name__}: {e}")
     
