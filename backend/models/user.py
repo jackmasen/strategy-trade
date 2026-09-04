@@ -24,6 +24,7 @@ class User(Base):
     )
     two_factor_secret = Column(String(128), default="", comment="谷歌2FA密钥")
     two_factor_enabled = Column(Boolean, default=False, comment="是否启用2FA")
+    must_change_password = Column(Boolean, default=False, comment="是否需要强制修改密码(默认密码/管理员重置后为True)")
     status = Column(SmallInteger, default=1, comment="状态: 1-启用 0-禁用")
     last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
     last_login_ip = Column(String(64), default="", comment="最后登录IP")

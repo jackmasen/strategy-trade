@@ -130,6 +130,7 @@ def _ensure_admin_user(
         # 如果传入了新密码，就强制更新密码 hash（安装向导改密需要）
         if password:
             exists.password_hash = hash_password(final_password)
+            exists.must_change_password = False
             db.flush()
             db.add(OperationLog(
                 user_id=exists.id, action="SYSTEM_INIT", module="seed_data",
@@ -146,6 +147,7 @@ def _ensure_admin_user(
         status=1,
         email="admin@example.com",
         phone="13800000000",
+        must_change_password=not bool(password),  # 使用默认密码时强制修改
     )
     db.add(u)
     db.flush()
@@ -168,6 +170,7 @@ def _ensure_editor_user(
     if exists:
         if password:
             exists.password_hash = hash_password(final_password)
+            exists.must_change_password = False
             db.flush()
         return None
     u = User(
@@ -178,6 +181,7 @@ def _ensure_editor_user(
         status=1,
         email="trader@example.com",
         phone="13900000000",
+        must_change_password=not bool(password),  # 使用默认密码时强制修改
     )
     db.add(u)
     db.flush()

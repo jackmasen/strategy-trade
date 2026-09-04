@@ -717,21 +717,25 @@ class StrategyScoringEngine:
             emv_res = self.emv_generator.generate(
                 klines, symbol=symbol, timeframe=timeframe,
                 recent_win_rate=_rate, recent_trade_count=_cnt,
+                direction=getattr(strategy, "direction_mode", 0) or 0,
             )
             result.is_emv = True
             result.emv_signal = emv_res.signal
             result.emv_filter_details = emv_res.filter_details
             result.emv_reasons = list(emv_res.reasons)
-            # EMV信号通过 → 强化做多方向（EMV是只做多策略）
+            # EMV信号通过 → 设置方向（做多/做空）
             if emv_res.signal == 1:
                 result.direction = 1
+                result.score_total = max(result.score_total, 7.5)
+            elif emv_res.signal == 2:
+                result.direction = 2
                 result.score_total = max(result.score_total, 7.5)
             result.reasons.extend(emv_res.reasons)
 
         # ---- 7) 是否触发交易 ----
         if result.direction != 0 and result.score_total >= result.trigger_threshold:
-            # EMV策略：信号通过即触发
-            if is_emv and emv_res and emv_res.signal == 1:
+            # EMV策略：信号通过即触发（做多或做空）
+            if is_emv and emv_res and emv_res.signal in (1, 2):
                 result.trigger_trade = True
             else:
                 # 7因子引擎已经做了方向一致性判断

@@ -45,12 +45,25 @@ async def lifespan(app: FastAPI):
     # ---- 启动时执行 ----
     logger.info(f"🚀 启动 {settings.APP_NAME} - 环境: {settings.APP_ENV}")
 
-    # 1. 自动建表（生产推荐用 Alembic，此处MVP保留自动建表）
+    # 1. 数据库迁移（优先 Alembic，降级为 create_all）
     try:
-        Base.metadata.create_all(bind=engine)
-        logger.info("✅ 数据库表初始化完成")
+        from alembic.config import Config as AlembicConfig
+        from alembic import command as alembic_command
+        _alembic_cfg_path = str(BASE_DIR / "alembic.ini")
+        import os as _os
+        if _os.path.exists(_alembic_cfg_path):
+            _alembic_cfg = AlembicConfig(_alembic_cfg_path)
+            alembic_command.upgrade(_alembic_cfg, "head")
+            logger.info("✅ Alembic 迁移完成")
+        else:
+            Base.metadata.create_all(bind=engine)
+            logger.info("✅ 数据库表初始化完成 (create_all)")
     except Exception as e:
-        logger.error(f"❌ 数据库建表失败: {e}")
+        logger.warning(f"⚠️ Alembic 迁移失败，降级为 create_all: {e}")
+        try:
+            Base.metadata.create_all(bind=engine)
+        except Exception as e2:
+            logger.error(f"❌ 数据库建表失败: {e2}")
 
     # 2. 初始化种子数据（管理员/策略模板/演示新闻/Mock交易数据 —— 幂等）
     try:
@@ -58,9 +71,10 @@ async def lifespan(app: FastAPI):
             # 开发环境写Mock交易，生产不写
             stats = ensure_seed_data(db, with_mock_trades=settings.APP_DEBUG)
             logger.info(f"✅ 种子数据初始化完成: {stats}")
-            # 安全检测：若 admin/trader 仍使用默认密码，输出 ERROR 级别告警
+            # 安全检测：若 admin/trader 仍使用默认密码，强制 must_change_password=True
             from backend.core.utils import verify_password
             from backend.db.seed_data import DEFAULT_ADMIN_PASSWORD, DEFAULT_EDITOR_PASSWORD
+            _need_flag_update = False
             for _uname, _dpwd in (
                 ("admin", DEFAULT_ADMIN_PASSWORD),
                 ("trader", DEFAULT_EDITOR_PASSWORD),
@@ -71,6 +85,12 @@ async def lifespan(app: FastAPI):
                         f"🚨 安全告警：账号 [{_uname}] 仍在使用默认密码！"
                         f"请立即登录后修改，否则存在被爆破风险。"
                     )
+                    if not _u.must_change_password:
+                        _u.must_change_password = True
+                        _need_flag_update = True
+            if _need_flag_update:
+                db.commit()
+                logger.info("[Security] 已为使用默认密码的账号标记 must_change_password=True")
     except Exception as e:
         logger.error(f"❌ 种子数据初始化失败: {e}")
 
@@ -163,10 +183,17 @@ async def lifespan(app: FastAPI):
                     AIAnalysisRecord.created_at < ai_cutoff,
                 ).delete(synchronize_session=False)
 
+                # 清理30天前的评分记录（每分钟30+条，膨胀快）
+                from backend.models.strategy import ScoreRecord
+                score_cutoff = now - timedelta(days=30)
+                old_scores = db.query(ScoreRecord).filter(
+                    ScoreRecord.candle_close_time < score_cutoff,
+                ).delete(synchronize_session=False)
+
                 db.commit()
                 logger.info(
                     f"[Scheduler] 数据清理完成: 删除{old_news_count}条旧新闻, "
-                    f"{very_old_count}条过期新闻, {old_ai}条AI记录"
+                    f"{very_old_count}条过期新闻, {old_ai}条AI记录, {old_scores}条评分记录"
                 )
                 db.close()
             except Exception as e:
@@ -388,6 +415,69 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+
+# ============== 强制修改密码中间件 ==============
+# 当用户 must_change_password=True 时，仅允许访问登录/刷新Token/查看个人信息/修改密码接口，
+# 其他已认证接口一律返回 403，迫使前端引导用户先修改密码。
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+
+class MustChangePasswordMiddleware(BaseHTTPMiddleware):
+    # 允许通过的路径（不需要检查 must_change_password）
+    _ALLOWED_PATHS = {
+        f"{PREFIX}/auth/login",
+        f"{PREFIX}/auth/refresh",
+        f"{PREFIX}/auth/logout",
+        f"{PREFIX}/users/me",
+        f"{PREFIX}/users/me/password",
+    }
+
+    async def dispatch(self, request, call_next):
+        path = request.url.path
+        # 非 API 路径 / docs / openapi 直接放行
+        if not path.startswith(PREFIX) or path in ("/docs", "/redoc", "/openapi.json"):
+            return await call_next(request)
+        # 白名单路径放行
+        if path in self._ALLOWED_PATHS:
+            return await call_next(request)
+        # 尝试解析 Token（未带 Token 的请求交给后续依赖处理，不拦截）
+        auth_header = request.headers.get("Authorization", "")
+        token = ""
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        if not token:
+            token = request.cookies.get("access_token", "")
+        if not token:
+            return await call_next(request)
+        try:
+            from backend.core.utils import decode_token
+            from backend.db.session import SessionLocal
+            from backend.models.user import User
+            payload = decode_token(token)
+            if payload.get("type") != "access":
+                return await call_next(request)
+            uid = int(payload.get("sub", 0))
+            if not uid:
+                return await call_next(request)
+            with SessionLocal() as _db:
+                _u = _db.query(User).filter(User.id == uid, User.status == 1).first()
+                if _u and _u.must_change_password:
+                    return JSONResponse(
+                        status_code=403,
+                        content={
+                            "code": 403,
+                            "message": "账号需要修改默认密码后才能继续操作",
+                            "data": {"must_change_password": True},
+                        },
+                    )
+        except Exception:
+            pass  # 解析失败交给后续认证依赖处理
+        return await call_next(request)
+
+
+app.add_middleware(MustChangePasswordMiddleware)
 
 
 # ============== 全局异常 ==============

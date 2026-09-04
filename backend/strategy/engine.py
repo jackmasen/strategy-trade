@@ -29,6 +29,9 @@ from backend.db.session import get_db
 from backend.exchanges.market import MarketManager
 from backend.exchanges.base import ExchangeClientBase
 from backend.exchanges._types import ORDER_TYPE_MARKET, SIDE_LONG, SIDE_SHORT
+from backend.core.distributed_lock import StrategyLock
+from backend.core.logging_config import logger
+from backend.core.utils import gen_client_order_id
 
 
 # =========================================================
@@ -142,81 +145,87 @@ class StrategyEngine:
         if not owner:
             return {"error": "策略所属用户不存在"}
 
-        symbols = list(strategy.symbols or [])
-        timeframes = [t.strip() for t in (strategy.timeframe or "1h,4h").split(",") if t.strip()]
+        # 分布式锁：防止多 Worker 重复执行同一策略
+        with StrategyLock(strategy.id, expire_seconds=180) as acquired:
+            if not acquired:
+                logger.info(f"[Engine] 策略 {strategy_id} 已被其他 Worker 锁定，跳过")
+                return {"error": "策略正在被其他进程执行", "strategy_id": strategy_id}
 
-        score_results: List[ScoreResult] = []
-        triggered: List[dict] = []
-        errors: List[str] = []
+            symbols = list(strategy.symbols or [])
+            timeframes = [t.strip() for t in (strategy.timeframe or "1h,4h").split(",") if t.strip()]
 
-        for tf in timeframes:
-            for sym in symbols:
-                # 去重：避免过于频繁
-                k = (strategy.id, sym, tf)
-                now = datetime.now()
-                if self._last_run_per_key.get(k) and (now - self._last_run_per_key[k]).total_seconds() < 60:
-                    continue
-                self._last_run_per_key[k] = now
-                try:
-                    r, record = self.score_symbol(db, strategy, sym, tf, account_id=strategy.exchange_id)
-                except Exception as e:
-                    errors.append(f"{sym} {tf}: {e}")
-                    continue
-                score_results.append(r)
-                if r.trigger_trade and execute_trade:
-                    # 风控
-                    risk_ok, risk_msg = self._check_risk(db, strategy, owner, r.symbol, r.direction)
-                    if not risk_ok:
-                        # 记录风控事件
-                        self._log_risk(db, owner, strategy, RiskEventLog.TYPE_COOLDOWN_START,
-                                       2, f"{sym} {tf} {risk_msg}", record.id)
-                        errors.append(risk_msg)
+            score_results: List[ScoreResult] = []
+            triggered: List[dict] = []
+            errors: List[str] = []
+
+            for tf in timeframes:
+                for sym in symbols:
+                    # 去重：避免过于频繁
+                    k = (strategy.id, sym, tf)
+                    now = datetime.now()
+                    if self._last_run_per_key.get(k) and (now - self._last_run_per_key[k]).total_seconds() < 60:
                         continue
-                    if strategy.run_mode == StrategyConfig.MODE_AUTO:
-                        # 全自动 → 下单
-                        try:
-                            order = self._execute_trade(db, owner, strategy, r)
+                    self._last_run_per_key[k] = now
+                    try:
+                        r, record = self.score_symbol(db, strategy, sym, tf, account_id=strategy.exchange_id)
+                    except Exception as e:
+                        errors.append(f"{sym} {tf}: {e}")
+                        continue
+                    score_results.append(r)
+                    if r.trigger_trade and execute_trade:
+                        # 风控
+                        risk_ok, risk_msg = self._check_risk(db, strategy, owner, r.symbol, r.direction)
+                        if not risk_ok:
+                            # 记录风控事件
+                            self._log_risk(db, owner, strategy, RiskEventLog.TYPE_COOLDOWN_START,
+                                           2, f"{sym} {tf} {risk_msg}", record.id)
+                            errors.append(risk_msg)
+                            continue
+                        if strategy.run_mode == StrategyConfig.MODE_AUTO:
+                            # 全自动 → 下单
+                            try:
+                                order = self._execute_trade(db, owner, strategy, r)
+                                triggered.append({
+                                    "symbol": r.symbol,
+                                    "timeframe": tf,
+                                    "score": r.score_total,
+                                    "direction": r.direction,
+                                    "leverage": r.suggested_leverage,
+                                    "order_id": order.id if order else None,
+                                })
+                            except Exception as e:
+                                errors.append(f"{sym} {tf} 执行下单失败: {e}")
+                        elif strategy.run_mode == StrategyConfig.MODE_SEMIAUTO:
                             triggered.append({
                                 "symbol": r.symbol,
                                 "timeframe": tf,
                                 "score": r.score_total,
                                 "direction": r.direction,
                                 "leverage": r.suggested_leverage,
-                                "order_id": order.id if order else None,
+                                "mode": "semiauto",
+                                "message": "半自动模式：请前往[策略详情]确认后下单",
                             })
-                        except Exception as e:
-                            errors.append(f"{sym} {tf} 执行下单失败: {e}")
-                    elif strategy.run_mode == StrategyConfig.MODE_SEMIAUTO:
-                        triggered.append({
-                            "symbol": r.symbol,
-                            "timeframe": tf,
-                            "score": r.score_total,
-                            "direction": r.direction,
-                            "leverage": r.suggested_leverage,
-                            "mode": "semiauto",
-                            "message": "半自动模式：请前往[策略详情]确认后下单",
-                        })
-                    else:  # 模拟盘
-                        triggered.append({
-                            "symbol": r.symbol,
-                            "timeframe": tf,
-                            "score": r.score_total,
-                            "direction": r.direction,
-                            "leverage": r.suggested_leverage,
-                            "mode": "simulate",
-                        })
+                        else:  # 模拟盘
+                            triggered.append({
+                                "symbol": r.symbol,
+                                "timeframe": tf,
+                                "score": r.score_total,
+                                "direction": r.direction,
+                                "leverage": r.suggested_leverage,
+                                "mode": "simulate",
+                            })
 
-        return {
-            "strategy_id": strategy.id,
-            "strategy_name": strategy.strategy_name,
-            "scored": len(score_results),
-            "triggered": triggered,
-            "errors": errors,
-            "total_score_avg": (
-                round(sum(r.score_total for r in score_results) / len(score_results), 2)
-                if score_results else 0.0
-            ),
-        }
+            return {
+                "strategy_id": strategy.id,
+                "strategy_name": strategy.strategy_name,
+                "scored": len(score_results),
+                "triggered": triggered,
+                "errors": errors,
+                "total_score_avg": (
+                    round(sum(r.score_total for r in score_results) / len(score_results), 2)
+                    if score_results else 0.0
+                ),
+            }
 
     # =========================================================
     #  辅助
@@ -388,7 +397,7 @@ class StrategyEngine:
         bal = client.fetch_balance()
         total_usdt = float(bal.total) if float(bal.total) > 0 else float(acc.current_balance or 1000)
         nominal = total_usdt * float(strategy.single_position_ratio or 10) / 100
-        nominal = max(10.0, min(2000.0, nominal))  # 最少10U，最多2000U（可配置）
+        nominal = max(10.0, min(2000.0, nominal))
         qty = nominal / entry
         leverage = max(3, min(10, min(int(r.suggested_leverage), int(acc.leverage_max or 10))))
 
@@ -398,13 +407,16 @@ class StrategyEngine:
         except Exception:
             pass
 
-        # 4) 写 TradeOrder
+        # 4) 预生成 client_order_id（用于后续精确匹配持仓）
+        client_oid = gen_client_order_id("S")
+
+        # 5) 写 TradeOrder（仅 flush 不 commit，保证后续与持仓原子提交）
         order = TradeOrder(
             exchange_account_id=acc.id,
             strategy_id=strategy.id,
             user_id=user.id,
             exchange=acc.exchange,
-            client_order_id="",
+            client_order_id=client_oid,
             symbol=r.symbol,
             side=r.direction,
             order_type=1,
@@ -416,14 +428,15 @@ class StrategyEngine:
             tp_price=Decimal(str(round(tp, 8))),
             sl_price=Decimal(str(round(sl, 8))),
             margin_used=Decimal(str(nominal / leverage)),
-            trigger_reason=2,  # 评分触发
+            trigger_reason=2,
             trigger_score=float(r.score_total),
             status=0,
             error_msg="",
         )
-        db.add(order); db.commit(); db.refresh(order)
+        db.add(order)
+        db.flush()  # 获取 order.id，不 commit
 
-        # 5) 调用交易所下单
+        # 6) 调用交易所下单
         try:
             created = client.place_order(
                 symbol=r.symbol,
@@ -434,9 +447,9 @@ class StrategyEngine:
                 take_profit_price=round(tp, 8),
                 stop_loss_price=round(sl, 8),
                 leverage=leverage,
-                client_order_id=f"auto_{order.id}_{datetime.now().strftime('%H%M%S')}",
+                client_order_id=client_oid,
             )
-            order.client_order_id = created.client_order_id or ""
+            order.client_order_id = created.client_order_id or client_oid
             order.exchange_order_id = created.exchange_order_id or ""
             order.status = 2
             order.avg_fill_price = Decimal(str(created.avg_fill_price or entry))
@@ -444,16 +457,42 @@ class StrategyEngine:
             order.filled_at = datetime.now()
             order.submitted_at = datetime.now()
         except Exception as e:
+            # 交易所下单失败：仅回写失败状态，不创建持仓
             order.status = 5
             order.error_msg = str(e)[:500]
             db.commit()
             raise e
 
-        # 6) 持仓落库
+        # 7) 持仓落库 — 用 client_order_id 精确匹配，避免多仓位关联错误
         try:
             positions = client.fetch_positions()
-            matched = next((p for p in positions if p.symbol == r.symbol and p.side == r.direction), None)
-            pos_obj = None
+            # 查询已关联的持仓 ID，避免匹配到已有订单的持仓
+            linked_pos_ids = set(
+                row[0] for row in db.query(TradeOrder.position_id)
+                .filter(TradeOrder.position_id.isnot(None))
+                .all()
+            )
+            # 优先用 client_order_id / raw_position_id 匹配
+            matched = None
+            for p in positions:
+                if p.symbol != r.symbol or p.side != r.direction:
+                    continue
+                # 如果交易所返回了 raw_position_id 且已在 DB 关联，跳过
+                if p.raw_position_id and p.raw_position_id in linked_pos_ids:
+                    continue
+                # 优先选择有 raw_position_id 且未关联的
+                if p.raw_position_id:
+                    matched = p
+                    break
+            # 回退：取 symbol+side 匹配且未关联的最后一个
+            if not matched:
+                candidates = [
+                    p for p in positions
+                    if p.symbol == r.symbol and p.side == r.direction
+                ]
+                if candidates:
+                    matched = candidates[-1]
+
             if matched:
                 pos_obj = TradePosition(
                     user_id=user.id,
@@ -482,9 +521,19 @@ class StrategyEngine:
                     close_price=None,
                     holding_minutes=0,
                 )
-                db.add(pos_obj); db.flush()
+                db.add(pos_obj)
+                db.flush()
                 order.position_id = pos_obj.id
-        except Exception:
-            pass
+            else:
+                logger.warning(
+                    f"[Engine] 订单 {order.id} 下单成功但未匹配到持仓 "
+                    f"(symbol={r.symbol}, side={r.direction})，可能为模拟盘或仓位已被平仓"
+                )
+        except Exception as e:
+            # 持仓匹配失败不影响订单记录，但需要记录异常
+            logger.exception(f"[Engine] 订单 {order.id} 持仓匹配异常: {e}")
+
+        # 8) 原子提交：订单 + 持仓一起 commit
         db.commit()
+        db.refresh(order)
         return order
