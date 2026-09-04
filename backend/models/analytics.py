@@ -51,6 +51,7 @@ class NewsArticle(Base):
     SOURCE_DECRYPT = 63        # Decrypt（加密英文）
     SOURCE_DAILYFX = 64       # DailyFX（宏观经济/非农）
     SOURCE_INVESTING = 65     # Investing.com
+    SOURCE_MINIFLUX = 70      # Miniflux（自托管RSS聚合，通过RSSHub扩展到1000+源）
 
     SOURCE_NAME_MAP = {
         SOURCE_NEWSAPI: "NewsAPI", SOURCE_CRYPTOPANIC: "CryptoPanic",
@@ -69,6 +70,7 @@ class NewsArticle(Base):
         SOURCE_CLS: "财联社", SOURCE_BISHIJIE: "币世界",
         SOURCE_WALLSTREETCN: "华尔街见闻", SOURCE_DECRYPT: "Decrypt",
         SOURCE_DAILYFX: "DailyFX", SOURCE_INVESTING: "Investing.com",
+        SOURCE_MINIFLUX: "Miniflux RSS",
     }
 
     __table_args__ = (

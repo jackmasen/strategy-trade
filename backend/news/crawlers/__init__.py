@@ -5,6 +5,7 @@ from .macro import FREDCrawler, EIAWeeklyCrawler
 from .alphavantage import AlphaVantageCrawler
 from .newsdata import NewsDataCrawler
 from .cn_media import CLSCrawler, BishijieCrawler, WallStreetCNCrawler, DecryptCrawler, DailyFXCrawler
+from .miniflux import MinifluxCrawler
 
 ALL_CRAWLERS = [
     CoinDeskCrawler, CoinTelegraphCrawler, DecryptCrawler,
@@ -13,6 +14,7 @@ ALL_CRAWLERS = [
     FREDCrawler, EIAWeeklyCrawler,
     AlphaVantageCrawler, NewsDataCrawler,
     CLSCrawler, BishijieCrawler, WallStreetCNCrawler, DailyFXCrawler,
+    MinifluxCrawler,
 ]
 
 __all__ = [
@@ -22,4 +24,5 @@ __all__ = [
     "OilPriceCrawler", "FREDCrawler", "EIAWeeklyCrawler",
     "AlphaVantageCrawler", "NewsDataCrawler",
     "CLSCrawler", "BishijieCrawler", "WallStreetCNCrawler", "DailyFXCrawler",
+    "MinifluxCrawler",
 ]

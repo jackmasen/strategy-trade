@@ -109,6 +109,12 @@ class Settings(BaseSettings):
     # NewsData.io：聚合新闻 API（200篇/天免费，支持关键词+分类+语言过滤）。
     # 申请：https://newsdata.io/register
     NEWSDATA_API_KEY: str = ""
+    # Miniflux：自托管 RSS 聚合器（配合 RSSHub 可扩展到1000+新闻源，全部免费）。
+    # 部署：Docker 一键部署，详见 deploy/ 目录。留空则跳过此源。
+    MINIFLUX_URL: str = ""           # 如 http://127.0.0.1:8080 或 https://news.yourdomain.com
+    MINIFLUX_API_KEY: str = ""       # Miniflux 设置页生成的 API Key
+    MINIFLUX_USERNAME: str = ""      # 或用用户名密码认证（二选一）
+    MINIFLUX_PASSWORD: str = ""
 
     # ---------- 代理池（访问美国新闻源 / 交易所 API 自动用，全部可留空=直连） ----------
     # 1) 最快：直接写固定代理列表，逗号分隔，格式 http://[user:pass@]host:port 或 socks5://...
