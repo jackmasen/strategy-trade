@@ -17,6 +17,9 @@
       <!-- 第二行：品种、时间、价格、其他 -->
       <div class="toolbar-row toolbar-row-bottom">
         <div class="toolbar-left">
+          <div class="conn-indicator" :title="connStatus === 'ok' ? `数据正常 · ${connLastUpdate ? new Date(connLastUpdate).toLocaleTimeString() : ''}` : '数据连接异常'">
+            <span class="conn-dot" :class="connStatus"></span>
+          </div>
           <el-select v-model="selectedSymbol" placeholder="选择/搜索品种" size="default" style="width:160px;" filterable allow-create default-first-option @change="onSymbolChange">
             <el-option v-for="(m, k) in SYMBOL_META" :key="k" :label="`${m.icon} ${k} ${m.name}`" :value="k" />
           </el-select>
@@ -601,7 +604,7 @@
     </div>
 
     <!-- 底部：当前持仓横排展示 -->
-    <div v-if="layoutMode !== 'custom' && selectedAccount > 0" class="kline-positions-bar">
+    <div v-if="layoutMode !== 'custom'" class="kline-positions-bar">
       <div class="kpb-header">
         <div class="kpb-title">
           <span class="kpb-icon">💼</span>
@@ -674,6 +677,9 @@
     <div v-if="layoutMode === 'custom'" class="kline-custom-main" ref="customLayoutRef">
       <!-- 悬浮入口（极小，仅在工具栏被删除或需要快速切换时用） -->
       <div class="custom-fab">
+        <div class="conn-indicator conn-indicator-fab" :title="connStatus === 'ok' ? '数据正常' : '连接异常'">
+          <span class="conn-dot" :class="connStatus"></span>
+        </div>
         <el-dropdown trigger="click" @command="onFabCommand">
           <el-button size="small" circle :icon="Grid" />
           <template #dropdown>
@@ -1507,6 +1513,9 @@ const panelTitles = {
 // 数据
 const klines = ref([])
 const klineError = ref('')
+const connStatus = ref('ok')  // ok / error / loading
+const connLastUpdate = ref(0)  // timestamp of last successful update
+let connErrorCount = 0
 const indicators = ref({})
 const supportResistance = ref({ supports: [], resistances: [], pivot_points: [] })
 const trend = ref({ short_term: 'neutral', mid_term: 'neutral', rsi: 50, last_price: 0 })
@@ -1687,7 +1696,14 @@ async function loadKlineAnalysis() {
     lastPrice = curPrice
 
     renderCharts()
+    connStatus.value = 'ok'
+    connLastUpdate.value = Date.now()
+    connErrorCount = 0
   } catch (e) {
+    connErrorCount++
+    if (connErrorCount >= 3) {
+      connStatus.value = 'error'
+    }
     console.error('K线加载失败', e)
     if (klines.value.length === 0) {
       klineError.value = e?.message || 'K线数据加载失败，请检查交易所配置'
@@ -1927,16 +1943,14 @@ const totalMarginUsed = computed(() => {
 })
 
 async function loadMyPositions() {
-  if (selectedAccount.value <= 0) return
   positionsLoading.value = true
   try {
-    const r = await http.get(`${API_PREFIX}/trades/positions`, {
-      status: 1,
-      account_id: selectedAccount.value,
-      page_size: 50,
-    })
+    const params = { status: 1, page_size: 50 }
+    if (selectedAccount.value > 0) {
+      params.account_id = selectedAccount.value
+    }
+    const r = await http.get(`${API_PREFIX}/trades/positions`, params)
     const items = r.items || r.data?.items || []
-    // 计算盈亏百分比
     myPositions.value = items.map(p => ({
       ...p,
       pnl_pct: p.entry_price ? (p.unrealized_pnl / (p.entry_price * p.quantity / p.leverage)) * 100 : 0
@@ -2259,6 +2273,51 @@ onBeforeUnmount(() => {
   flex-direction: column;
   height: calc(100vh - 64px - 20px);
   padding: 10px;
+
+/* 连接状态灯 */
+.conn-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.conn-indicator-fab {
+  margin-bottom: 6px;
+}
+.conn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.conn-dot.ok {
+  background: #25D07D;
+  box-shadow: 0 0 6px rgba(37, 208, 125, 0.8);
+  animation: conn-blink-green 2s ease-in-out infinite;
+}
+.conn-dot.error {
+  background: #EF4444;
+  box-shadow: 0 0 6px rgba(239, 68, 68, 0.8);
+  animation: conn-blink-red 1s ease-in-out infinite;
+}
+.conn-dot.loading {
+  background: #FBBF24;
+  animation: conn-pulse 0.8s ease-in-out infinite;
+}
+@keyframes conn-blink-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes conn-blink-red {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+@keyframes conn-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.3); opacity: 0.6; }
+}
   gap: 10px;
 }
 

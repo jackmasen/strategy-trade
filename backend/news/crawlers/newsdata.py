@@ -34,7 +34,7 @@ class NewsDataCrawler(NewsCrawlerBase):
     API_URL = "https://newsdata.io/api/1/news"
 
     # 关键词组合（AV 用的 OR 语法）：覆盖 5 个交易品种
-    QUERY = "(bitcoin OR ethereum OR solana OR BTC OR ETH OR SOL OR crypto OR cryptocurrency OR gold OR \"crude oil\" OR WTI OR OPEC)"
+    QUERY = "(bitcoin OR ethereum OR solana OR BTC OR ETH OR SOL OR crypto OR cryptocurrency OR gold OR \"crude oil\" OR WTI OR OPEC OR sandbox OR SAND OR hedera OR HBAR)"
     # 免费档 category 支持：business, technology, world, science, politics
     CATEGORY = "business,technology,world"
     LANGUAGE = "en"

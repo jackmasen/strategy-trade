@@ -94,6 +94,8 @@ SUPPORTED_SYMBOLS = [
     {"symbol": "SOL", "name": "索拉纳", "binance": "SOLUSDT", "okx": "SOL-USDT-SWAP", "type": "crypto"},
     {"symbol": "XAU", "name": "黄金",   "binance": "",        "okx": "XAU-USDT-SWAP", "type": "commodity"},
     {"symbol": "WTI", "name": "石油",   "binance": "",        "okx": "WTI-USDT-SWAP", "type": "commodity"},
+    {"symbol": "SAND", "name": "沙盒", "binance": "SANDUSDT", "okx": "SAND-USDT-SWAP", "type": "crypto"},
+    {"symbol": "HBAR", "name": "海代拉", "binance": "HBARUSDT", "okx": "HBAR-USDT-SWAP", "type": "crypto"},
 ]
 
 

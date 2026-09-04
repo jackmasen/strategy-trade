@@ -1218,7 +1218,7 @@ def dashboard_report(
 
 # ======================== AI 综合预测 ========================
 
-PREDICTION_SYMBOLS = ["BTC", "ETH", "SOL", "XAU", "WTI"]
+PREDICTION_SYMBOLS = ["BTC", "ETH", "SOL", "XAU", "WTI", "SAND", "HBAR"]
 
 _OKX_INST_MAP = {
     "WTI": ["CL-USDT-SWAP", "CLUSDT", "WTI-USDT-SWAP"],

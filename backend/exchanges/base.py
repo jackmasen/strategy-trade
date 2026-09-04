@@ -41,6 +41,8 @@ class ExchangeClientBase(ABC):
         "BTC": "BTCUSDT",
         "ETH": "ETHUSDT",
         "SOL": "SOLUSDT",
+        "SAND": "SANDUSDT",
+        "HBAR": "HBARUSDT",
         # 贵金属
         "XAU": "XAUUSDT",   # 如交易所不支持贵金属，子类覆盖
         "XAG": "XAGUSDT",   # 白银

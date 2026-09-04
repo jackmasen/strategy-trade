@@ -50,6 +50,10 @@ SUPPORTED_SYMBOLS = [
      "default_price": 2350.0, "binance": "",        "okx": "XAU-USDT-SWAP"},
     {"symbol": "WTI", "name": "石油",   "type": "commodity",
      "default_price": 82.0,   "binance": "",        "okx": "WTI-USDT-SWAP"},
+    {"symbol": "SAND", "name": "沙盒", "type": "crypto",
+     "default_price": 0.5, "binance": "SANDUSDT", "okx": "SAND-USDT-SWAP"},
+    {"symbol": "HBAR", "name": "海代拉", "type": "crypto",
+     "default_price": 0.1, "binance": "HBARUSDT", "okx": "HBAR-USDT-SWAP"},
 ]
 
 
