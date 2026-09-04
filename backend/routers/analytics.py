@@ -843,7 +843,12 @@ async def test_news_ai_config(
         resp = _requests.post(endpoint, json=payload, headers=headers, timeout=15)
         latency = int((time.time() - t0) * 1000)
         if resp.status_code != 200:
-            raise Exception(f"HTTP {resp.status_code}: {resp.text[:200]}")
+            try:
+                err_data = resp.json()
+                err_msg = err_data.get("error", {}).get("message") or err_data.get("message") or err_data.get("error", {}).get("code") or resp.text[:200]
+            except Exception:
+                err_msg = resp.text[:200]
+            raise Exception(f"HTTP {resp.status_code}: {err_msg}")
         data = resp.json()
         result = {"latency_ms": latency, "model": data.get("model", "")}
         # 更新该配置的健康状态

@@ -52,6 +52,10 @@
       console.warn('[ignored] Script error (cross-origin / CORS-opaque error, likely harmless)')
       return
     }
+    if (e.message && e.message.includes('ResizeObserver')) {
+      console.warn('[ignored] ResizeObserver loop warning (harmless)')
+      return
+    }
     if (e.error && isHarmlessError(e.error)) {
       console.warn('[ignored] Harmless error during page transition:', e.message)
       return
