@@ -31,7 +31,7 @@ from .indicators import sma, rsi, atr, emv, _nan_to_zero
 @dataclass
 class EMVSignalResult:
     """EMV策略信号结果"""
-    signal: int = 0  # 0=无信号 1=做多 2=做空（当前只实现做多）
+    signal: int = 0  # 0=无信号 1=做多 2=做空
     score: float = 5.0  # 0-10，信号强度评分
     direction: float = 0.0  # -1..+1
     confidence: float = 0.0  # 0-1
@@ -105,6 +105,7 @@ class EMVSignalGenerator:
         timeframe: str = "4h",
         recent_win_rate: Optional[float] = None,
         recent_trade_count: int = 0,
+        direction: int = 0,
     ) -> EMVSignalResult:
         """
         对最新K线生成EMV信号
@@ -112,6 +113,7 @@ class EMVSignalGenerator:
         recent_win_rate: 该品种滚动近 win_rate_lookback 笔的胜率(0-100)，由调用方查DB传入；
             样本不足 win_rate_min_trades 笔时观察期不生效（默认通过），避免冷启动误杀
         recent_trade_count: 已有历史平仓笔数，用于判断观察期是否生效
+        direction: 0=自动(先测多再测空) 1=仅做多 2=仅做空
         """
         result = EMVSignalResult()
         need = max(
@@ -163,47 +165,199 @@ class EMVSignalGenerator:
         result.recent_win_rate = recent_win_rate
         result.recent_trade_count = recent_trade_count
 
+        # 方向决定：direction=0 先做多再做空，1=仅多，2=仅空
+        dirs_to_check = []
+        if direction == 0:
+            dirs_to_check = [1, 2]
+        elif direction == 1:
+            dirs_to_check = [1]
+        elif direction == 2:
+            dirs_to_check = [2]
+
+        for _dir in dirs_to_check:
+            _res = self._check_filters(
+                i, emv_arr, emv_sig, ma25, ma99, closes, rsi14, atr14, atr_long,
+                recent_win_rate, recent_trade_count,
+            )
+            if _dir == 1 and _res.signal == 1:
+                return _res
+            if _dir == 2 and _res.signal == 2:
+                return _res
+            # 如果当前方向没通过，记录原因但继续尝试另一方向
+            if direction == 0 and _dir == 1:
+                # 保存做多失败结果，做空可能成功
+                result = _res
+            elif direction == 0 and _dir == 2:
+                if _res.signal == 2:
+                    return _res
+                # 两个方向都没通过，返回做空检查结果
+                return _res
+            else:
+                result = _res
+
+        return result
+
+    def _check_filters(
+        self,
+        i: int,
+        emv_arr: list,
+        emv_sig: list,
+        ma25: list,
+        ma99: list,
+        closes: list,
+        rsi14: list,
+        atr14: list,
+        atr_long: list,
+        recent_win_rate: Optional[float],
+        recent_trade_count: int,
+    ) -> EMVSignalResult:
+        """检查10层过滤条件，is_short控制方向"""
+        result = EMVSignalResult()
+        fd = result.filter_details
+
+        # 快照
+        result.emv_value = emv_arr[i]
+        result.emv_signal_line = emv_sig[i]
+        result.ma25 = ma25[i]
+        result.ma99 = ma99[i]
+        result.rsi14 = rsi14[i]
+        result.atr14 = atr14[i]
+        if atr_long[i] > 0:
+            result.atr_vol_ratio = atr14[i] / atr_long[i]
+        if ma99[i] > 0 and closes[i] > 0:
+            result.price_above_ma99_pct = (closes[i] / ma99[i] - 1) * 100
+        if i >= self.p["ma99_slope_lookback"] and ma99[i - self.p["ma99_slope_lookback"]] > 0:
+            result.ma99_slope_pct = (ma99[i] / ma99[i - self.p["ma99_slope_lookback"]] - 1) * 100
+        result.recent_win_rate = recent_win_rate
+        result.recent_trade_count = recent_trade_count
+
+        is_short = False  # 默认做多
+
+        # 先尝试做多
+        long_res = self._run_filters(
+            i, emv_arr, emv_sig, ma25, ma99, closes, rsi14, atr14, atr_long,
+            recent_win_rate, recent_trade_count, is_short=False,
+        )
+        if long_res.signal == 1:
+            return long_res
+
+        # 再尝试做空
+        short_res = self._run_filters(
+            i, emv_arr, emv_sig, ma25, ma99, closes, rsi14, atr14, atr_long,
+            recent_win_rate, recent_trade_count, is_short=True,
+        )
+        if short_res.signal == 2:
+            return short_res
+
+        # 都不通过，返回做多失败结果（保留更完整的快照）
+        return long_res
+
+    def _run_filters(
+        self,
+        i: int,
+        emv_arr: list,
+        emv_sig: list,
+        ma25: list,
+        ma99: list,
+        closes: list,
+        rsi14: list,
+        atr14: list,
+        atr_long: list,
+        recent_win_rate: Optional[float],
+        recent_trade_count: int,
+        is_short: bool = False,
+    ) -> EMVSignalResult:
+        """执行10层过滤（支持做多/做空镜像）"""
+        result = EMVSignalResult()
+        fd = result.filter_details
+
+        # 快照
+        result.emv_value = emv_arr[i]
+        result.emv_signal_line = emv_sig[i]
+        result.ma25 = ma25[i]
+        result.ma99 = ma99[i]
+        result.rsi14 = rsi14[i]
+        result.atr14 = atr14[i]
+        if atr_long[i] > 0:
+            result.atr_vol_ratio = atr14[i] / atr_long[i]
+        if ma99[i] > 0 and closes[i] > 0:
+            result.price_above_ma99_pct = (closes[i] / ma99[i] - 1) * 100
+        if i >= self.p["ma99_slope_lookback"] and ma99[i - self.p["ma99_slope_lookback"]] > 0:
+            result.ma99_slope_pct = (ma99[i] / ma99[i - self.p["ma99_slope_lookback"]] - 1) * 100
+        result.recent_win_rate = recent_win_rate
+        result.recent_trade_count = recent_trade_count
+
+        dir_label = "做空" if is_short else "做多"
+
         # ① EMV交叉 + confirm_bars根确认
         conf = self.p["confirm_bars"]
         k_idx = i - (conf - 1)
-        cross_ok = (
-            k_idx >= 1
-            and emv_arr[k_idx - 1] <= emv_sig[k_idx - 1]
-            and emv_arr[k_idx] > emv_sig[k_idx]
-            and emv_arr[k_idx] > 0
-        )
+        if is_short:
+            cross_ok = (
+                k_idx >= 1
+                and emv_arr[k_idx - 1] >= emv_sig[k_idx - 1]
+                and emv_arr[k_idx] < emv_sig[k_idx]
+                and emv_arr[k_idx] < 0
+            )
+        else:
+            cross_ok = (
+                k_idx >= 1
+                and emv_arr[k_idx - 1] <= emv_sig[k_idx - 1]
+                and emv_arr[k_idx] > emv_sig[k_idx]
+                and emv_arr[k_idx] > 0
+            )
         confirm_ok = cross_ok and all(
-            emv_arr[j] >= emv_sig[j] for j in range(k_idx, i + 1)
+            emv_arr[j] <= emv_sig[j] if is_short else emv_arr[j] >= emv_sig[j]
+            for j in range(k_idx, i + 1)
         )
-        fd["1_emv_cross"] = bool(cross_ok)
-        fd["1_emv_confirm"] = bool(confirm_ok)
+        fd[f"1_emv_cross_{'short' if is_short else 'long'}"] = bool(cross_ok)
+        fd[f"1_emv_confirm_{'short' if is_short else 'long'}"] = bool(confirm_ok)
         result.emv_cross_up = bool(cross_ok)
 
         if not confirm_ok:
-            result.reasons.append("EMV未上穿Signal或确认不足")
+            result.reasons.append(f"EMV未{'下穿' if is_short else '上穿'}Signal或确认不足")
             result.score = 5.0
             return result
 
-        # ② MA99上升
-        ma99_up = ma99[i] > 0 and ma99[i - self.p["ma99_lookback"]] > 0 and ma99[i] > ma99[i - self.p["ma99_lookback"]]
-        fd["2_ma99_up"] = ma99_up
-        if not ma99_up:
-            result.reasons.append("MA99未上升，大趋势非多头")
-            result.score = 4.5
-            return result
+        # ② MA99方向
+        if is_short:
+            ma99_dir = ma99[i] > 0 and ma99[i - self.p["ma99_lookback"]] > 0 and ma99[i] < ma99[i - self.p["ma99_lookback"]]
+            fd["2_ma99_down"] = ma99_dir
+            if not ma99_dir:
+                result.reasons.append("MA99未下降，大趋势非空头")
+                result.score = 4.5
+                return result
+        else:
+            ma99_up = ma99[i] > 0 and ma99[i - self.p["ma99_lookback"]] > 0 and ma99[i] > ma99[i - self.p["ma99_lookback"]]
+            fd["2_ma99_up"] = ma99_up
+            if not ma99_up:
+                result.reasons.append("MA99未上升，大趋势非多头")
+                result.score = 4.5
+                return result
 
-        # ③ 多头排列
-        align_ok = (
-            ma25[i] > 0 and ma99[i] > 0 and closes[i] > ma25[i]
-            and ma25[i] > ma99[i] * (1 - self.p["alignment_tol"])
-        )
-        fd["3_bull_alignment"] = align_ok
-        if not align_ok:
-            result.reasons.append("均线非多头排列")
-            result.score = 4.8
-            return result
+        # ③ 排列
+        if is_short:
+            align_ok = (
+                ma25[i] > 0 and ma99[i] > 0 and closes[i] < ma25[i]
+                and ma25[i] < ma99[i] * (1 + self.p["alignment_tol"])
+            )
+            fd["3_bear_alignment"] = align_ok
+            if not align_ok:
+                result.reasons.append("均线非空头排列")
+                result.score = 4.8
+                return result
+        else:
+            align_ok = (
+                ma25[i] > 0 and ma99[i] > 0 and closes[i] > ma25[i]
+                and ma25[i] > ma99[i] * (1 - self.p["alignment_tol"])
+            )
+            fd["3_bull_alignment"] = align_ok
+            if not align_ok:
+                result.reasons.append("均线非多头排列")
+                result.score = 4.8
+                return result
 
-        # ④ EMV强度
+        # ④ EMV强度（方向无关）
         if i >= self.p["emv_lookback"]:
             window = emv_arr[i - self.p["emv_lookback"] + 1: i + 1]
             m = sum(window) / len(window)
@@ -219,15 +373,21 @@ class EMVSignalGenerator:
             result.score = 4.8
             return result
 
-        # ⑤ RSI中段
-        rsi_ok = self.p["rsi_low"] <= rsi14[i] <= self.p["rsi_high"]
+        # ⑤ RSI中段（做空下移区间）
+        if is_short:
+            rsi_low = 32.0
+            rsi_high = 62.0
+        else:
+            rsi_low = self.p["rsi_low"]
+            rsi_high = self.p["rsi_high"]
+        rsi_ok = rsi_low <= rsi14[i] <= rsi_high
         fd["5_rsi_range"] = rsi_ok
         if not rsi_ok:
-            result.reasons.append(f"RSI={rsi14[i]:.1f}不在[{self.p['rsi_low']},{self.p['rsi_high']}]")
+            result.reasons.append(f"RSI={rsi14[i]:.1f}不在[{rsi_low},{rsi_high}]")
             result.score = 4.5
             return result
 
-        # ⑥ ATR波动率
+        # ⑥ ATR波动率（方向无关）
         vol_ok = atr_long[i] > 0 and atr14[i] / atr_long[i] <= self.p["atr_vol_max_ratio"]
         fd["6_atr_vol"] = vol_ok
         if not vol_ok:
@@ -238,43 +398,61 @@ class EMVSignalGenerator:
         # ⑦ 突破分位
         if i >= self.p["breakout_lookback"]:
             window = sorted(closes[j] for j in range(i - self.p["breakout_lookback"], i))
-            idx_p = max(0, min(int(len(window) * self.p["breakout_pctl"] / 100), len(window) - 1))
-            p_thresh = window[idx_p]
-            breakout_ok = closes[i] >= p_thresh
+            if is_short:
+                pctl_val = 100 - self.p["breakout_pctl"]  # 35分位
+                idx_p = max(0, min(int(len(window) * pctl_val / 100), len(window) - 1))
+                p_thresh = window[idx_p]
+                breakout_ok = closes[i] <= p_thresh
+            else:
+                idx_p = max(0, min(int(len(window) * self.p["breakout_pctl"] / 100), len(window) - 1))
+                p_thresh = window[idx_p]
+                breakout_ok = closes[i] >= p_thresh
         else:
             breakout_ok = True
         fd["7_breakout"] = breakout_ok
         if not breakout_ok:
-            result.reasons.append("未突破65分位")
+            result.reasons.append(f"未{'跌破' if is_short else '突破'}分位")
             result.score = 4.8
             return result
 
-        # ⑧ MA99斜率加速
+        # ⑧ MA99斜率
         if i >= self.p["ma99_slope_lookback"] and ma99[i - self.p["ma99_slope_lookback"]] > 0:
             slope = ma99[i] / ma99[i - self.p["ma99_slope_lookback"]] - 1
-            slope_ok = slope >= self.p["ma99_slope_min_pct"] / 100
+            if is_short:
+                slope_ok = slope <= -self.p["ma99_slope_min_pct"] / 100
+            else:
+                slope_ok = slope >= self.p["ma99_slope_min_pct"] / 100
         else:
             slope_ok = False
         fd["8_ma99_slope"] = slope_ok
         if not slope_ok:
-            result.reasons.append(f"MA99斜率={result.ma99_slope_pct:.2f}%<{self.p['ma99_slope_min_pct']}%")
+            result.reasons.append(
+                f"MA99斜率={result.ma99_slope_pct:.2f}%"
+                f"{'<' if is_short else '<'}{'-' if is_short else ''}"
+                f"{self.p['ma99_slope_min_pct']}%"
+            )
             result.score = 4.8
             return result
 
-        # ⑨ Close远离MA99
+        # ⑨ Close偏离MA99
         if ma99[i] > 0:
             gap = closes[i] / ma99[i] - 1
-            gap_ok = gap >= self.p["price_above_ma99_min_pct"] / 100
+            if is_short:
+                gap_ok = gap <= -self.p["price_above_ma99_min_pct"] / 100
+            else:
+                gap_ok = gap >= self.p["price_above_ma99_min_pct"] / 100
         else:
             gap_ok = False
         fd["9_price_above_ma99"] = gap_ok
         if not gap_ok:
-            result.reasons.append(f"价格距MA99仅{result.price_above_ma99_pct:.2f}%<{self.p['price_above_ma99_min_pct']}%")
+            result.reasons.append(
+                f"价格距MA99仅{result.price_above_ma99_pct:.2f}%"
+                f"（需要{'<' if is_short else '>'}{self.p['price_above_ma99_min_pct']}%）"
+            )
             result.score = 4.8
             return result
 
-        # ⑩ 滚动历史胜率观察期：样本达 win_rate_min_trades 笔后才生效，
-        #    胜率 < win_rate_min% 则拦截（连续黑天鹅保护）；样本不足时默认通过
+        # ⑩ 滚动历史胜率观察期（方向无关）
         if recent_trade_count >= self.p["win_rate_min_trades"]:
             winrate_ok = (
                 recent_win_rate is not None
@@ -289,23 +467,21 @@ class EMVSignalGenerator:
                 result.score = 4.5
                 return result
         else:
-            # 样本不足，观察期不生效
             fd["10_win_rate_observe"] = True
 
-        # ====== 全部10层通过 → 做多信号 ======
-        result.signal = 1
-        result.direction = 0.8
+        # ====== 全部10层通过 → 信号 ======
+        result.signal = 2 if is_short else 1
+        result.direction = -0.8 if is_short else 0.8
         result.confidence = 0.75
-        result.score = 7.5  # 高于默认5.0触发阈值
+        result.score = 7.5
 
-        # 根据过滤层通过数量动态提升评分
         passed = sum(1 for v in fd.values() if v)
         if passed >= 10:
             result.score = 8.0
             result.confidence = 0.85
         result.reasons.append(
-            f"EMV策略信号：10层过滤全部通过 → 做多 | "
-            f"EMV={emv_arr[i]:.4f}>Sig={emv_sig[i]:.4f} | "
+            f"EMV策略信号：10层过滤全部通过 → {dir_label} | "
+            f"EMV={emv_arr[i]:.4f}{'<' if is_short else '>'}Sig={emv_sig[i]:.4f} | "
             f"MA99斜率={result.ma99_slope_pct:.2f}% | "
             f"Gap={result.price_above_ma99_pct:.2f}% | "
             f"RSI={rsi14[i]:.1f}"

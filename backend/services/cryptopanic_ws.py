@@ -254,7 +254,7 @@ class CryptoPanicWSClient:
         )
 
         # 补充 CryptoPanic 的币种关联
-        code_map = {"BTC": "BTC", "ETH": "ETH", "SOL": "SOL"}
+        code_map = {"BTC": "BTC", "ETH": "ETH", "SOL": "SOL", "SAND": "SAND", "HBAR": "HBAR"}
         for code in crypto_codes:
             mapped = code_map.get(code)
             if mapped and mapped not in result.related_symbols:

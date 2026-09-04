@@ -44,6 +44,7 @@ pnpm-debug.log*
 # 打包产物 / 临时诊断文件
 策略交易系统_onepress_*.zip
 dist.zip
+frontend_dist.zip
 dist/
 _zip_build/
 _local_env_diagnosis.json

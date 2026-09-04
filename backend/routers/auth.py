@@ -54,6 +54,15 @@ def login(req: LoginReq, db: Session = Depends(get_db), request: Request = None)
     if user.status != 1:
         raise UnauthorizedException("账号已被禁用，请联系管理员")
 
+    # 2FA 检查：已启用 2FA 的用户需要验证验证码
+    if user.two_factor_enabled and user.two_factor_secret:
+        import pyotp
+        temp_token = create_access_token(
+            user.id,
+            extra={"type": "2fa_pending", "2fa_user": user.id, "role": user.role, "username": user.username},
+        )
+        return success({"need_2fa": True, "temp_token": temp_token})
+
     # 生成Token
     extra = {"role": user.role, "username": user.username}
     access = create_access_token(user.id, extra)
@@ -76,6 +85,7 @@ def login(req: LoginReq, db: Session = Depends(get_db), request: Request = None)
         "avatar": user.avatar,
         "role": user.role,
         "two_factor_enabled": user.two_factor_enabled,
+        "must_change_password": user.must_change_password,
         "last_login_at": user.last_login_at,
         "created_at": user.created_at,
     }
@@ -114,6 +124,138 @@ def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
 def logout(user: User = Depends(get_current_user)):
     """登出（前端清除Token即可，后端如需黑名单可扩展Redis）"""
     return success(message="已退出登录")
+
+
+# ============ 2FA 双因素认证 ============
+
+class TwoFASetupResp(BaseModel):
+    secret: str
+    otpauth_uri: str
+    qr_code_data: str
+
+
+class TwoFAVerifyReq(BaseModel):
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+class TwoFALoginReq(BaseModel):
+    temp_token: str
+    code: str = Field(..., min_length=6, max_length=6)
+
+
+@router.post("/2fa/setup", response_model=ApiResponse[TwoFASetupResp])
+def setup_2fa(user: User = Depends(get_current_user)):
+    """生成 2FA 密钥和 QR 码（用户扫码后需调用 /2fa/verify 确认）"""
+    import pyotp
+    import urllib.parse
+    import urllib.parse as _urlparse
+
+    secret = pyotp.random_base32()
+    issuer = "StrategyTrade"
+    label = f"{issuer}:{user.username}"
+    otpauth_uri = pyotp.totp.TOTP(secret).provisioning_uri(name=user.username, issuer_name=issuer)
+
+    # 不立即保存 secret，等验证通过后才写入
+    return success(TwoFASetupResp(
+        secret=secret,
+        otpauth_uri=otpauth_uri,
+        qr_code_data=otpauth_uri,
+    ))
+
+
+@router.post("/2fa/verify")
+def verify_2fa(
+    req: TwoFAVerifyReq,
+    secret: str = "",
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """验证 6 位验证码，通过后启用 2FA"""
+    import pyotp
+    from fastapi import Query
+
+    if not secret:
+        raise ParameterException("缺少 secret 参数")
+    totp = pyotp.TOTP(secret)
+    if not totp.verify(req.code, valid_window=1):
+        raise ParameterException("验证码错误或已过期")
+
+    user.two_factor_secret = secret
+    user.two_factor_enabled = True
+    db.commit()
+    return success(message="2FA 已启用")
+
+
+@router.post("/2fa/disable")
+def disable_2fa(
+    req: TwoFAVerifyReq,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """关闭 2FA（需密码验证码确认）"""
+    import pyotp
+    if not user.two_factor_enabled or not user.two_factor_secret:
+        raise ParameterException("未启用 2FA")
+    totp = pyotp.TOTP(user.two_factor_secret)
+    if not totp.verify(req.code, valid_window=1):
+        raise ParameterException("验证码错误或已过期")
+    user.two_factor_secret = ""
+    user.two_factor_enabled = False
+    db.commit()
+    return success(message="2FA 已关闭")
+
+
+@router.post("/login/2fa", response_model=ApiResponse[LoginResp])
+def login_2fa(req: TwoFALoginReq, db: Session = Depends(get_db), request: Request = None):
+    """2FA 登录第二步：用 temp_token + 验证码完成登录"""
+    import pyotp
+    try:
+        payload = decode_token(req.temp_token)
+        if payload.get("type") != "2fa_pending":
+            raise UnauthorizedException("无效的 2FA 临时令牌")
+        uid = int(payload["sub"])
+    except UnauthorizedException:
+        raise
+    except Exception:
+        raise UnauthorizedException("2FA 临时令牌已过期或无效")
+
+    user = db.query(User).filter(User.id == uid, User.status == 1).first()
+    if not user:
+        raise UnauthorizedException("用户不存在或已禁用")
+    if not user.two_factor_enabled or not user.two_factor_secret:
+        raise UnauthorizedException("该用户未启用 2FA")
+
+    totp = pyotp.TOTP(user.two_factor_secret)
+    if not totp.verify(req.code, valid_window=1):
+        raise UnauthorizedException("验证码错误或已过期")
+
+    extra = {"role": user.role, "username": user.username}
+    access = create_access_token(user.id, extra)
+    refresh = create_refresh_token(user.id)
+
+    from datetime import datetime
+    user.last_login_at = datetime.now()
+    user.last_login_ip = request.client.host if request and request.client else ""
+    db.commit()
+
+    user_payload = {
+        "id": user.id,
+        "username": user.username,
+        "nickname": user.nickname,
+        "email": user.email,
+        "phone": user.phone,
+        "avatar": user.avatar,
+        "role": user.role,
+        "two_factor_enabled": user.two_factor_enabled,
+        "must_change_password": user.must_change_password,
+        "last_login_at": user.last_login_at,
+        "created_at": user.created_at,
+    }
+    return success(LoginResp(
+        access_token=access,
+        refresh_token=refresh,
+        user=user_payload,
+    ))
 
 
 # ============ 用户信息 ============
@@ -156,6 +298,7 @@ def update_me(
         "avatar": user.avatar,
         "role": user.role,
         "two_factor_enabled": user.two_factor_enabled,
+        "must_change_password": user.must_change_password,
         "last_login_at": user.last_login_at,
         "created_at": user.created_at,
     }, message="资料已更新")
@@ -173,6 +316,7 @@ def get_me(user: User = Depends(get_current_user)):
         "avatar": user.avatar,
         "role": user.role,
         "two_factor_enabled": user.two_factor_enabled,
+        "must_change_password": user.must_change_password,
         "last_login_at": user.last_login_at,
         "created_at": user.created_at,
     })
@@ -188,6 +332,7 @@ def change_password(
     if not verify_password(req.old_password, user.password_hash):
         raise ParameterException("原密码错误")
     user.password_hash = hash_password(req.new_password)
+    user.must_change_password = False
     db.commit()
     return success(message="密码修改成功")
 
@@ -252,6 +397,7 @@ def create_user(
         phone=req.phone,
         role=req.role,
         status=req.status,
+        must_change_password=True,
     )
     db.add(user)
     db.commit()
@@ -284,6 +430,7 @@ def update_user(
         if len(req.reset_password) < 6 or len(req.reset_password) > 128:
             raise ParameterException("新密码长度需 6-128 位")
         user.password_hash = hash_password(req.reset_password)
+        user.must_change_password = True
     db.commit()
     return success(message="修改成功")
 

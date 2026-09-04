@@ -130,6 +130,12 @@ class TradePosition(Base):
     tp_price = Column(DECIMAL(18, 8), nullable=True, comment="止盈价")
     sl_price = Column(DECIMAL(18, 8), nullable=True, comment="止损价")
 
+    # Trailing Stop 移动止损
+    trailing_enabled = Column(Integer, default=0, comment="是否启用移动止损: 0-否 1-是")
+    trailing_activation_pct = Column(Float, default=1.0, comment="激活移动止损的盈利百分比")
+    trailing_distance_pct = Column(Float, default=0.5, comment="移动止损跟踪距离(%)")
+    trailing_high_price = Column(DECIMAL(18, 8), nullable=True, comment="持仓期间最高价(多)/最低价(空)")
+
     unrealized_pnl = Column(DECIMAL(18, 8), default=0, comment="未实现盈亏")
     realized_pnl = Column(DECIMAL(18, 8), default=0, comment="平仓后已实现盈亏")
     pnl_ratio = Column(Float, default=0, comment="盈亏百分比")

@@ -765,7 +765,8 @@ def _generate_mock_klines(symbol, timeframe, date_start, date_end):
         delta = timedelta(hours=4)
 
     base_prices = {"BTC": 65000, "ETH": 3200, "SOL": 150, "XRP": 0.5, "BNB": 500,
-                   "ADA": 0.4, "DOGE": 0.12, "XAU": 2300, "WTI": 78, "AVAX": 30, "LINK": 15}
+                   "ADA": 0.4, "DOGE": 0.12, "XAU": 2300, "WTI": 78, "AVAX": 30, "LINK": 15,
+                   "SAND": 0.5, "HBAR": 0.1}
     base = base_prices.get(symbol, 100)
 
     result = []

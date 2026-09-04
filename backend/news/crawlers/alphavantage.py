@@ -32,7 +32,7 @@ class AlphaVantageCrawler(NewsCrawlerBase):
     SOURCE_DISPLAY = "Alpha Vantage"
 
     # 一次请求合并所有关心的 ticker（节省免费配额）
-    TICKERS = "CRYPTO:BTC,CRYPTO:ETH,CRYPTO:SOL"
+    TICKERS = "CRYPTO:BTC,CRYPTO:ETH,CRYPTO:SOL,CRYPTO:SAND,CRYPTO:HBAR"
     # topic 过滤（逗号分隔，AV 会返回命中的）
     TOPICS = "monetary_policy,economy,finance,crypto,energy"
 
@@ -192,6 +192,7 @@ class AlphaVantageCrawler(NewsCrawlerBase):
         # AV 返回：[{"ticker": "CRYPTO:BTC", "relevance_score": "0.85", ...}, ...]
         av_to_sys = {
             "CRYPTO:BTC": "BTC", "CRYPTO:ETH": "ETH", "CRYPTO:SOL": "SOL",
+            "CRYPTO:SAND": "SAND", "CRYPTO:HBAR": "HBAR",
             "FOREX:USD": "XAU",  # USD 美元 ↔ 黄金（反向，但关联性强）
             "COMMODITY:WTI": "WTI", "COMMODITY:BRENT": "WTI",
             "COMMODITY:NATURAL_GAS": "WTI",  # 能源板块联动

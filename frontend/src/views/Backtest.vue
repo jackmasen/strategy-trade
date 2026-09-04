@@ -180,7 +180,7 @@ const current = ref(null)
 const list = ref([])
 
 const form = reactive({
-  run_name: '', symbols: ['BTC','ETH'], timeframe: '4h',
+  run_name: '', symbols: ['BTC','ETH','SAND','HBAR'], timeframe: '4h',
   range: [], initial_capital: 10000, fee_rate: 0.04, slippage: 0.05, strategy_id: undefined,
 })
 

@@ -1218,7 +1218,7 @@ def dashboard_report(
 
 # ======================== AI 综合预测 ========================
 
-PREDICTION_SYMBOLS = ["BTC", "ETH", "SOL", "XAU", "WTI"]
+PREDICTION_SYMBOLS = ["BTC", "ETH", "SOL", "XAU", "WTI", "SAND", "HBAR"]
 
 _OKX_INST_MAP = {
     "WTI": ["CL-USDT-SWAP", "CLUSDT", "WTI-USDT-SWAP"],
@@ -1668,16 +1668,16 @@ def get_prediction(
     """综合预测：技术面(40%) + 新闻情绪(30%) + AI分析(20%) + Polymarket(10%)"""
     syms = [s.strip().upper() for s in symbols.split(",") if s.strip()] or PREDICTION_SYMBOLS
 
-    # Polymarket 单独调用（有缓存，超时内完成）
     poly_odds = {}
     try:
-        poly_odds = _fetch_all_polymarket_odds()
+        poly_odds = _run_with_timeout(_fetch_all_polymarket_odds, timeout_sec=5.0)
+    except TimeoutError:
+        logger.warning("[Prediction] Polymarket获取超时，跳过")
     except Exception as e:
         logger.warning(f"[Prediction] Polymarket获取失败: {e}")
 
-    # 核心预测逻辑在超时保护下运行
     try:
-        results = _run_with_timeout(_compute_predictions, timeout_sec=8.0, syms=syms, db=db, poly_odds=poly_odds)
+        results = _run_with_timeout(_compute_predictions, timeout_sec=15.0, syms=syms, db=db, poly_odds=poly_odds)
     except TimeoutError:
         logger.warning("[Prediction] 预测计算超时，返回基础数据")
         results = []

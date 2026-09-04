@@ -731,7 +731,7 @@ const taskForm = reactive({
   strategy: 'emv',
   days: 90,
   initial_capital: 10000,
-  symbols: 'BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT',
+  symbols: 'BTC/USDT,ETH/USDT,SOL/USDT,SAND/USDT,HBAR/USDT,BNB/USDT,XRP/USDT',
   timeframes: '15m,1h,4h',
   top_n: 10,
   analysis_type: 'comprehensive',

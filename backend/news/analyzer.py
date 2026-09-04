@@ -45,6 +45,8 @@ SYMBOL_KEYWORDS: List[Tuple[str, List[str]]] = [
     ("BTC", ["bitcoin", " btc ", "btc/", "btc$", "#btc", "xbt", "satoshi"]),
     ("ETH", ["ethereum", " eth ", "eth/", "ether", "vitalik", "eip-", "erc-"]),
     ("SOL", ["solana", " sol ", "sol/", "sbf"]),
+    ("SAND", ["sandbox", " sand ", "sand/", "the sandbox", "sand token"]),
+    ("HBAR", ["hedera", "hbar", "hashgraph", "hederahashgraph"]),
     # Precious metals
     ("XAU", ["gold ", "gold,", "golden", "xau", "precious metal", "rally in gold", "safe haven"]),
     ("XAG", ["silver", " xag ", "silver price", "white metal"]),

@@ -33,6 +33,9 @@ textblob==0.18.0.post0
 schedule==1.2.2
 loguru==0.7.2
 email-validator==2.1.1
+# 2FA 双因素认证
+pyotp==2.9.0
+qrcode[pil]==7.4.2
 # 国际新闻情绪 VADER（轻量级，专门针对金融/新闻标题英文语料）
 vaderSentiment==3.3.2
 # feedparser：RSS/Atom 解析

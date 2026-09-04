@@ -610,6 +610,8 @@ const chartData = ref({
     { name: 'SOL 索拉纳', value: 1520.88, color: '#9945FF' },
     { name: '黄金 XAU', value: 680.40,  color: '#FBBF24' },
     { name: '石油 WTI', value: -260.08, color: '#F87171' },
+    { name: 'SAND 沙盒', value: 0, color: '#00ADEF' },
+    { name: 'HBAR 海代拉', value: 0, color: '#222222' },
   ],
   winLoss: { weeks: ['W1','W2','W3','W4','W5','W6','W7','W8'], win: [18,22,15,28,20,25,19,24], loss: [8,10,12,9,11,8,13,7] },
 })
