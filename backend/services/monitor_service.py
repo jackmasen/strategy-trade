@@ -34,6 +34,9 @@ LOG_DIR = BASE_DIR / "logs"
 _redis_client = None
 SHARE_TOKEN_PREFIX = "monitor:share:token:"
 
+# 内存分享令牌存储（fallback：Redis 不可用时使用）
+_share_tokens: Dict[str, Dict] = {}
+
 
 def _get_redis():
     global _redis_client

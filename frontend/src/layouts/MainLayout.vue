@@ -138,8 +138,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Fold, Expand, Search, Bell, FullScreen, Timer, ArrowDown, User, Lock, SwitchButton,
-  Monitor, Wallet, DataAnalysis, TrendCharts, PieChart, Reading, Cpu, Histogram,
-  Warning, Document, Setting
+  Monitor, Wallet, DataAnalysis, DataLine, TrendCharts, PieChart, Reading, Cpu, Histogram,
+  Warning, Document, Setting, MagicStick
 } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 import router from '@/router'
