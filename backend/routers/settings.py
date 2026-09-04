@@ -407,6 +407,15 @@ def test_smtp(
         return build_response(1, "SMTP认证失败，请检查账号和密码/授权码是否正确", None)
     except smtplib.SMTPConnectError as e:
         return build_response(1, f"无法连接SMTP服务器：{e}", None)
+    except smtplib.SMTPDataError as e:
+        err_str = str(e)
+        if "sending limit" in err_str.lower() or "5.4.5" in err_str:
+            return build_response(1, "SMTP连接和认证成功，但邮件服务商返回「每日发送限额已超」。Gmail免费账户每日限500封，请24小时后重试或更换SMTP服务", None)
+        return build_response(1, f"邮件服务商拒绝发送：{e}", None)
+    except smtplib.SMTPServerDisconnected as e:
+        return build_response(1, f"SMTP服务器断开连接：{e}", None)
+    except TimeoutError:
+        return build_response(1, "SMTP连接超时，请检查端口和防火墙设置", None)
     except Exception as e:
         logger.error(f"[Settings] SMTP测试失败: {e}")
         return build_response(1, f"SMTP测试失败: {str(e)}", None)

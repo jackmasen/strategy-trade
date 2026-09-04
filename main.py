@@ -1321,7 +1321,7 @@ async def serve_index():
     if rr is not None:
         return rr
     if FRONTEND_DIST is not None and (FRONTEND_DIST / "index.html").exists():
-        return FileResponse(str(FRONTEND_DIST / "index.html"))
+        return FileResponse(str(FRONTEND_DIST / "index.html"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
     # 前端还没构建 dist 时，给一个引导页（告诉用户 /docs /install 是能用的）
     unbuilt_html = r"""<!doctype html><title>策略交易系统</title><meta charset="utf-8" /><body style="margin:0;padding:40px;font-family:system-ui,-apple-system,Segoe UI,Microsoft YaHei,sans-serif;background:#0b1220;color:#e2e8f0;min-height:100vh">
 <div style="max-width:780px;margin:0 auto">
@@ -1364,8 +1364,8 @@ async def spa_fallback(full_path: str, request = None):
     ]
     for c in candidates:
         if c.exists() and c.is_file():
-            return FileResponse(str(c))
-    return FileResponse(str(FRONTEND_DIST / "index.html"))
+            return FileResponse(str(c), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
+    return FileResponse(str(FRONTEND_DIST / "index.html"), headers={"Cache-Control": "no-cache, no-store, must-revalidate"})
 
 
 # ============== 开发时直接运行 ==============

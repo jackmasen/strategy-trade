@@ -21,6 +21,9 @@ export const SYMBOL_META = {
   MSFT: { name: '微软',   color: '#00A4EF', icon: 'M' },
   // ===== 美股-中概 =====
   TCEHY: { name: '腾讯',  color: '#0052D9', icon: '腾' },
+  // ===== 美股-半导体 =====
+  SKHYNIX: { name: 'SK海力士', color: '#FF6600', icon: 'H' },
+  SNDK:    { name: '闪迪',     color: '#FF4444', icon: 'S' },
 }
 
 // 新闻来源（与 backend/models/analytics.py NewsArticle.SOURCE_* 严格一致）

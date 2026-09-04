@@ -42,11 +42,11 @@
         </div>
         <div class="ssb-item">
           <span class="ssb-label">数据库</span>
-          <span class="ssb-dot" :class="sysStatus.database.connection === 'ok' ? 'dot-ok' : 'dot-fail'"></span>
+          <span class="status-light" :class="sysStatus.database.connection === 'ok' ? 'ok' : 'error'"></span>
         </div>
         <div class="ssb-item">
           <span class="ssb-label">定时任务</span>
-          <span class="ssb-dot" :class="sysStatus.scheduler.status === 'running' ? 'dot-ok' : 'dot-warn'"></span>
+          <span class="status-light" :class="sysStatus.scheduler.status === 'running' ? 'ok' : 'warn'"></span>
         </div>
         <div class="ssb-item ssb-refresh" @click="loadSysStatus" title="刷新系统状态">
           <el-icon :size="14" :class="{ 'rotating': sysLoading }"><Refresh /></el-icon>
@@ -59,7 +59,10 @@
       <el-col :span="6" v-for="(k, idx) in kpiCards" :key="idx">
         <div class="stat-card" :class="k.cls">
           <div class="stat-card__label">
-            <span>{{ k.label }}</span>
+            <span style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="k.lightStatus || (k.trend > 0 ? 'ok' : (k.trend < 0 ? 'error' : 'idle'))"></span>
+              {{ k.label }}
+            </span>
             <div class="stat-card__icon" :style="{ background: k.iconBg }">
               <el-icon :size="20" :style="{ color: k.iconColor }"><component :is="k.icon" /></el-icon>
             </div>
@@ -140,7 +143,10 @@
                 :class="p.direction"
               >
                 <div class="pc-header">
-                  <span class="pc-symbol">{{ p.symbol }}</span>
+                  <span class="pc-symbol">
+                    <span class="status-light" :class="p.direction==='bullish'?'ok':(p.direction==='bearish'?'error':'warn')"></span>
+                    {{ p.symbol }}
+                  </span>
                   <el-tag :type="p.direction==='bullish'?'success':p.direction==='bearish'?'danger':'warning'" effect="dark" size="small">
                     {{ p.direction_cn }}
                   </el-tag>
@@ -210,9 +216,10 @@
           </div>
           <div class="panel-card__body" style="height: calc(100% - 56px); overflow: auto;">
             <el-table :data="latestScores" size="default" :header-cell-style="{ background:'#192738' }">
-              <el-table-column label="品种" width="90">
+              <el-table-column label="品种" width="100">
                 <template #default="{ row }">
                   <div class="flex-center gap-8">
+                    <span class="status-light" :class="row.score_total>=5?'ok':'error'"></span>
                     <span style="font-size:20px;">{{ SYMBOL_META[row.symbol]?.icon || '●' }}</span>
                     <span class="monospace text-strong">{{ row.symbol }}</span>
                   </div>
@@ -309,9 +316,12 @@
                   </span>
                 </template>
               </el-table-column>
-              <el-table-column label="状态" width="80" align="center">
+              <el-table-column label="状态" width="100" align="center">
                 <template #default="{ row }">
-                  <el-tag size="small" effect="dark" :type="row.statusType" round>{{ row.status }}</el-tag>
+                  <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
+                    <span class="status-light" :class="row.statusType==='success'?'ok':(row.statusType==='danger'?'error':'warn')"></span>
+                    <el-tag size="small" effect="dark" :type="row.statusType" round>{{ row.status }}</el-tag>
+                  </div>
                 </template>
               </el-table-column>
             </el-table>
@@ -336,7 +346,8 @@
               <el-col :span="8" v-for="p in positions" :key="p.symbol">
                 <div class="position-card" :class="p.side === 1 ? 'pos-long' : 'pos-short'">
                   <div class="flex-between">
-                    <div class="flex gap-8">
+                    <div class="flex gap-8" style="align-items:center;">
+                      <span class="status-light" :class="p.side === 1 ? 'ok' : 'error'"></span>
                       <span class="pos-symbol">{{ SYMBOL_META[p.symbol]?.icon }}</span>
                       <div>
                         <div class="monospace text-strong" style="font-size: 16px;">{{ p.symbol }}</div>
@@ -361,7 +372,25 @@
                     </div>
                     <div class="progress-row__value text-loss">-{{ p.slDistPct }}%</div>
                   </div>
-                  <div class="mt-16 flex-between pos-bottom">
+                  <div class="mt-8 pos-info-row" style="display:flex;justify-content:space-between;gap:8px;font-size:11px;">
+                    <div>
+                      <span class="text-dim">仓位金额</span>
+                      <span class="monospace text-strong" style="margin-left:4px;">${{ p.quantity.toFixed(0) }}</span>
+                    </div>
+                    <div>
+                      <span class="text-dim">保证金</span>
+                      <span class="monospace text-warn" style="margin-left:4px;">${{ p.margin.toFixed(0) }}</span>
+                    </div>
+                    <div>
+                      <span class="text-dim">开仓</span>
+                      <span class="monospace" style="margin-left:4px;">${{ p.entry.toFixed(2) }}</span>
+                    </div>
+                    <div>
+                      <span class="text-dim">标记</span>
+                      <span class="monospace text-info" style="margin-left:4px;">${{ p.mark.toFixed(2) }}</span>
+                    </div>
+                  </div>
+                  <div class="mt-8 flex-between pos-bottom">
                     <div>
                       <div class="text-dim" style="font-size:11px;">浮动盈亏</div>
                       <div class="monospace pos-pnl" :class="p.upnl >= 0 ? 'text-profit' : 'text-loss'">
@@ -397,12 +426,12 @@
             <div class="metrics-row">
               <div class="metric">
                 <div class="metric__label">累计胜率</div>
-                <div class="metric__value text-profit">{{ stats.winRate }}<span class="unit">%</span></div>
+                <div class="metric__value" style="display:flex;align-items:center;gap:6px;"><span class="status-light" :class="stats.winRate >= 50 ? 'ok' : 'error'"></span><span class="text-profit">{{ stats.winRate }}<span class="unit">%</span></span></div>
                 <div class="metric__bar"><div class="metric__fill win" :style="{ width: stats.winRate + '%' }"></div></div>
               </div>
               <div class="metric">
                 <div class="metric__label">盈亏比</div>
-                <div class="metric__value" :class="stats.pf >= 2 ? 'text-profit' : 'text-warn'">{{ stats.pf }}<span class="unit">:1</span></div>
+                <div class="metric__value" style="display:flex;align-items:center;gap:6px;"><span class="status-light" :class="stats.pf >= 2 ? 'ok' : 'warn'"></span><span :class="stats.pf >= 2 ? 'text-profit' : 'text-warn'">{{ stats.pf }}<span class="unit">:1</span></span></div>
                 <div class="metric__bar"><div class="metric__fill pf" :style="{ width: Math.min(100, stats.pf * 25) + '%' }"></div></div>
               </div>
             </div>
@@ -543,10 +572,10 @@ function formatPrice(price, symbol) {
 
 // -------- KPI 默认为 mock，加载API后覆盖 --------
 const kpiCards = ref([
-  { label: '账户总权益',  value: '102,348.62', icon: Money,      isMoney: true, trend: 0,    sub: '', cls: 'kpi-total', iconBg:'rgba(37,208,125,.14)', iconColor:'#25D07D', valueCls:'' },
-  { label: '今日盈亏',    value: '0.00',       icon: Promotion,  isMoney: true, trend: 0,    sub: '',   cls: 'kpi-pnl',   iconBg:'rgba(74,222,128,.14)', iconColor:'#4ADE80', valueCls:'' },
-  { label: '今日交易笔数', value: '0',          icon: Coin,       isMoney: false, trend: 0,    sub: '',     cls: 'kpi-count', iconBg:'rgba(96,165,250,.14)', iconColor:'#60A5FA', valueCls:'' },
-  { label: '风险等级',    value: '中低',       icon: Warning,    isMoney: false, trend: 0,    sub: '5档: 1低 2中低 3中 4中高 5高', cls: 'kpi-risk', iconBg:'rgba(251,191,36,.14)', iconColor:'#FBBF24', valueCls:'text-warn' },
+  { label: '账户总权益',  value: '102,348.62', icon: Money,      isMoney: true, trend: 0,    sub: '', cls: 'kpi-total', iconBg:'rgba(37,208,125,.14)', iconColor:'#25D07D', valueCls:'', lightStatus: '' },
+  { label: '今日盈亏',    value: '0.00',       icon: Promotion,  isMoney: true, trend: 0,    sub: '',   cls: 'kpi-pnl',   iconBg:'rgba(74,222,128,.14)', iconColor:'#4ADE80', valueCls:'', lightStatus: '' },
+  { label: '今日交易笔数', value: '0',          icon: Coin,       isMoney: false, trend: 0,    sub: '',     cls: 'kpi-count', iconBg:'rgba(96,165,250,.14)', iconColor:'#60A5FA', valueCls:'', lightStatus: '' },
+  { label: '风险等级',    value: '中低',       icon: Warning,    isMoney: false, trend: 0,    sub: '5档: 1低 2中低 3中 4中高 5高', cls: 'kpi-risk', iconBg:'rgba(251,191,36,.14)', iconColor:'#FBBF24', valueCls:'text-warn', lightStatus: 'warn' },
 ])
 
 // -------- 图表 --------
@@ -784,6 +813,8 @@ const loadAll = async () => {
         return {
           symbol: p.symbol, side: p.side, leverage: p.leverage || 3,
           entry: ent, mark, upnl, upnlPct: upPct,
+          quantity: Number(p.quantity_usdt || p.nominal || 0),
+          margin: Number(p.margin || p.margin_used || 0),
           tpDistPct: +tpDist.toFixed(1), slDistPct: +slDist.toFixed(1),
           holding: `${h}h ${m}m`,
         }

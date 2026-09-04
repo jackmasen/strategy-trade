@@ -145,6 +145,24 @@ def list_orders(
     return success(res)
 
 
+@router.get("/ticker/{symbol}")
+def get_ticker(symbol: str, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
+    """获取指定品种的最新行情（bid/ask/last），用于手动下单实时定价"""
+    symbol = symbol.upper()
+    acc = db.query(ExchangeAccount).filter(ExchangeAccount.status == 1).order_by(ExchangeAccount.id).first()
+    if not acc:
+        raise NotFoundException("没有可用的交易所账号")
+    client = _build_client(acc)
+    ticker = client.fetch_ticker(symbol)
+    return success({
+        "symbol": symbol,
+        "last_price": ticker.last_price,
+        "bid_price": ticker.bid_price,
+        "ask_price": ticker.ask_price,
+        "change_pct": ticker.change_pct if hasattr(ticker, 'change_pct') else 0,
+    })
+
+
 @router.post("/orders/manual")
 def manual_order(
     req: ManualOrderReq,
@@ -177,9 +195,13 @@ def manual_order(
     # 1) 获取最新价
     ticker = client.fetch_ticker(symbol)
     entry_price = ticker.last_price
+    bid_price = ticker.bid_price
+    ask_price = ticker.ask_price
+    # 做多以卖价(ask)成交，做空以买价(bid)成交
+    execution_price = ask_price if req.side == SIDE_LONG else (bid_price or ask_price)
     if entry_price <= 0:
         raise BizException("无法获取最新行情，请稍后重试")
-    tp, sl = _calc_tp_sl(req.side, entry_price,
+    tp, sl = _calc_tp_sl(req.side, execution_price or entry_price,
                            req.tp_ratio_pct, req.sl_ratio_pct,
                            req.tp_price, req.sl_price)
 
@@ -338,6 +360,9 @@ def manual_order(
         "symbol": symbol,
         "side": req.side,
         "entry_price": entry_price,
+        "execution_price": execution_price,
+        "bid_price": bid_price,
+        "ask_price": ask_price,
         "tp": tp, "sl": sl,
         "qty": qty,
         "margin": round(margin_need, 4),
@@ -375,19 +400,21 @@ def cancel_order(oid: int, db: Session = Depends(get_db), user: User = Depends(r
 def list_positions(
     account_id: int | None = None,
     symbol: str | None = None,
-    status: int = 1,
+    status: int | None = 1,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """持仓列表（默认仅查询持仓中）"""
-    query = db.query(TradePosition).filter(TradePosition.status == status)
+    """持仓列表（status=0 返回全部，默认仅持仓中）"""
+    query = db.query(TradePosition)
+    if status is not None and status > 0:
+        query = query.filter(TradePosition.status == status)
     if user.role != 1:
         query = query.filter(TradePosition.user_id == user.id)
     if account_id:
         query = query.filter(TradePosition.exchange_account_id == account_id)
     if symbol:
         query = query.filter(TradePosition.symbol == symbol.upper())
-    items = query.order_by(TradePosition.entry_time.desc()).all()
+    items = query.order_by(TradePosition.entry_time.desc()).limit(200).all()
     return success({
         "total": len(items),
         "items": [
@@ -408,6 +435,17 @@ def list_positions(
                 "sl": float(p.sl_price or 0),
                 "max_drawdown_ratio": float(p.max_drawdown_ratio or 0),
                 "open_time": p.entry_time.isoformat() if p.entry_time else None,
+                "realized_pnl": float(p.realized_pnl or 0),
+                "fee_total": float(p.fee_total or 0),
+                "entry_score": float(p.entry_score or 0),
+                "holding_minutes": p.holding_minutes or 0,
+                "strategy_id": p.strategy_id,
+                "exchange": p.exchange,
+                "status": p.status,
+                "status_name": "持仓中" if p.status == 1 else "已平仓",
+                "close_price": float(p.close_price or 0),
+                "liquidation_price": 0,
+                "raw_position_id": "",
             } for p in items
         ]
     })

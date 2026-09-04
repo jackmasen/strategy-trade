@@ -49,7 +49,7 @@ request.interceptors.response.use(
           ElMessage.warning('登录已过期，请重新登录')
           setTimeout(() => { _isLoggingOut = false }, 2000)
         }
-      } else {
+      } else if (!resp.config?._silent) {
         ElMessage({
           showClose: true,
           message: body.message || '请求失败',
@@ -77,17 +77,20 @@ request.interceptors.response.use(
       }
       return Promise.reject(err)
     }
-    let msg = err.message || '网络异常'
-    if (status === 403) {
-      msg = '权限不足'
-    } else if (status === 404) {
-      msg = '接口不存在'
-    } else if (status === 422) {
-      msg = '参数校验失败'
-    } else if (status >= 500) {
-      msg = '服务器错误，请稍后重试'
-    } else if (!window.navigator.onLine) {
-      msg = '网络已断开，请检查网络'
+    const bodyMsg = err.response?.data?.message
+    let msg = bodyMsg || err.message || '网络异常'
+    if (!bodyMsg) {
+      if (status === 403) {
+        msg = '权限不足'
+      } else if (status === 404) {
+        msg = '接口不存在'
+      } else if (status === 422) {
+        msg = '参数校验失败'
+      } else if (status >= 500) {
+        msg = '服务器错误，请稍后重试'
+      } else if (!window.navigator.onLine) {
+        msg = '网络已断开，请检查网络'
+      }
     }
     ElMessage({ showClose: true, message: msg, type: 'error', duration: 4000 })
     return Promise.reject(err)

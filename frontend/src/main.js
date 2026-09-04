@@ -56,6 +56,12 @@
       console.warn('[ignored] Harmless error during page transition:', e.message)
       return
     }
+    if (!e.error && !e.message && e.target && e.target !== window && e.target.tagName) {
+      const tag = e.target.tagName
+      const src = e.target.src || e.target.href || ''
+      console.warn('[ignored] Resource loading error:', tag, src)
+      return
+    }
     const msg = e.error && e.error.stack ? String(e.error.stack) : `${e.message} (${e.filename}:${e.lineno}:${e.colno})`
     showError('JS 运行时错误', [msg, 'URL: ' + location.href])
   }, true)
@@ -69,7 +75,12 @@
     showError('未捕获 Promise 拒绝', [msg, 'URL: ' + location.href])
   })
   window.addEventListener('vite:preloadError', (e) => {
-    showError('Vite 预加载失败', [String(e?.payload?.err || e)])
+    console.warn('[vite:preloadError] Stale chunk detected, reloading page...')
+    e.preventDefault()
+    if (!window.__viteReloading) {
+      window.__viteReloading = true
+      window.location.reload()
+    }
   })
   // 旧版 vite：捕获 module load fail 最后兜底
   window.addEventListener('load', () => {

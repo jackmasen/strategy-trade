@@ -44,6 +44,7 @@ _MOCK_PRICES = {
     "BTC": 78000, "ETH": 2400, "SOL": 100,
     "XAU": 2500, "XAG": 30, "WTI": 75,
     "TSLA": 250, "NVDA": 120, "AAPL": 220, "MSFT": 420, "TCEHY": 60,
+    "SKHYNIX": 1219.75, "SNDK": 1555.05,
 }
 
 def _gen_mock_ticker(symbol):
@@ -63,7 +64,7 @@ def _gen_mock_ticker(symbol):
         timestamp_ms=int(time.time() * 1000),
     )
 
-_TF_MS = {"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000,"1d":86400000,"1w":604800000,"1M":2592000000}
+_TF_MS = {"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000,"1d":86400000,"1w":604800000,"1M":2592000000,"1y":31536000000}
 
 def _gen_mock_klines(symbol, timeframe, limit):
     import random
@@ -109,7 +110,7 @@ DAILY_CACHE_TTL = 300  # 秒，日线数据缓存5分钟（变化慢）
 def _cached_fetch_klines(client, symbol, timeframe, limit, ttl=None):
     """带缓存的 K 线拉取，相同参数在 TTL 内直接返回缓存"""
     if ttl is None:
-        ttl = DAILY_CACHE_TTL if timeframe in ("1d", "1w", "1M") else KLINE_CACHE_TTL
+        ttl = DAILY_CACHE_TTL if timeframe in ("1d", "1w", "1M", "1y") else KLINE_CACHE_TTL
     key = (symbol, timeframe, limit)
     now = time.time()
     with _kline_cache_lock:
@@ -552,8 +553,8 @@ def get_klines(
     timeframe = timeframe.lower()
     if timeframe == "1m" and tf_raw.endswith("M"):
         timeframe = "1M"
-    if timeframe not in ("1m","5m","15m","1h","4h","1d","1w","1M"):
-        raise ParameterException("timeframe 必须为 1m/5m/15m/1h/4h/1d/1w/1M")
+    if timeframe not in ("1m","5m","15m","1h","4h","1d","1w","1M","1y"):
+        raise ParameterException("timeframe 必须为 1m/5m/15m/1h/4h/1d/1w/1M/1y")
     limit = max(10, min(500, limit))
     mm = MarketManager.get_instance()
     klines = mm.get_klines(symbol, timeframe, limit=limit)

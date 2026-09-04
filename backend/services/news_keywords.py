@@ -193,6 +193,28 @@ KEYWORD_LIBRARY = [
     ("止损", -1, 2, ["BTC", "ETH"], "sentiment"),
     ("清算", -1, 3, ["BTC", "ETH"], "sentiment"),
     ("liquidation", -1, 3, ["BTC", "ETH"], "sentiment"),
+
+    # ================= 半导体/存储芯片 =================
+    ("海力士", 0, 3, ["SKHYNIX"], "semiconductor"),
+    ("SK Hynix", 0, 3, ["SKHYNIX"], "semiconductor"),
+    ("SKHYNIX", 0, 3, ["SKHYNIX"], "semiconductor"),
+    ("HBM", 0, 3, ["SKHYNIX", "SNDK"], "semiconductor"),
+    ("高带宽存储", 0, 3, ["SKHYNIX"], "semiconductor"),
+    ("存储芯片", 0, 2, ["SKHYNIX", "SNDK"], "semiconductor"),
+    ("memory chip", 0, 2, ["SKHYNIX", "SNDK"], "semiconductor"),
+    ("NAND", 0, 2, ["SNDK"], "semiconductor"),
+    ("闪存", 0, 2, ["SNDK"], "semiconductor"),
+    ("闪迪", 0, 3, ["SNDK"], "semiconductor"),
+    ("SanDisk", 0, 3, ["SNDK"], "semiconductor"),
+    ("SNDK", 0, 2, ["SNDK"], "semiconductor"),
+    ("半导体", 0, 2, ["SKHYNIX", "SNDK"], "semiconductor"),
+    ("semiconductor", 0, 2, ["SKHYNIX", "SNDK"], "semiconductor"),
+    ("芯片", 0, 2, ["SKHYNIX", "SNDK"], "semiconductor"),
+    ("chip", 0, 2, ["SKHYNIX", "SNDK"], "semiconductor"),
+    ("晶圆", 0, 2, ["SKHYNIX"], "semiconductor"),
+    ("wafer", 0, 2, ["SKHYNIX"], "semiconductor"),
+    ("DRAM", 0, 2, ["SKHYNIX"], "semiconductor"),
+    ("SSD", 0, 2, ["SNDK"], "semiconductor"),
 ]
 
 

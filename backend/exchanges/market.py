@@ -137,7 +137,7 @@ class MarketManager:
 
         # 1) 预加载历史 K 线 (for 指标)
         if self._primary_client:
-            default_symbols = ["BTC", "ETH", "SOL", "XAU", "WTI"]
+            default_symbols = ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
             symbols_to_load = symbols or list(self._symbols_subscribed) or default_symbols
             for sym in symbols_to_load:
                 for tf in ("1h", "4h"):
@@ -148,7 +148,7 @@ class MarketManager:
 
         # 2) 启动主用 client 的 WS 行情（失败不影响，后台继续用 REST fallback）
         if self._primary_client:
-            all_syms = list(symbols or self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI"]
+            all_syms = list(symbols or self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
             try:
                 self._primary_client.start_ws(
                     symbols=all_syms,
@@ -501,7 +501,7 @@ class MarketManager:
                 if not self._primary_client:
                     continue
                 # 只处理已订阅 + 主用5品种
-                syms = list(self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI"]
+                syms = list(self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
                 for sym in syms:
                     try:
                         ticker = self._primary_client.fetch_ticker(sym)
@@ -523,7 +523,7 @@ class MarketManager:
                     time.sleep(1.0)
                 if not self._primary_client:
                     continue
-                syms = list(self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI"]
+                syms = list(self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
                 for sym in syms:
                     try:
                         # 加密货币从真实API拉取

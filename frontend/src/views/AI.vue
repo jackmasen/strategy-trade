@@ -718,18 +718,18 @@ const deleteNewsConfig = async (row) => {
 
 const testNewsConfig = async (row) => {
   if (!row.has_key) { ElMessage.warning('该接口未配置API Key，无法测试'); return }
-  // 直接测试该配置（无需打开编辑表单）
   newsTesting.value = true
   try {
     const r = await http.post(`${API_PREFIX}/news/ai-configs/test`, {
       provider: row.provider, api_endpoint: row.api_endpoint || '',
       api_key: '__USE_EXISTING__', model_name: row.model_name,
       config_id: row.id,
-    })
+    }, { _silent: true })
     ElMessage.success(`连接成功！耗时 ${r.latency_ms || '?'}ms`)
     await loadNewsAiConfigs()
   } catch (e) {
-    ElMessage.error(e?.message || '连接测试失败')
+    const msg = e?.response?.data?.message || e?.message || '连接测试失败'
+    ElMessage.error(msg)
     await loadNewsAiConfigs()
   } finally { newsTesting.value = false }
 }
@@ -744,13 +744,14 @@ const testCurrentNewsConfig = async () => {
       api_key: newsForm.api_key || (editingNewsId.value ? '__USE_EXISTING__' : ''),
       model_name: newsForm.model_name,
       config_id: editingNewsId.value,
-    })
+    }, { _silent: true })
     ElMessage.success(`连接成功！耗时 ${r.latency_ms || '?'}ms`)
     if (editingNewsId.value) {
       await loadNewsAiConfigs()
     }
   } catch (e) {
-    ElMessage.error(e?.message || '连接测试失败')
+    const msg = e?.response?.data?.message || e?.message || '连接测试失败'
+    ElMessage.error(msg)
     if (editingNewsId.value) {
       await loadNewsAiConfigs()
     }

@@ -5,14 +5,24 @@
     <el-row :gutter="16">
       <el-col :span="6">
         <div class="stat-card">
-          <div class="stat-label">已验证信号</div>
+          <div class="stat-label">
+            <span style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="dashboard.summary.total_verified_signals > 0 ? 'ok' : 'idle'"></span>
+              已验证信号
+            </span>
+          </div>
           <div class="stat-value">{{ dashboard.summary.total_verified_signals }}</div>
           <div class="stat-sub text-dim">样本量</div>
         </div>
       </el-col>
       <el-col :span="6">
         <div class="stat-card win">
-          <div class="stat-label">整体胜率</div>
+          <div class="stat-label">
+            <span style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="dashboard.summary.win_rate >= 50 ? 'ok' : 'error'"></span>
+              整体胜率
+            </span>
+          </div>
           <div class="stat-value">{{ dashboard.summary.win_rate }}%</div>
           <div class="stat-sub">
             胜 {{ dashboard.summary.win_signals }} / 亏 {{ dashboard.summary.loss_signals }}
@@ -21,14 +31,24 @@
       </el-col>
       <el-col :span="6">
         <div class="stat-card pattern">
-          <div class="stat-label">发现模式</div>
+          <div class="stat-label">
+            <span style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="dashboard.patterns?.length > 0 ? 'warn' : 'ok'"></span>
+              发现模式
+            </span>
+          </div>
           <div class="stat-value">{{ dashboard.patterns?.length || 0 }}</div>
           <div class="stat-sub text-dim">假信号模式</div>
         </div>
       </el-col>
       <el-col :span="6">
         <div class="stat-card proposal">
-          <div class="stat-label">待处理方案</div>
+          <div class="stat-label">
+            <span style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="dashboard.pending_proposals?.length > 0 ? 'warn' : 'ok'"></span>
+              待处理方案
+            </span>
+          </div>
           <div class="stat-value">{{ dashboard.pending_proposals?.length || 0 }}</div>
           <div class="stat-sub text-dim">优化建议</div>
         </div>
@@ -97,17 +117,23 @@
       </div>
       <div class="panel-card__body">
         <el-table :data="dashboard.patterns" size="small" stripe>
-          <el-table-column prop="severity_cn" label="程度" width="70">
+          <el-table-column prop="severity_cn" label="程度" width="90">
             <template #default="{ row }">
-              <el-tag size="small" :type="severityType(row.severity)" effect="dark">
-                {{ row.severity_cn }}
-              </el-tag>
+              <span style="display:inline-flex;align-items:center;gap:4px;">
+                <span class="status-light" :class="row.severity==='critical'||row.severity==='high'?'error':(row.severity==='medium'?'warn':'idle')"></span>
+                <el-tag size="small" :type="severityType(row.severity)" effect="dark">
+                  {{ row.severity_cn }}
+                </el-tag>
+              </span>
             </template>
           </el-table-column>
           <el-table-column prop="description" label="模式描述" min-width="200" />
-          <el-table-column prop="win_rate" label="胜率" width="80" align="center">
+          <el-table-column prop="win_rate" label="胜率" width="90" align="center">
             <template #default="{ row }">
-              <span :class="row.win_rate >= 50 ? 'text-profit' : 'text-loss'">{{ row.win_rate }}%</span>
+              <span style="display:inline-flex;align-items:center;gap:4px;">
+                <span class="status-light" :class="row.win_rate >= 50 ? 'ok' : 'error'"></span>
+                <span :class="row.win_rate >= 50 ? 'text-profit' : 'text-loss'">{{ row.win_rate }}%</span>
+              </span>
             </template>
           </el-table-column>
           <el-table-column prop="total_signals" label="样本量" width="80" align="center" />
@@ -139,9 +165,13 @@
           <div v-for="p in dashboard.pending_proposals" :key="p.id" class="proposal-card">
             <div class="proposal-header">
               <el-tag :type="proposalTypeColor(p.proposal_type)" effect="light" size="small">
+                <span class="status-light" :class="p.confidence>=70?'ok':(p.confidence>=50?'warn':'error')" style="margin-right:2px;"></span>
                 {{ p.proposal_type_cn }}
               </el-tag>
-              <span class="proposal-confidence">置信度 {{ p.confidence }}%</span>
+              <span class="proposal-confidence">
+                <span class="status-light" :class="p.confidence>=70?'ok':(p.confidence>=50?'warn':'error')" style="margin-right:2px;"></span>
+                置信度 {{ p.confidence }}%
+              </span>
             </div>
             <div class="proposal-title">{{ p.title }}</div>
             <div class="proposal-desc text-dim">{{ p.description }}</div>

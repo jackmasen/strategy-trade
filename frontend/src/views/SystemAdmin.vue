@@ -87,7 +87,7 @@
             </div>
             <div class="smb-info-item">
               <span class="smb-info-label">定时任务</span>
-              <span class="smb-dot" :class="monitorStatus.scheduler.status === 'running' ? 'dot-ok' : 'dot-warn'"></span>
+              <span class="status-light" :class="monitorStatus.scheduler.status === 'running' ? 'ok' : 'warn'"></span>
               <span class="smb-info-value">{{ monitorStatus.scheduler.status === 'running' ? '正常' : '异常' }}</span>
             </div>
             <div class="smb-info-item">

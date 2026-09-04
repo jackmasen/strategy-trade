@@ -42,20 +42,29 @@
         <el-table-column label="手机" prop="phone" width="140" />
         <el-table-column label="角色" width="130" align="center">
           <template #default="{ row }">
-            <el-tag :type="['success','warning','info'][row.role-1]" effect="dark" size="small">
-              {{ ['超级管理员','运营','访客'][row.role-1] }}
-            </el-tag>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="row.role===1?'ok':(row.role===2?'warn':'idle')"></span>
+              <el-tag :type="['success','warning','info'][row.role-1]" effect="dark" size="small">
+                {{ ['超级管理员','运营','访客'][row.role-1] }}
+              </el-tag>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="2FA" width="90" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.two_factor_enabled" type="success" effect="dark" size="small">已启用</el-tag>
-            <span v-else class="text-dim">未启用</span>
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="row.two_factor_enabled?'ok':'warn'"></span>
+              <el-tag v-if="row.two_factor_enabled" type="success" effect="dark" size="small">已启用</el-tag>
+              <span v-else class="text-dim">未启用</span>
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="状态" width="90" align="center">
           <template #default="{ row }">
-            <el-switch v-model="row.status" :active-value="1" :inactive-value="0" @change="toggle(row)" />
+            <span style="display:inline-flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="row.status===1?'ok':'error'"></span>
+              <el-switch v-model="row.status" :active-value="1" :inactive-value="0" @change="toggle(row)" />
+            </span>
           </template>
         </el-table-column>
         <el-table-column label="最后登录" width="180">

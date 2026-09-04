@@ -21,15 +21,34 @@ from dataclasses import dataclass, field, asdict
 from sqlalchemy.orm import Session
 from loguru import logger
 
+import redis as redis_lib
+
 from backend.config import get_settings
 
 settings = get_settings()
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
+
+# 分享令牌内存存储
+_share_tokens: Dict[str, Dict] = {}
 LOG_DIR = BASE_DIR / "logs"
 
-# 内存中的分享令牌（重启失效；如需持久化可存DB）
-_share_tokens: Dict[str, dict] = {}
+# Redis客户端（多worker共享令牌状态）
+_redis_client = None
+SHARE_TOKEN_PREFIX = "monitor:share:token:"
+
+
+def _get_redis():
+    global _redis_client
+    if _redis_client is None:
+        _redis_client = redis_lib.Redis(
+            host=settings.REDIS_HOST,
+            port=settings.REDIS_PORT,
+            password=settings.REDIS_PASSWORD,
+            db=settings.REDIS_DB,
+            decode_responses=True,
+        )
+    return _redis_client
 
 
 # ============================================================
@@ -474,10 +493,9 @@ def run_full_self_check(db: Session) -> Dict:
     
     # 3.4 新闻情绪分析
     try:
-        from backend.news.analyzer import NewsSentimentAnalyzer
-        analyzer = NewsSentimentAnalyzer()
-        result = analyzer.analyze_text("Bitcoin surges to new all-time high as ETF inflows increase.")
-        add_check("新闻情绪分析", True, {"score": result.get("compound", 0)})
+        from backend.news.analyzer import analyze
+        result = analyze("Bitcoin surges to new all-time high", "ETF inflows increase significantly.")
+        add_check("新闻情绪分析", True, {"score": result.sentiment_score})
     except Exception as e:
         add_check("新闻情绪分析", False, error=f"{e.__class__.__name__}: {e}")
     
@@ -502,7 +520,7 @@ def run_full_self_check(db: Session) -> Dict:
     
     # 3.7 AI模块
     try:
-        from backend.strategy.ai_strategy import AIStrategyEngine
+        from backend.strategy.engine import StrategyEngine
         add_check("AI策略引擎", True, {"status": "模块可导入"})
     except Exception as e:
         add_check("AI策略引擎", False, error=str(e))

@@ -6,7 +6,7 @@
 1) **情绪 VADER (-1 ~ +1)**：优先 `vaderSentiment`（专门针对社交媒体/新闻/标题，40MB依赖极小）；
    若未安装则 fallback 到关键词词典规则（bullish/bearish/hawkish/dovish/surge/plunge 等）。
 
-2) **关联品种 related_symbols**：本系统只交易 BTC/ETH/SOL/XAU/WTI 5 个，
+2) **关联品种 related_symbols**：本系统交易 BTC/ETH/SOL/XAU/WTI/SKHYNIX/SNDK 等，
    所以基于标题+摘要+分类做关键词命中映射，而不是 NER 命名实体（省内存省时间）。
    同时保留 `tags` 字段用于前端筛选。
 
@@ -31,7 +31,7 @@ class AnalysisResult:
     sentiment: int            # -1 / 0 / 1
     sentiment_score: float    # -1.0 ~ +1.0
     sentiment_keywords: List[str]
-    related_symbols: List[str]   # 本系统关心的：BTC/ETH/SOL/XAU/WTI（不关心的不写，保持 related_symbols 干净）
+    related_symbols: List[str]   # 本系统关心的：BTC/ETH/SOL/XAU/WTI/SKHYNIX/SNDK等（不关心的不写，保持 related_symbols 干净）
     tags: List[str]
     impact_level: int         # 1~4
     is_hot: bool
@@ -58,6 +58,9 @@ SYMBOL_KEYWORDS: List[Tuple[str, List[str]]] = [
     ("MSFT", ["microsoft", " msft ", "msft/", "azure", "windows", "office 365", "satya", "盖茨", "openai"]),
     # US Stocks - China
     ("TCEHY", ["tencent", " tcehy ", "tcehy/", "腾讯", "wechat", "微信", "pony ma", "马化腾"]),
+    # Semiconductor / Memory
+    ("SKHYNIX", ["sk hynix", "skhynix", "海力士", "hbm", "高带宽存储", "dram", "晶圆", "000660"]),
+    ("SNDK", ["sandisk", "sndk", "闪迪", "nand flash", "nand", "闪存", "ssd"]),
 ]
 
 # 宏观类关键词：命中的会把品种扩散成全部（宏观对所有 5 种都可能有影响）

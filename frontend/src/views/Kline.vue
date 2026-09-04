@@ -7,6 +7,7 @@
       <div class="toolbar-row toolbar-row-top">
         <div class="toolbar-periods">
           <div v-for="(mp, key) in multiPeriod" :key="key" class="tp-item">
+            <span class="status-light ok" style="margin:0;"></span>
             <span class="tp-label">{{ periodLabel(key) }}</span>
             <span class="tp-high">H{{ fmtMoney(mp.high) }}</span>
             <span class="tp-low">L{{ fmtMoney(mp.low) }}</span>
@@ -37,8 +38,10 @@
             <el-radio-button value="1y">年线</el-radio-button>
           </el-radio-group>
           <div class="price-block">
+            <span class="price-live-dot" :class="priceDirection"></span>
             <span class="price-main" :class="priceDirection">${{ fmtMoney(ticker.last_price) }}</span>
-            <span class="price-change" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">
+            <span class="price-change" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'" style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="ticker.change_pct_24h >= 0 ? 'ok' : 'error'" style="margin:0;"></span>
               {{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ (ticker.change_pct_24h || 0).toFixed(2) }}%
             </span>
             <span class="price-hl"><span class="hl-label">24H高</span><span class="hl-high">{{ fmtMoney(ticker.high_24h) }}</span></span>
@@ -47,9 +50,18 @@
         </div>
         <div class="toolbar-right">
           <div class="toolbar-indicators">
-            <el-tag :type="trend.short_term === 'up' ? 'success' : trend.short_term === 'down' ? 'danger' : 'info'" size="small">短:{{ trendText(trend.short_term) }}</el-tag>
-            <el-tag :type="trend.mid_term === 'up' ? 'success' : trend.mid_term === 'down' ? 'danger' : 'info'" size="small">中:{{ trendText(trend.mid_term) }}</el-tag>
-            <el-tag type="warning" size="small">RSI:{{ trend.rsi }}</el-tag>
+            <el-tag :type="trend.short_term === 'up' ? 'success' : trend.short_term === 'down' ? 'danger' : 'info'" size="small">
+              <span class="status-light" :class="trend.short_term === 'up' ? 'ok' : (trend.short_term === 'down' ? 'error' : 'idle')" style="margin-right:2px;"></span>
+              短:{{ trendText(trend.short_term) }}
+            </el-tag>
+            <el-tag :type="trend.mid_term === 'up' ? 'success' : trend.mid_term === 'down' ? 'danger' : 'info'" size="small">
+              <span class="status-light" :class="trend.mid_term === 'up' ? 'ok' : (trend.mid_term === 'down' ? 'error' : 'idle')" style="margin-right:2px;"></span>
+              中:{{ trendText(trend.mid_term) }}
+            </el-tag>
+            <el-tag type="warning" size="small">
+              <span class="status-light" :class="trend.rsi > 70 ? 'error' : (trend.rsi < 30 ? 'ok' : 'warn')" style="margin-right:2px;"></span>
+              RSI:{{ trend.rsi }}
+            </el-tag>
           </div>
           <el-button-group v-if="layoutMode === 'custom'" size="small">
             <el-button :type="layoutEditMode ? 'warning' : ''" :icon="Edit" @click="toggleEditMode">
@@ -110,7 +122,7 @@
         <!-- 副图：MACD + RSI 并排 -->
         <div class="sub-charts-row">
           <div class="chart-card sub-chart">
-            <div class="chart-header"><span class="chart-title">MACD</span></div>
+            <div class="chart-header"><span class="status-light ok" style="margin:0;"></span><span class="chart-title">MACD</span></div>
             <div ref="macdChartRef" class="chart-sub"></div>
           </div>
           <div class="chart-card sub-chart">
@@ -123,7 +135,7 @@
         <div class="bottom-panels">
           <!-- 深度盘口 -->
           <div class="side-card bottom-panel compact-ob">
-            <div class="side-title">深度盘口</div>
+            <div class="side-title"><span class="status-light ok" style="margin:0;"></span>深度盘口</div>
             <div class="orderbook">
               <div class="ob-header">
                 <span>价格</span><span>数量</span><span>累计</span>
@@ -154,6 +166,7 @@
           <!-- 近期成交 -->
           <div class="side-card bottom-panel compact-trades">
             <div class="side-title">
+              <span class="status-light ok" style="margin:0;"></span>
               近期成交
               <span class="side-sub">实时更新</span>
             </div>
@@ -176,6 +189,7 @@
               <div v-for="(t, i) in recentTrades.slice(0, 10)" :key="t.trade_id || i" class="trade-row"
                    :class="[t.side === 1 ? 'buy' : 'sell', { 'is-big': t.quote_qty >= whaleThreshold }]">
                 <span class="trade-price">
+                  <span class="status-light" :class="t.side === 1 ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span>
                   <span class="trade-arrow">{{ t.side === 1 ? '▲' : '▼' }}</span>
                   {{ fmtMoney(t.price, 4) }}
                 </span>
@@ -255,7 +269,7 @@
 
         <!-- 涨跌参数分析 -->
         <div class="info-card">
-          <div class="info-title">涨跌参数分析</div>
+          <div class="info-title"><span class="status-light ok" style="margin:0;"></span>涨跌参数分析</div>
           <div class="rf-grid">
             <div class="rf-item">
               <div class="rf-label">涨跌幅</div>
@@ -359,7 +373,7 @@
       <div class="kline-right">
         <!-- 深度盘口 -->
         <div class="side-card">
-          <div class="side-title">深度盘口</div>
+          <div class="side-title"><span class="status-light ok" style="margin:0;"></span>深度盘口</div>
           <div class="orderbook">
             <div class="ob-header">
               <span>价格</span><span>数量</span><span>累计</span>
@@ -390,18 +404,19 @@
         <!-- 近期成交 -->
         <div class="side-card">
           <div class="side-title">
+            <span class="status-light ok" style="margin:0;"></span>
             近期成交
             <span class="side-sub">实时更新</span>
           </div>
           <!-- 大单统计 -->
           <div class="trades-stats" v-if="bigTradeStats.buyCount > 0 || bigTradeStats.sellCount > 0">
             <div class="ts-item buy">
-              <div class="ts-label">大单买入</div>
+              <div class="ts-label"><span class="status-light ok" style="margin:0;width:6px;height:6px;"></span> 大单买入</div>
               <div class="ts-value">{{ bigTradeStats.buyCount }}笔</div>
               <div class="ts-amount">${{ formatBig(bigTradeStats.buyAmount) }}</div>
             </div>
             <div class="ts-item sell">
-              <div class="ts-label">大单卖出</div>
+              <div class="ts-label"><span class="status-light error" style="margin:0;width:6px;height:6px;"></span> 大单卖出</div>
               <div class="ts-value">{{ bigTradeStats.sellCount }}笔</div>
               <div class="ts-amount">${{ formatBig(bigTradeStats.sellAmount) }}</div>
             </div>
@@ -413,6 +428,7 @@
             <div v-for="(t, i) in recentTrades" :key="t.trade_id || i" class="trade-row"
                  :class="[t.side === 1 ? 'buy' : 'sell', { 'is-big': t.quote_qty >= whaleThreshold }]">
               <span class="trade-price">
+                <span class="status-light" :class="t.side === 1 ? 'ok' : 'error'" style="margin:0;width:6px;height:6px;"></span>
                 <span class="trade-arrow">{{ t.side === 1 ? '▲' : '▼' }}</span>
                 {{ fmtMoney(t.price, 4) }}
               </span>
@@ -432,6 +448,7 @@
         <!-- 清算热力图 & 爆仓预警 -->
         <div class="side-card">
           <div class="side-title">
+            <span class="status-light ok" style="margin:0;"></span>
             清算热力图
             <span class="side-sub">爆仓密集区估算</span>
           </div>
@@ -472,7 +489,7 @@
               暂无数据
             </div>
             <div v-for="(d, i) in liqHeatmap.danger_levels" :key="i" class="liq-danger-item" :class="d.side">
-              <span class="liq-danger-side">{{ d.side_cn }}</span>
+              <span class="liq-danger-side"><span class="status-light" :class="d.side === 'long' ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span> {{ d.side_cn }}</span>
               <span class="liq-danger-price">{{ d.price }}</span>
               <span class="liq-danger-dist">距当前 {{ d.distance_pct }}%</span>
               <div class="liq-danger-bar" :style="{width: (d.density * 100) + '%'}"></div>
@@ -485,27 +502,27 @@
           <div class="side-title">持仓量 & 资金信息</div>
           <div class="oi-info">
             <div class="oi-row">
-              <span class="oi-label">持仓量(币)</span>
+              <span class="oi-label"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span> 持仓量(币)</span>
               <span class="oi-value">{{ formatBig(openInterest.open_interest) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">持仓价值(USDT)</span>
+              <span class="oi-label"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span> 持仓价值(USDT)</span>
               <span class="oi-value">${{ formatBig(openInterest.open_interest_usdt) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">24h 最高</span>
+              <span class="oi-label"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span> 24h 最高</span>
               <span class="oi-value high">{{ fmtMoney(ticker.high_24h) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">24h 最低</span>
+              <span class="oi-label"><span class="status-light warn" style="margin:0;width:5px;height:5px;"></span> 24h 最低</span>
               <span class="oi-value low">{{ fmtMoney(ticker.low_24h) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">24h 成交量</span>
+              <span class="oi-label"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span> 24h 成交量</span>
               <span class="oi-value">{{ formatBig(ticker.volume_24h) }}</span>
             </div>
             <div class="oi-row">
-              <span class="oi-label">24h 涨跌</span>
+              <span class="oi-label"><span class="status-light" :class="ticker.change_pct_24h >= 0 ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span> 24h 涨跌</span>
               <span class="oi-value" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">
                 {{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ ticker.change_pct_24h }}%
               </span>
@@ -516,6 +533,7 @@
         <!-- 大资金预警 -->
         <div class="side-card alert-card">
           <div class="side-title">
+            <span class="status-light ok" style="margin:0;"></span>
             <el-icon><Bell /></el-icon>
             大资金异动预警
           </div>
@@ -525,7 +543,7 @@
               <div class="alert-tip">单笔 > {{ whaleThreshold }} USDT 将触发提醒</div>
             </div>
             <div v-for="(a, i) in whaleAlerts" :key="i" class="alert-item" :class="a.side === 1 ? 'buy' : 'sell'">
-              <div class="alert-side">{{ a.side === 1 ? '大单买入' : '大单卖出' }}</div>
+              <div class="alert-side"><span class="status-light" :class="a.side === 1 ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span> {{ a.side === 1 ? '大单买入' : '大单卖出' }}</div>
               <div class="alert-price">{{ fmtMoney(a.price, 4) }}</div>
               <div class="alert-amount">${{ formatBig(a.quote_qty) }}</div>
               <div class="alert-time">{{ formatTime(a.timestamp_ms) }}</div>
@@ -584,72 +602,6 @@
       </div>
     </div>
 
-    <!-- 底部：当前持仓横排展示 -->
-    <div v-if="layoutMode !== 'custom' && selectedAccount > 0" class="kline-positions-bar">
-      <div class="kpb-header">
-        <div class="kpb-title">
-          <span class="kpb-icon">💼</span>
-          <span>当前持仓</span>
-          <el-tag size="small" type="info" effect="dark" round>{{ myPositions.length }}个</el-tag>
-        </div>
-        <div class="kpb-summary">
-          <span class="kpb-summary-item">
-            <span class="kpb-sl">未实现盈亏</span>
-            <span class="kpb-sv" :class="totalUnrealizedPnl >= 0 ? 'profit' : 'loss'">
-              {{ totalUnrealizedPnl >= 0 ? '+' : '' }}${{ formatBig(totalUnrealizedPnl) }}
-            </span>
-          </span>
-          <span class="kpb-summary-item">
-            <span class="kpb-sl">保证金占用</span>
-            <span class="kpb-sv">${{ formatBig(totalMarginUsed) }}</span>
-          </span>
-          <span class="kpb-refresh" @click="loadMyPositions" title="刷新持仓">
-            <el-icon :size="14" :class="{ 'rotating': positionsLoading }"><Refresh /></el-icon>
-          </span>
-        </div>
-      </div>
-      <div class="kpb-body" v-if="myPositions.length > 0">
-        <div v-for="pos in myPositions" :key="pos.id" class="pos-card" :class="pos.side === 1 ? 'long' : 'short'" @click="focusPosition(pos)">
-          <div class="pos-card-header">
-            <span class="pos-symbol">{{ pos.symbol }}</span>
-            <el-tag size="small" effect="dark" :type="pos.side === 1 ? 'success' : 'danger'">
-              {{ pos.side === 1 ? '多' : '空' }} {{ pos.leverage }}x
-            </el-tag>
-          </div>
-          <div class="pos-card-main">
-            <div class="pos-row">
-              <span class="pos-label">数量</span>
-              <span class="pos-value">{{ pos.quantity }}</span>
-            </div>
-            <div class="pos-row">
-              <span class="pos-label">开仓价</span>
-              <span class="pos-value">${{ fmtMoney(pos.entry_price) }}</span>
-            </div>
-            <div class="pos-row">
-              <span class="pos-label">标记价</span>
-              <span class="pos-value">${{ fmtMoney(pos.mark_price) }}</span>
-            </div>
-            <div class="pos-row pos-pnl-row">
-              <span class="pos-label">未实现盈亏</span>
-              <span class="pos-value" :class="pos.unrealized_pnl >= 0 ? 'profit' : 'loss'">
-                {{ pos.unrealized_pnl >= 0 ? '+' : '' }}${{ formatBig(pos.unrealized_pnl) }}
-                <span class="pos-pnl-pct">({{ pos.pnl_pct >= 0 ? '+' : '' }}{{ pos.pnl_pct?.toFixed(2) }}%)</span>
-              </span>
-            </div>
-          </div>
-          <div class="pos-card-liquidation">
-            <span class="pos-liq-label">强平价</span>
-            <span class="pos-liq-value">${{ fmtMoney(pos.liquidation_price) }}</span>
-            <div class="pos-liq-bar">
-              <div class="pos-liq-fill" :style="{ width: liqDistancePct(pos) + '%' }"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div class="kpb-empty" v-else>
-        <el-empty description="暂无持仓" :image-size="60" />
-      </div>
-    </div>
     <div v-if="layoutMode === 'custom'" class="kline-custom-main" ref="customLayoutRef">
       <!-- 悬浮入口（极小，仅在工具栏被删除或需要快速切换时用） -->
       <div class="custom-fab">
@@ -705,6 +657,7 @@
                   <div class="ct-center">
                     <div class="ct-periods">
                       <div v-for="(mp, key) in multiPeriod" :key="key" class="ctp-item">
+                        <span class="status-light ok" style="margin:0;width:5px;height:5px;"></span>
                         <span class="ctp-label">{{ periodLabel(key) }}</span>
                         <span class="ctp-high">H{{ fmtMoney(mp.high) }}</span>
                         <span class="ctp-low">L{{ fmtMoney(mp.low) }}</span>
@@ -721,9 +674,23 @@
                       <el-radio-button value="1M">月线</el-radio-button>
                       <el-radio-button value="1y">年线</el-radio-button>
                     </el-radio-group>
+                    <div class="ct-trend-row">
+                      <el-tag :type="trend.short_term === 'up' ? 'success' : trend.short_term === 'down' ? 'danger' : 'info'" size="small">
+                        <span class="status-light" :class="trend.short_term === 'up' ? 'ok' : (trend.short_term === 'down' ? 'error' : 'idle')" style="margin-right:2px;width:5px;height:5px;"></span>
+                        短:{{ trendText(trend.short_term) }}
+                      </el-tag>
+                      <el-tag :type="trend.mid_term === 'up' ? 'success' : trend.mid_term === 'down' ? 'danger' : 'info'" size="small">
+                        <span class="status-light" :class="trend.mid_term === 'up' ? 'ok' : (trend.mid_term === 'down' ? 'error' : 'idle')" style="margin-right:2px;width:5px;height:5px;"></span>
+                        中:{{ trendText(trend.mid_term) }}
+                      </el-tag>
+                      <el-tag type="warning" size="small">
+                        <span class="status-light" :class="trend.rsi > 70 ? 'error' : (trend.rsi < 30 ? 'ok' : 'warn')" style="margin-right:2px;width:5px;height:5px;"></span>
+                        RSI:{{ trend.rsi }}
+                      </el-tag>
+                    </div>
                     <div class="ct-price-row">
                       <span class="ct-hl"><span class="ct-hl-label">24H高</span><span class="ct-hl-high">{{ fmtMoney(ticker.high_24h) }}</span></span>
-                      <span class="ct-price-big" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">${{ fmtMoney(ticker.last_price) }}</span>
+                      <span class="ct-price-big" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'"><span class="price-live-dot" :class="priceDirection"></span> ${{ fmtMoney(ticker.last_price) }}</span>
                       <span class="ct-change" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">{{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ (ticker.change_pct_24h || 0).toFixed(2) }}%</span>
                       <span class="ct-hl"><span class="ct-hl-label">24L低</span><span class="ct-hl-low">{{ fmtMoney(ticker.low_24h) }}</span></span>
                     </div>
@@ -803,17 +770,17 @@
               </template>
               <!-- MACD -->
               <template v-else-if="item.i === 'macd'">
-                <div class="sub-title">MACD</div>
+                <div class="sub-title"><span class="status-light ok" style="margin:0;"></span>MACD</div>
                 <div ref="macdChartRef" class="chart-sub chart-full"></div>
               </template>
               <!-- RSI -->
               <template v-else-if="item.i === 'rsi'">
-                <div class="sub-title">RSI(14)</div>
+                <div class="sub-title"><span class="status-light ok" style="margin:0;"></span>RSI(14)</div>
                 <div ref="rsiChartRef" class="chart-sub chart-full"></div>
               </template>
               <!-- 深度盘口 -->
               <template v-else-if="item.i === 'orderbook'">
-                <div class="side-title-sm">深度盘口</div>
+                <div class="side-title-sm"><span class="status-light ok" style="margin:0;"></span>深度盘口</div>
                 <div class="orderbook-sm">
                   <div class="ob-header-sm"><span>价格</span><span>数量</span><span>累计</span></div>
                   <div class="ob-asks-sm">
@@ -837,12 +804,12 @@
               </template>
               <!-- 近期成交 -->
               <template v-else-if="item.i === 'trades'">
-                <div class="side-title-sm">近期成交</div>
+                <div class="side-title-sm"><span class="status-light ok" style="margin:0;width:5px;height:5px;"></span>近期成交</div>
                 <div class="trades-header-sm"><span>价格</span><span>数量</span><span>时间</span></div>
                 <div class="trades-list-sm">
                   <div v-for="(t, i) in recentTrades.slice(0, 15)" :key="t.trade_id || i" class="trade-row-sm"
                        :class="[t.side === 1 ? 'buy' : 'sell']">
-                    <span class="trade-price-sm"><span class="trade-arrow-sm">{{ t.side === 1 ? '&#9650;' : '&#9660;' }}</span>{{ fmtMoney(t.price, 4) }}</span>
+                    <span class="trade-price-sm"><span class="status-light" :class="t.side === 1 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span><span class="trade-arrow-sm">{{ t.side === 1 ? '&#9650;' : '&#9660;' }}</span>{{ fmtMoney(t.price, 4) }}</span>
                     <span class="trade-qty-sm">{{ t.quantity.toFixed(4) }}</span>
                     <span class="trade-time-sm">{{ formatTime(t.timestamp_ms) }}</span>
                   </div>
@@ -850,7 +817,7 @@
               </template>
               <!-- 清算热力图 -->
               <template v-else-if="item.i === 'liqheatmap'">
-                <div class="side-title-sm">清算热力图</div>
+                <div class="side-title-sm"><span class="status-light ok" style="margin:0;"></span>清算热力图</div>
                 <div class="liq-chart-horizontal liq-chart-sm">
                   <div class="liq-h-side liq-h-long">
                     <div class="liq-h-title-sm">多头爆仓</div>
@@ -882,7 +849,7 @@
               </template>
               <!-- 主力位置分析 -->
               <template v-else-if="item.i === 'mainforce'">
-                <div class="info-title-sm">主力位置 <span class="info-badge-sm" :class="mainForce.pressure">{{ mainForce.pressure_cn || '均衡' }}</span></div>
+                <div class="info-title-sm">主力位置 <span class="info-badge-sm" :class="mainForce.pressure"><span class="status-light" :class="mainForce.pressure === 'bullish' ? 'ok' : (mainForce.pressure === 'bearish' ? 'error' : 'idle')" style="margin:0;width:4px;height:4px;"></span> {{ mainForce.pressure_cn || '均衡' }}</span></div>
                 <div class="mf-summary-sm">
                   <div class="mf-bar-sm">
                     <div class="mf-bar-buy-sm" :style="{width: mainForce.pressure_score + '%'}"></div>
@@ -896,7 +863,7 @@
               </template>
               <!-- 支撑阻力位 -->
               <template v-else-if="item.i === 'supportres'">
-                <div class="info-title-sm">支撑阻力位</div>
+                <div class="info-title-sm"><span class="status-light ok" style="margin:0;"></span>支撑阻力位</div>
                 <div class="sr-grid-sm">
                   <div class="sr-column-sm">
                     <div class="sr-label-sm">阻力</div>
@@ -922,28 +889,29 @@
               <template v-else-if="item.i === 'risefall'">
                 <div class="info-title-sm">涨跌参数</div>
                 <div class="rf-grid-sm">
-                  <div class="rf-item-sm"><div class="rf-label-sm">涨跌幅</div><div class="rf-value-sm" :class="riseFallParams.change_pct >= 0 ? 'profit' : 'loss'">{{ riseFallParams.change_pct >= 0 ? '+' : '' }}{{ riseFallParams.change_pct || '0' }}%</div></div>
-                  <div class="rf-item-sm"><div class="rf-label-sm">振幅</div><div class="rf-value-sm">{{ riseFallParams.amplitude || '0' }}%</div></div>
-                  <div class="rf-item-sm"><div class="rf-label-sm">ATR</div><div class="rf-value-sm">{{ riseFallParams.atr_14 || '0' }}</div></div>
-                  <div class="rf-item-sm"><div class="rf-label-sm">波动率</div><div class="rf-value-sm">{{ riseFallParams.volatility || '0' }}%</div></div>
-                  <div class="rf-item-sm"><div class="rf-label-sm">量比</div><div class="rf-value-sm">{{ riseFallParams.vol_ratio || '0' }}</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light" :class="riseFallParams.change_pct >= 0 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span> 涨跌幅</div><div class="rf-value-sm" :class="riseFallParams.change_pct >= 0 ? 'profit' : 'loss'">{{ riseFallParams.change_pct >= 0 ? '+' : '' }}{{ riseFallParams.change_pct || '0' }}%</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> 振幅</div><div class="rf-value-sm">{{ riseFallParams.amplitude || '0' }}%</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> ATR</div><div class="rf-value-sm">{{ riseFallParams.atr_14 || '0' }}</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light warn" style="margin:0;width:4px;height:4px;"></span> 波动率</div><div class="rf-value-sm">{{ riseFallParams.volatility || '0' }}%</div></div>
+                  <div class="rf-item-sm"><div class="rf-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> 量比</div><div class="rf-value-sm">{{ riseFallParams.vol_ratio || '0' }}</div></div>
                 </div>
               </template>
               <!-- 持仓量 & 资金 -->
               <template v-else-if="item.i === 'openinterest'">
                 <div class="side-title-sm">持仓 &amp; 资金</div>
                 <div class="oi-stats-sm">
-                  <div class="oi-item-sm"><span class="oi-label-sm">持仓价值</span><span class="oi-value-sm">${{ formatBig(openInterest.open_interest_usdt) }}</span></div>
-                  <div class="oi-item-sm"><span class="oi-label-sm">24h最高</span><span class="oi-value-sm profit">{{ fmtMoney(ticker.high_24h) }}</span></div>
-                  <div class="oi-item-sm"><span class="oi-label-sm">24h最低</span><span class="oi-value-sm loss">{{ fmtMoney(ticker.low_24h) }}</span></div>
-                  <div class="oi-item-sm"><span class="oi-label-sm">24h涨跌</span><span class="oi-value-sm" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">{{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ ticker.change_pct_24h }}%</span></div>
+                  <div class="oi-item-sm"><span class="oi-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> 持仓价值</span><span class="oi-value-sm">${{ formatBig(openInterest.open_interest_usdt) }}</span></div>
+                  <div class="oi-item-sm"><span class="oi-label-sm"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> 24h最高</span><span class="oi-value-sm profit">{{ fmtMoney(ticker.high_24h) }}</span></div>
+                  <div class="oi-item-sm"><span class="oi-label-sm"><span class="status-light warn" style="margin:0;width:4px;height:4px;"></span> 24h最低</span><span class="oi-value-sm loss">{{ fmtMoney(ticker.low_24h) }}</span></div>
+                  <div class="oi-item-sm"><span class="oi-label-sm"><span class="status-light" :class="ticker.change_pct_24h >= 0 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span> 24h涨跌</span><span class="oi-value-sm" :class="ticker.change_pct_24h >= 0 ? 'profit' : 'loss'">{{ ticker.change_pct_24h >= 0 ? '+' : '' }}{{ ticker.change_pct_24h }}%</span></div>
                 </div>
               </template>
               <!-- 预警记录 -->
               <template v-else-if="item.i === 'alerts'">
-                <div class="side-title-sm">预警记录</div>
+                <div class="side-title-sm"><span class="status-light ok" style="margin:0;"></span>预警记录</div>
                 <div class="alert-list-sm">
                   <div v-for="(a, i) in whaleAlerts.slice(0, 6)" :key="i" class="alert-item-sm" :class="a.side === 1 ? 'buy' : 'sell'">
+                    <span class="status-light" :class="a.side === 1 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span>
                     <span class="alert-arrow-sm">{{ a.side === 1 ? '&#9650;' : '&#9660;' }}</span>
                     <span class="alert-sym-sm">{{ a.symbol }}</span>
                     <span class="alert-price-sm">{{ fmtMoney(a.price, 2) }}</span>
@@ -957,15 +925,39 @@
                   <span class="mp-sm-title">当前持仓</span>
                   <el-tag size="small" type="info" effect="dark" round>{{ myPositions.length }}个</el-tag>
                   <span class="mp-sm-pnl" :class="totalUnrealizedPnl >= 0 ? 'profit' : 'loss'">
+                    <span class="status-light" :class="totalUnrealizedPnl >= 0 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span>
                     {{ totalUnrealizedPnl >= 0 ? '+' : '' }}${{ formatBig(totalUnrealizedPnl) }}
                   </span>
                 </div>
                 <div class="mp-sm-list" v-if="myPositions.length > 0">
-                  <div v-for="pos in myPositions.slice(0, 6)" :key="pos.id" class="mp-sm-item" :class="pos.side === 1 ? 'long' : 'short'" @click="focusPosition(pos)">
-                    <div class="mp-sm-sym">{{ pos.symbol }}</div>
-                    <el-tag size="small" effect="dark" :type="pos.side === 1 ? 'success' : 'danger'">{{ pos.side === 1 ? '多' : '空' }}{{ pos.leverage }}x</el-tag>
-                    <div class="mp-sm-pnl" :class="pos.unrealized_pnl >= 0 ? 'profit' : 'loss'">
-                      {{ pos.unrealized_pnl >= 0 ? '+' : '' }}${{ formatBig(pos.unrealized_pnl) }}
+                  <div v-for="pos in myPositions" :key="pos.id" class="mp-sm-item" :class="[pos.side === 1 ? 'long' : 'short', { closed: pos.status === 2 }]" @click="focusPosition(pos)">
+                    <div class="mp-sm-sym" style="display:flex;align-items:center;gap:2px;">
+                      <span class="status-light" :class="pos.side === 1 ? 'ok' : 'error'" style="margin:0;width:4px;height:4px;"></span>
+                      {{ pos.symbol }}
+                      <el-tag size="small" effect="dark" :type="pos.status === 1 ? 'success' : 'info'">{{ pos.status === 1 ? '持仓中' : '已平仓' }}</el-tag>
+                      <el-tag size="small" effect="dark" :type="pos.side === 1 ? 'success' : 'danger'">{{ pos.side === 1 ? '多' : '空' }}{{ pos.leverage }}x</el-tag>
+                    </div>
+                    <div class="mp-sm-grid">
+                      <div class="mp-sm-row"><span class="mp-sm-lbl">数量</span><span class="mp-sm-val">{{ pos.quantity }}</span></div>
+                      <div class="mp-sm-row"><span class="mp-sm-lbl">名义值</span><span class="mp-sm-val">${{ formatBig(pos.quantity_usdt) }}</span></div>
+                      <div class="mp-sm-row"><span class="mp-sm-lbl">开仓价</span><span class="mp-sm-val">${{ fmtMoney(pos.entry_price) }}</span></div>
+                      <div class="mp-sm-row" v-if="pos.status === 1"><span class="mp-sm-lbl">标记价</span><span class="mp-sm-val">${{ fmtMoney(pos.mark_price) }}</span></div>
+                      <div class="mp-sm-row" v-if="pos.status === 2 && pos.close_price > 0"><span class="mp-sm-lbl">平仓价</span><span class="mp-sm-val">${{ fmtMoney(pos.close_price) }}</span></div>
+                      <div class="mp-sm-row"><span class="mp-sm-lbl">保证金</span><span class="mp-sm-val"><span class="status-light ok" style="margin:0;width:3px;height:3px;"></span> ${{ formatBig(pos.margin) }}</span></div>
+                      <div class="mp-sm-row"><span class="mp-sm-lbl">{{ pos.status === 1 ? '盈亏' : '已实现' }}</span><span class="mp-sm-val" :class="(pos.status === 1 ? pos.unrealized_pnl : pos.realized_pnl) >= 0 ? 'profit' : 'loss'">{{ (pos.status === 1 ? pos.unrealized_pnl : pos.realized_pnl) >= 0 ? '+' : '' }}${{ formatBig(pos.status === 1 ? pos.unrealized_pnl : pos.realized_pnl) }}</span></div>
+                      <div class="mp-sm-row" v-if="pos.tp > 0"><span class="mp-sm-lbl">止盈</span><span class="mp-sm-val profit"><span class="status-light ok" style="margin:0;width:3px;height:3px;"></span> ${{ fmtMoney(pos.tp) }}</span></div>
+                      <div class="mp-sm-row" v-if="pos.sl > 0"><span class="mp-sm-lbl">止损</span><span class="mp-sm-val loss"><span class="status-light error" style="margin:0;width:3px;height:3px;"></span> ${{ fmtMoney(pos.sl) }}</span></div>
+                      <div class="mp-sm-row" v-if="pos.max_drawdown_ratio > 0"><span class="mp-sm-lbl">回撤</span><span class="mp-sm-val"><span class="status-light" :class="pos.max_drawdown_ratio > 2 ? 'error' : 'warn'" style="margin:0;width:3px;height:3px;"></span> {{ pos.max_drawdown_ratio?.toFixed(2) }}%</span></div>
+                      <div class="mp-sm-row" v-if="pos.fee_total > 0"><span class="mp-sm-lbl">手续费</span><span class="mp-sm-val">${{ formatBig(pos.fee_total) }}</span></div>
+                      <div class="mp-sm-row" v-if="pos.entry_score > 0"><span class="mp-sm-lbl">评分</span><span class="mp-sm-val"><span class="status-light" :class="pos.entry_score >= 7 ? 'ok' : (pos.entry_score >= 5 ? 'warn' : 'idle')" style="margin:0;width:3px;height:3px;"></span> {{ pos.entry_score?.toFixed(1) }}</span></div>
+                      <div class="mp-sm-row" v-if="pos.open_time"><span class="mp-sm-lbl">开仓</span><span class="mp-sm-val" style="font-size:10px;">{{ formatPosTime(pos.open_time) }}</span></div>
+                      <div class="mp-sm-row" v-if="pos.holding_minutes > 0"><span class="mp-sm-lbl">时长</span><span class="mp-sm-val" style="font-size:10px;">{{ formatHolding(pos.holding_minutes) }}</span></div>
+                    </div>
+                    <div class="mp-sm-actions" v-if="pos.status === 1" @click.stop>
+                      <el-button size="small" type="danger" plain :loading="pos._closing" @click="closePosition(pos)" style="width:100%;font-size:10px;height:22px;padding:0;">
+                        <span class="status-light error" style="margin:0;width:3px;height:3px;"></span>
+                        市价平仓
+                      </el-button>
                     </div>
                   </div>
                 </div>
@@ -976,6 +968,93 @@
             <div v-if="layoutEditMode" class="resize-handle" @mousedown="startResize($event, item.i)" title="拖拽缩放"></div>
           </div>
         </div>
+      </div>
+    </div>
+
+    <!-- 底部持仓面板（内联，页面可滚动） -->
+    <div class="pos-bottom-panel" :class="{ 'pos-bottom-collapsed': posPanelCollapsed }">
+      <div class="pos-bottom-header">
+        <div class="kpb-title">
+          <span class="kpb-icon">💼</span>
+          <span>当前持仓</span>
+          <el-tag size="small" type="info" effect="dark" round>{{ myPositions.length }}个</el-tag>
+        </div>
+        <div class="kpb-summary">
+          <span class="kpb-summary-item">
+            <span class="status-light" :class="totalUnrealizedPnl >= 0 ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span>
+            <span class="kpb-sv" :class="totalUnrealizedPnl >= 0 ? 'profit' : 'loss'">
+              {{ totalUnrealizedPnl >= 0 ? '+' : '' }}${{ formatBig(totalUnrealizedPnl) }}
+            </span>
+          </span>
+          <span class="pos-bottom-actions">
+            <el-icon :size="14" :class="{ 'rotating': positionsLoading }" @click.stop="loadMyPositions" title="刷新"><Refresh /></el-icon>
+            <el-icon :size="14" @click.stop="posPanelCollapsed = !posPanelCollapsed" :title="posPanelCollapsed ? '展开' : '折叠'">
+              <ArrowDown v-if="!posPanelCollapsed" />
+              <Edit v-else />
+            </el-icon>
+          </span>
+        </div>
+      </div>
+      <div class="pos-bottom-body" v-show="!posPanelCollapsed">
+        <div class="kpb-body" v-if="myPositions.length > 0">
+          <div v-for="pos in myPositions" :key="pos.id" class="pos-card" :class="[pos.side === 1 ? 'long' : 'short', { closed: pos.status === 2 }]" @click="focusPosition(pos)">
+            <div class="pos-card-header">
+              <span class="pos-symbol" style="display:flex;align-items:center;gap:4px;">
+                <span class="status-light" :class="pos.side === 1 ? 'ok' : 'error'" style="margin:0;"></span>
+                {{ pos.symbol }}
+              </span>
+              <div style="display:flex;gap:4px;align-items:center;">
+                <el-tag size="small" effect="dark" :type="pos.status === 1 ? 'success' : 'info'">
+                  {{ pos.status === 1 ? '持仓中' : '已平仓' }}
+                </el-tag>
+                <el-tag size="small" effect="dark" :type="pos.side === 1 ? 'success' : 'danger'">
+                  {{ pos.side === 1 ? '多' : '空' }} {{ pos.leverage }}x
+                </el-tag>
+              </div>
+            </div>
+            <div class="pos-card-main">
+              <div class="pos-row"><span class="pos-label">数量</span><span class="pos-value">{{ pos.quantity }}</span></div>
+              <div class="pos-row"><span class="pos-label">名义价值</span><span class="pos-value">${{ formatBig(pos.quantity_usdt) }}</span></div>
+              <div class="pos-row"><span class="pos-label">开仓价</span><span class="pos-value">${{ fmtMoney(pos.entry_price) }}</span></div>
+              <div class="pos-row"><span class="pos-label">标记价</span><span class="pos-value">${{ fmtMoney(pos.mark_price) }}</span></div>
+              <div class="pos-row"><span class="pos-label">保证金</span><span class="pos-value"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> ${{ formatBig(pos.margin) }}</span></div>
+              <div class="pos-row pos-pnl-row">
+                <span class="pos-label">{{ pos.status === 1 ? '未实现盈亏' : '已实现盈亏' }}</span>
+                <span class="pos-value" :class="(pos.status === 1 ? pos.unrealized_pnl : pos.realized_pnl) >= 0 ? 'profit' : 'loss'">
+                  {{ (pos.status === 1 ? pos.unrealized_pnl : pos.realized_pnl) >= 0 ? '+' : '' }}${{ formatBig(pos.status === 1 ? pos.unrealized_pnl : pos.realized_pnl) }}
+                  <span class="pos-pnl-pct" v-if="pos.status === 1">({{ pos.pnl_pct >= 0 ? '+' : '' }}{{ pos.pnl_pct?.toFixed(2) }}%)</span>
+                </span>
+              </div>
+              <div class="pos-row" v-if="pos.status === 2 && pos.close_price > 0"><span class="pos-label">平仓价</span><span class="pos-value">${{ fmtMoney(pos.close_price) }}</span></div>
+              <div class="pos-row" v-if="pos.tp > 0"><span class="pos-label">止盈价</span><span class="pos-value profit"><span class="status-light ok" style="margin:0;width:4px;height:4px;"></span> ${{ fmtMoney(pos.tp) }}</span></div>
+              <div class="pos-row" v-if="pos.sl > 0"><span class="pos-label">止损价</span><span class="pos-value loss"><span class="status-light error" style="margin:0;width:4px;height:4px;"></span> ${{ fmtMoney(pos.sl) }}</span></div>
+              <div class="pos-row" v-if="pos.max_drawdown_ratio > 0"><span class="pos-label">最大回撤</span><span class="pos-value" :class="pos.max_drawdown_ratio > 2 ? 'loss' : ''"><span class="status-light" :class="pos.max_drawdown_ratio > 2 ? 'error' : 'warn'" style="margin:0;width:4px;height:4px;"></span> {{ pos.max_drawdown_ratio?.toFixed(2) }}%</span></div>
+              <div class="pos-row" v-if="pos.fee_total > 0"><span class="pos-label">手续费</span><span class="pos-value">${{ formatBig(pos.fee_total) }}</span></div>
+              <div class="pos-row" v-if="pos.entry_score > 0"><span class="pos-label">开仓评分</span><span class="pos-value"><span class="status-light" :class="pos.entry_score >= 7 ? 'ok' : (pos.entry_score >= 5 ? 'warn' : 'idle')" style="margin:0;width:4px;height:4px;"></span> {{ pos.entry_score?.toFixed(1) }}</span></div>
+              <div class="pos-row" v-if="pos.open_time"><span class="pos-label">开仓时间</span><span class="pos-value" style="font-size:11px;">{{ formatPosTime(pos.open_time) }}</span></div>
+              <div class="pos-row" v-if="pos.holding_minutes > 0"><span class="pos-label">持仓时长</span><span class="pos-value" style="font-size:11px;">{{ formatHolding(pos.holding_minutes) }}</span></div>
+            </div>
+            <div class="pos-card-liquidation" v-if="pos.liquidation_price > 0">
+              <span class="pos-liq-label">强平价</span>
+              <span class="pos-liq-value"><span class="status-light error" style="margin:0;width:4px;height:4px;"></span> ${{ fmtMoney(pos.liquidation_price) }}</span>
+              <div class="pos-liq-bar"><div class="pos-liq-fill" :style="{ width: liqDistancePct(pos) + '%' }"></div></div>
+            </div>
+            <div class="pos-card-actions" v-if="pos.status === 1" @click.stop>
+              <el-button
+                size="small"
+                type="danger"
+                plain
+                :loading="pos._closing"
+                @click="closePosition(pos)"
+                class="pos-close-btn"
+              >
+                <span class="status-light error" style="margin:0;width:4px;height:4px;"></span>
+                市价平仓
+              </el-button>
+            </div>
+          </div>
+        </div>
+        <div class="kpb-empty" v-else><el-empty description="暂无持仓" :image-size="60" /></div>
       </div>
     </div>
 
@@ -1051,7 +1130,7 @@
 import { ref, reactive, onMounted, onBeforeUnmount, computed, watch, nextTick, markRaw } from 'vue'
 import * as echarts from 'echarts'
 import { Bell, Cpu, Warning, Close, Grid, ArrowDown, Edit, RefreshLeft, Setting, Upload } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { SYMBOL_META, EXCHANGE_META, fmtMoney, fmtPct } from '@/utils/env'
 import { http, API_PREFIX } from '@/utils/request'
 import { Refresh } from '@element-plus/icons-vue'
@@ -1083,6 +1162,9 @@ const setLayout = (mode) => {
     rsiChart?.resize()
   })
 }
+
+// -------- 底部持仓面板 --------
+const posPanelCollapsed = ref(false)
 
 // 加载用户布局配置（确保用户信息已就绪后再读取）
 function loadUserLayout() {
@@ -1897,20 +1979,16 @@ const totalUnrealizedPnl = computed(() => {
   return myPositions.value.reduce((s, p) => s + (p.unrealized_pnl || 0), 0)
 })
 const totalMarginUsed = computed(() => {
-  return myPositions.value.reduce((s, p) => s + (p.margin_used || 0), 0)
+  return myPositions.value.filter(p => p.status === 1).reduce((s, p) => s + (p.margin || 0), 0)
 })
 
 async function loadMyPositions() {
-  if (selectedAccount.value <= 0) return
   positionsLoading.value = true
   try {
-    const r = await http.get(`${API_PREFIX}/trades/positions`, {
-      status: 1,
-      account_id: selectedAccount.value,
-      page_size: 50,
-    })
+    const params = { status: 1, page_size: 200 }
+    if (selectedAccount.value > 0) params.account_id = selectedAccount.value
+    const r = await http.get(`${API_PREFIX}/trades/positions`, params)
     const items = r.items || r.data?.items || []
-    // 计算盈亏百分比
     myPositions.value = items.map(p => ({
       ...p,
       pnl_pct: p.entry_price ? (p.unrealized_pnl / (p.entry_price * p.quantity / p.leverage)) * 100 : 0
@@ -1930,6 +2008,29 @@ function focusPosition(pos) {
   }
 }
 
+async function closePosition(pos) {
+  try {
+    await ElMessageBox.confirm(
+      `确认按实时价格市价平仓 ${pos.symbol} (${pos.side === 1 ? '多' : '空'} ${pos.leverage}x)?\n数量: ${pos.quantity}\n标记价: $${fmtMoney(pos.mark_price)}`,
+      '手动平仓确认',
+      { confirmButtonText: '确认平仓', cancelButtonText: '取消', type: 'warning' }
+    )
+  } catch {
+    return
+  }
+  pos._closing = true
+  try {
+    const r = await http.post(`${API_PREFIX}/trades/positions/${pos.id}/close`)
+    ElMessage.success(`平仓成功 ${pos.symbol} 成交价 $${fmtMoney(r.close_price)} 盈亏 ${r.realized_pnl >= 0 ? '+' : ''}$${formatBig(r.realized_pnl)}`)
+    await loadMyPositions()
+  } catch (e) {
+    const msg = e?.response?.data?.message || e?.message || '平仓失败'
+    ElMessage.error(`平仓失败: ${msg}`)
+  } finally {
+    pos._closing = false
+  }
+}
+
 function liqDistancePct(pos) {
   if (!pos.entry_price || !pos.liquidation_price || !pos.mark_price) return 50
   const entry = pos.entry_price
@@ -1940,6 +2041,19 @@ function liqDistancePct(pos) {
   if (totalDist === 0) return 50
   const pct = Math.min(100, Math.max(5, (currentDist / totalDist) * 100))
   return pct
+}
+
+function formatPosTime(t) {
+  if (!t) return '--'
+  const d = new Date(t)
+  return `${d.getMonth()+1}/${d.getDate()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`
+}
+
+function formatHolding(mins) {
+  if (!mins || mins <= 0) return '--'
+  if (mins < 60) return `${mins}分钟`
+  if (mins < 1440) return `${(mins/60).toFixed(1)}小时`
+  return `${(mins/1440).toFixed(1)}天`
 }
 
 function onSymbolChange() {
@@ -2231,9 +2345,12 @@ onBeforeUnmount(() => {
   position: relative;
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 64px - 20px);
+  min-height: calc(100vh - 64px - 20px);
+  height: auto;
   padding: 10px;
   gap: 10px;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* 多周期行情条 */
@@ -2332,6 +2449,21 @@ onBeforeUnmount(() => {
       &.up { color: #4ADE80; }
       &.down { color: #F87171; }
       &.neutral { color: #E2E8F0; }
+    }
+    .price-live-dot {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      margin-right: 6px;
+      animation: price-pulse 1.2s ease-in-out infinite;
+      &.up { background: #4ADE80; box-shadow: 0 0 6px #4ADE80; }
+      &.down { background: #F87171; box-shadow: 0 0 6px #F87171; }
+      &.neutral { background: #94A3B8; box-shadow: 0 0 4px #94A3B8; }
+    }
+    @keyframes price-pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.3; transform: scale(0.7); }
     }
     .price-change {
       font-size: 12px;
@@ -3392,8 +3524,8 @@ onBeforeUnmount(() => {
 /* --- 方案 B: 紧凑全屏（一屏全展示） --- */
 .layout-compact {
   .kline-page {
-    height: calc(100vh - 64px - 20px);
-    overflow: hidden;
+    min-height: calc(100vh - 64px - 20px);
+    overflow-y: auto;
   }
   .kline-left {
     overflow: hidden;
@@ -3528,8 +3660,8 @@ onBeforeUnmount(() => {
 /* --- 方案 D: 仪表盘模式 --- */
 .layout-dashboard {
   .kline-page {
-    height: calc(100vh - 64px - 20px);
-    overflow: hidden;
+    min-height: calc(100vh - 64px - 20px);
+    overflow-y: auto;
   }
   .kline-left {
     overflow: hidden;
@@ -3718,6 +3850,12 @@ onBeforeUnmount(() => {
 }
 .ct-trend {
   font-size: 12px;
+}
+.ct-trend-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
 }
 .ct-price {
   font-size: 20px;
@@ -4229,122 +4367,132 @@ onBeforeUnmount(() => {
 .alert-sym-sm { color: #97A6B6; font-weight: 600; }
 .alert-price-sm { font-family: monospace; font-weight: 600; flex: 1; }
 
-/* ========== 当前持仓横排展示 ========== */
-.kline-positions-bar {
-  margin-top: 12px;
+/* ========== 底部持仓面板（内联，页面可滚动） ========== */
+.pos-bottom-panel {
+  width: 100%;
   background: linear-gradient(180deg, #0F1A24 0%, #0C151D 100%);
   border: 1px solid #1E3246;
-  border-radius: 12px;
+  border-radius: 10px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
+  flex-shrink: 0;
 
-  .kpb-header {
+  &.pos-bottom-collapsed {
+    .pos-bottom-body { display: none; }
+  }
+
+  .pos-bottom-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 10px 16px;
+    padding: 8px 12px;
+    background: rgba(0,0,0,0.3);
+    user-select: none;
     border-bottom: 1px solid #1A2A3A;
-    background: rgba(0,0,0,0.2);
 
     .kpb-title {
       display: flex;
       align-items: center;
-      gap: 8px;
-      font-size: 14px;
+      gap: 6px;
+      font-size: 13px;
       font-weight: 600;
       color: #E6EDF3;
-
-      .kpb-icon { font-size: 16px; }
+      .kpb-icon { font-size: 14px; }
     }
     .kpb-summary {
       display: flex;
       align-items: center;
-      gap: 20px;
-
+      gap: 10px;
       .kpb-summary-item {
         display: flex;
         align-items: center;
-        gap: 6px;
+        gap: 4px;
       }
-      .kpb-sl { font-size: 12px; color: #7A8A9A; }
       .kpb-sv {
-        font-size: 14px;
+        font-size: 13px;
         font-weight: 600;
         font-family: Consolas, monospace;
-
         &.profit { color: #25D07D; }
         &.loss { color: #F87171; }
       }
-      .kpb-refresh {
+      .pos-bottom-actions {
+        display: flex;
+        align-items: center;
+        gap: 6px;
         cursor: pointer;
-        color: #7A8A9A;
-        padding: 4px;
-        border-radius: 4px;
-        transition: all 0.2s;
-        &:hover { color: #25D07D; background: rgba(37,208,125,0.1); }
-        .rotating {
-          animation: spin 1s linear infinite;
-          display: inline-block;
-        }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
+        .el-icon { color: #7A8A9A; transition: color 0.2s; &:hover { color: #25D07D; } }
+        .rotating { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
       }
     }
   }
 
-  .kpb-body {
+  .pos-bottom-body {
     display: flex;
-    gap: 10px;
-    padding: 12px 16px;
-    overflow-x: auto;
-    scrollbar-width: thin;
+    flex-direction: column;
+  }
+}
 
-    .pos-card {
-      flex: 0 0 200px;
-      background: rgba(15, 26, 36, 0.8);
-      border: 1px solid #1E3246;
-      border-radius: 10px;
-      padding: 10px 12px;
-      cursor: pointer;
-      transition: all 0.2s;
+.kpb-body {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 10px;
+  align-content: flex-start;
 
-      &:hover {
-        border-color: #25D07D;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(37,208,125,0.15);
-      }
+  .pos-card {
+    flex: 1 1 220px;
+    min-width: 200px;
+    max-width: 320px;
+    background: rgba(15, 26, 36, 0.8);
+    border: 1px solid #1E3246;
+    border-radius: 6px;
+    padding: 6px 8px;
+    cursor: pointer;
+    transition: all 0.2s;
 
-      &.long {
-        border-left: 3px solid #25D07D;
-      }
-      &.short {
-        border-left: 3px solid #F87171;
-      }
+    &:hover {
+      border-color: #25D07D;
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(37,208,125,0.12);
+    }
 
-      .pos-card-header {
+    &.long { border-left: 3px solid #25D07D; }
+    &.short { border-left: 3px solid #F87171; }
+    &.closed {
+      opacity: 0.6;
+      background: rgba(15, 26, 36, 0.5);
+    }
+
+    .pos-card-header {
         display: flex;
         align-items: center;
         justify-content: space-between;
-        margin-bottom: 8px;
-        padding-bottom: 6px;
+        margin-bottom: 4px;
+        padding-bottom: 3px;
         border-bottom: 1px solid #1A2A3A;
 
         .pos-symbol {
-          font-size: 14px;
+          font-size: 12px;
           font-weight: 600;
           color: #E6EDF3;
         }
       }
 
       .pos-card-main {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1px 8px;
+
         .pos-row {
           display: flex;
           justify-content: space-between;
           align-items: center;
-          padding: 2px 0;
-          font-size: 12px;
+          font-size: 10px;
 
-          .pos-label { color: #7A8A9A; }
+          .pos-label { color: #7A8A9A; white-space: nowrap; }
           .pos-value {
             color: #CBD5E1;
             font-family: Consolas, monospace;
@@ -4355,16 +4503,17 @@ onBeforeUnmount(() => {
           }
         }
         .pos-pnl-row {
-          margin-top: 4px;
-          padding-top: 4px;
+          grid-column: 1 / -1;
+          margin-top: 3px;
+          padding-top: 3px;
           border-top: 1px dashed #1A2A3A;
 
           .pos-value {
-            font-size: 13px;
+            font-size: 11px;
             font-weight: 600;
           }
           .pos-pnl-pct {
-            font-size: 11px;
+            font-size: 9px;
             opacity: 0.8;
             margin-left: 4px;
           }
@@ -4372,16 +4521,16 @@ onBeforeUnmount(() => {
       }
 
       .pos-card-liquidation {
-        margin-top: 8px;
-        padding-top: 6px;
+        margin-top: 6px;
+        padding-top: 4px;
         border-top: 1px solid #1A2A3A;
 
         .pos-liq-label {
-          font-size: 11px;
+          font-size: 10px;
           color: #7A8A9A;
         }
         .pos-liq-value {
-          font-size: 12px;
+          font-size: 11px;
           color: #F59E0B;
           font-family: Consolas, monospace;
           font-weight: 500;
@@ -4389,8 +4538,8 @@ onBeforeUnmount(() => {
         }
         .pos-liq-bar {
           clear: both;
-          margin-top: 4px;
-          height: 4px;
+          margin-top: 3px;
+          height: 3px;
           background: #0A131B;
           border-radius: 2px;
           overflow: hidden;
@@ -4403,13 +4552,28 @@ onBeforeUnmount(() => {
           }
         }
       }
-    }
   }
+}
 
-  .kpb-empty {
-    padding: 20px;
-    text-align: center;
-    color: #64748B;
+.kpb-empty {
+  padding: 20px;
+  text-align: center;
+  color: #64748B;
+}
+
+.pos-card-actions {
+  margin-top: 6px;
+  padding-top: 4px;
+  border-top: 1px solid #1A2A3A;
+  display: flex;
+  justify-content: center;
+
+  .pos-close-btn {
+    width: 100%;
+    font-size: 11px;
+    font-weight: 600;
+    height: 26px;
+    padding: 0;
   }
 }
 
@@ -4442,21 +4606,48 @@ onBeforeUnmount(() => {
   padding: 0 8px;
   .mp-sm-item {
     display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 6px;
+    flex-direction: column;
+    gap: 4px;
+    padding: 6px 8px;
     border-radius: 6px;
     cursor: pointer;
-    margin-bottom: 2px;
+    margin-bottom: 4px;
     transition: background 0.2s;
+    border-left: 3px solid transparent;
 
+    &.long { border-left-color: #25D07D; }
+    &.short { border-left-color: #F87171; }
     &:hover { background: rgba(37,208,125,0.08); }
 
     .mp-sm-sym {
       font-size: 12px;
       font-weight: 600;
       color: #CBD5E1;
-      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .mp-sm-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 2px 8px;
+    }
+    .mp-sm-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+    }
+    .mp-sm-lbl {
+      color: #64748B;
+      font-size: 10px;
+    }
+    .mp-sm-val {
+      color: #CBD5E1;
+      font-family: Consolas, monospace;
+      font-size: 11px;
+      &.profit { color: #25D07D; }
+      &.loss { color: #F87171; }
     }
     .mp-sm-pnl {
       font-size: 11px;
@@ -4465,6 +4656,11 @@ onBeforeUnmount(() => {
 
       &.profit { color: #25D07D; }
       &.loss { color: #F87171; }
+    }
+    .mp-sm-actions {
+      margin-top: 4px;
+      padding-top: 4px;
+      border-top: 1px solid #1A2A3A;
     }
   }
 }

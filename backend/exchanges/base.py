@@ -53,6 +53,9 @@ class ExchangeClientBase(ABC):
         "MSFT": "MSFTUSDT",  # 微软
         # 美股-中概
         "TCEHY": "TCEHYUSDT",  # 腾讯 ADR
+        # 美股-半导体
+        "SKHYNIX": "SKHYNIXUSDT",  # SK海力士 永续合约
+        "SNDK": "SNDKUSDT",        # 闪迪 永续合约
     }
     # 交易对步进精度 (从交易所拉取后缓存)
     _step_size_cache: Dict[str, Decimal] = {}

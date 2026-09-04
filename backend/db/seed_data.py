@@ -50,6 +50,10 @@ SUPPORTED_SYMBOLS = [
      "default_price": 2350.0, "binance": "",        "okx": "XAU-USDT-SWAP"},
     {"symbol": "WTI", "name": "石油",   "type": "commodity",
      "default_price": 82.0,   "binance": "",        "okx": "WTI-USDT-SWAP"},
+    {"symbol": "SKHYNIX", "name": "SK海力士", "type": "stock",
+     "default_price": 1476.0, "binance": "SKHYNIXUSDT", "okx": ""},
+    {"symbol": "SNDK", "name": "闪迪",   "type": "stock",
+     "default_price": 50.0,   "binance": "SNDKUSDT",    "okx": ""},
 ]
 
 
@@ -207,7 +211,7 @@ def _ensure_default_strategy_templates(db: Session, owner_user: User | None) -> 
         {
             "name": "平衡型 5大主流币动态杠杆",
             "desc": "BTC/ETH/SOL/XAU/WTI 全品种，动态杠杆3-8x，4%TP/2%SL",
-            "symbols": ["BTC", "ETH", "SOL", "XAU", "WTI"],
+            "symbols": ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"],
             "leverage_mode": 2, "leverage_fixed": 3,
             "leverage_low_score": 3, "leverage_mid_score": 5, "leverage_high_score": 8,
             "tp_ratio": 4.0, "sl_ratio": 2.0,

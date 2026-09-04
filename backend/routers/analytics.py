@@ -14,7 +14,7 @@ import time
 from backend.db.session import get_db
 from backend.db.base import Base
 from backend.core.auth import get_current_user, require_editor, require_admin, require_trader
-from backend.core.exceptions import NotFoundException, ParameterException, success
+from backend.core.exceptions import NotFoundException, ParameterException, BizException, success
 from backend.core.schemas import ApiResponse, PaginationParams, paginate
 from backend.config import get_settings
 from backend.core.logging_config import logger
@@ -822,9 +822,9 @@ async def test_news_ai_config(
                     break
 
         if not api_key:
-            raise ParameterException("请先输入或选择API Key")
+            raise BizException("请先输入或选择API Key", code=4001, http_status=400)
         if not model_name:
-            raise ParameterException("请输入模型名称")
+            raise BizException("请输入模型名称", code=4001, http_status=400)
 
         endpoint = api_endpoint.rstrip("/") if api_endpoint else "https://api.openai.com/v1"
         if not endpoint.endswith("/chat/completions"):
@@ -857,7 +857,7 @@ async def test_news_ai_config(
                     break
             _save_news_ai_configs(db, configs)
         return success(result, message="连接成功")
-    except ParameterException:
+    except (ParameterException, BizException):
         raise
     except Exception as e:
         # 更新健康状态为error
@@ -872,7 +872,7 @@ async def test_news_ai_config(
                 _save_news_ai_configs(db, configs)
             except Exception:
                 pass
-        raise ParameterException(f"连接测试失败: {e}")
+        raise BizException(f"连接测试失败: {e}", code=5020, http_status=502)
 
 
 # ==================== 风控事件 ====================

@@ -121,7 +121,8 @@
         </div>
 
         <!-- 节点状态表格 -->
-        <el-table v-if="xrayStatus?.nodes?.length" :data="xrayStatus.nodes" stripe style="width: 100%; margin-top: 12px;" max-height="300">
+        <div v-if="xrayStatus?.nodes?.length" style="max-height: 300px; overflow-y: auto; margin-top: 12px;">
+      <el-table :data="xrayStatus.nodes" stripe style="width: 100%">
           <el-table-column label="节点名称" width="200">
             <template #default="{ row }">{{ row.name || row.tag || '—' }}</template>
           </el-table-column>
@@ -154,6 +155,7 @@
             </template>
           </el-table-column>
         </el-table>
+      </div>
       </div>
     </div>
 
@@ -201,7 +203,8 @@
           </el-descriptions>
 
           <!-- 代理节点列表 -->
-          <el-table v-if="proxyPool.all_proxies_detail?.length" :data="proxyPool.all_proxies_detail" stripe style="width: 100%; margin-top: 12px;" max-height="250">
+          <div v-if="proxyPool.all_proxies_detail?.length" style="max-height: 250px; overflow-y: auto; margin-top: 12px;">
+        <el-table :data="proxyPool.all_proxies_detail" stripe style="width: 100%">
             <el-table-column label="代理地址" prop="url" width="250" />
             <el-table-column label="状态" width="100" align="center">
               <template #default="{ row }">
@@ -227,6 +230,7 @@
               <template #default="{ row }">{{ formatTime(row.last_check_at) }}</template>
             </el-table-column>
           </el-table>
+          </div>
         </div>
       </div>
     </div>

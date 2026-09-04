@@ -77,8 +77,8 @@
       <el-col :span="4">
         <div class="stat-card">
           <div class="stat-card__label">系统状态</div>
-          <div class="stat-card__value" style="font-size:14px;">
-            <span :class="schedulerRunning ? 'text-profit' : 'text-loss'">●</span>
+          <div class="stat-card__value" style="font-size:14px;display:flex;align-items:center;gap:4px;">
+            <span class="status-light" :class="schedulerRunning ? 'ok' : 'error'"></span>
             {{ schedulerRunning ? '运行中' : '未启动' }}
           </div>
           <div class="stat-card__extra text-muted" style="font-size:11px;">
@@ -189,8 +189,11 @@
           </el-table-column>
           <el-table-column label="情绪" width="120" align="center">
             <template #default="{ row }">
-              <span class="pnl-badge" :class="row.sentiment===1?'profit':row.sentiment===-1?'loss':'neutral'">
-                {{ row.sentiment===1?'利多':row.sentiment===-1?'利空':'中性' }}
+              <span style="display:inline-flex;align-items:center;gap:4px;">
+                <span class="status-light" :class="row.sentiment===1?'ok':(row.sentiment===-1?'error':'idle')"></span>
+                <span class="pnl-badge" :class="row.sentiment===1?'profit':row.sentiment===-1?'loss':'neutral'">
+                  {{ row.sentiment===1?'利多':row.sentiment===-1?'利空':'中性' }}
+                </span>
               </span>
               <div class="text-dim" style="font-size:11px; margin-top:4px;">
                 {{ Number(row.sentiment_score).toFixed(2) }}

@@ -15,24 +15,31 @@
           </div>
           <div class="menu-item" :class="{ 'is-active': active === 'exchange' }" @click="handleMenuSelect('exchange')">
             <el-icon><Coin /></el-icon><span>交易所主账号</span>
+            <span class="menu-status-light" :class="exchangeMenuStatus"></span>
           </div>
           <div class="menu-item" :class="{ 'is-active': active === 'demo' }" @click="handleMenuSelect('demo')">
             <el-icon><DataLine /></el-icon><span>演示API配置</span>
+            <span class="menu-status-light" :class="demoMenuStatus"></span>
           </div>
           <div class="menu-item" :class="{ 'is-active': active === 'news' }" @click="handleMenuSelect('news')">
             <el-icon><Reading /></el-icon><span>新闻数据源</span>
+            <span class="menu-status-light" :class="newsMenuStatus"></span>
           </div>
           <div class="menu-item" :class="{ 'is-active': active === 'cryptopanic' }" @click="handleMenuSelect('cryptopanic')">
             <el-icon><Connection /></el-icon><span>实时新闻WS</span>
+            <span class="menu-status-light" :class="cpMenuStatus"></span>
           </div>
           <div class="menu-item" :class="{ 'is-active': active === 'crawler' }" @click="handleMenuSelect('crawler')">
             <el-icon><Monitor /></el-icon><span>爬虫健康检测</span>
+            <span class="menu-status-light idle"></span>
           </div>
           <div class="menu-item" :class="{ 'is-active': active === 'notify' }" @click="handleMenuSelect('notify')">
             <el-icon><Bell /></el-icon><span>告警推送</span>
+            <span class="menu-status-light" :class="notifyMenuStatus"></span>
           </div>
           <div class="menu-item" :class="{ 'is-active': active === 'ai' }" @click="handleMenuSelect('ai')">
             <el-icon><Cpu /></el-icon><span>AI 默认配置</span>
+            <span class="menu-status-light" :class="aiMenuStatus"></span>
           </div>
           <div class="menu-item" :class="{ 'is-active': active === 'about' }" @click="handleMenuSelect('about')">
             <el-icon><InfoFilled /></el-icon><span>关于系统</span>
@@ -171,7 +178,7 @@
             <!-- 连接状态 -->
             <div class="cp-status-bar">
               <div class="cp-status-item">
-                <span class="cp-dot" :class="cp.wsStatus.status || 'disconnected'"></span>
+                <span class="status-light" :class="cpWsStatusLightClass"></span>
                 <span style="margin-left:8px;font-weight:600;">
                   {{ cpStatusText }}
                 </span>
@@ -288,6 +295,10 @@
         <div v-show="active==='ai'" class="panel-card">
           <div class="panel-card__header">
             <span class="panel-card__title">AI 多API故障转移</span>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span class="status-light" :class="poolStatusClass"></span>
+              <span :style="{ fontSize: '13px', color: poolStatusColor }">{{ poolStatusText }}</span>
+            </div>
           </div>
           <div class="panel-card__body">
             <el-alert type="info" :closable="false" style="margin-bottom:16px;">
@@ -295,11 +306,14 @@
             </el-alert>
 
             <!-- 操作按钮 -->
-            <div style="margin-bottom:16px;">
+            <div style="margin-bottom:16px;display:flex;align-items:center;gap:12px;">
               <el-button type="primary" @click="showAddKey = true">添加API</el-button>
               <el-button type="warning" @click="healthCheckAll" :loading="checkingAll">一键检测全部</el-button>
-              <span v-if="lastHealthCheck" style="margin-left:16px;font-size:13px;color:#909399;">
+              <span v-if="lastHealthCheck" style="font-size:13px;color:#909399;">
                 上次检测: {{ lastHealthCheck }}
+              </span>
+              <span v-if="aiKeys.length > 0" style="font-size:13px;color:#909399;margin-left:auto;">
+                在线 <b style="color:#25D07D;">{{ activeKeyCount }}</b> / 故障 <b style="color:#EF4444;">{{ failedKeyCount }}</b> / 共 {{ aiKeys.length }} 个
               </span>
             </div>
 
@@ -319,11 +333,12 @@
                   <span v-else style="color:#909399;">未设置</span>
                 </template>
               </el-table-column>
-              <el-table-column label="状态" width="100">
+              <el-table-column label="状态" width="120">
                 <template #default="{ row }">
-                  <el-tag v-if="row.status === 'active'" type="success" size="small" effect="dark">在线</el-tag>
-                  <el-tag v-else-if="row.status === 'failed'" type="danger" size="small" effect="dark">故障</el-tag>
-                  <el-tag v-else type="info" size="small" effect="dark">已禁用</el-tag>
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <span class="status-light" :class="keyStatusClass(row.status)"></span>
+                    <span :style="{ fontSize: '12px', color: keyStatusColor(row.status) }">{{ keyStatusText(row.status) }}</span>
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column label="失败次数" prop="fail_count" width="80" />
@@ -481,7 +496,7 @@
 
             <div class="proxy-pool-bar" v-if="xrayStatus" style="margin-bottom:12px;">
               <div class="proxy-pool-item">
-                <span class="cp-dot" :class="xrayStatus.xray_available ? 'connected' : 'disconnected'"></span>
+                <span class="status-light" :class="xrayStatus.xray_available ? 'ok' : 'idle'"></span>
                 <span style="margin-left:8px;font-weight:600;font-size:13px;">
                   {{ xrayStatus.xray_available ? 'Xray已安装' : 'Xray未安装' }}
                 </span>
@@ -566,7 +581,7 @@
             <!-- 代理池实时状态 -->
             <div class="proxy-pool-bar" v-if="proxyPool">
               <div class="proxy-pool-item">
-                <span class="cp-dot" :class="proxyPool.enabled ? 'connected' : 'disconnected'"></span>
+                <span class="status-light" :class="proxyPool.enabled ? 'ok' : 'idle'"></span>
                 <span style="margin-left:8px;font-weight:600;font-size:13px;">
                   {{ proxyPool.enabled ? '代理已启用' : '代理未启用' }}
                 </span>
@@ -774,6 +789,31 @@ const p = reactive({
 const savingNotify = ref(false)
 const testingSmtp = ref(false)
 
+// 菜单状态灯 computed
+const exchangeMenuStatus = computed(() => {
+  if (e.bn.key || e.okx.key) return 'ok'
+  return 'idle'
+})
+const demoMenuStatus = computed(() => {
+  if (demo.enabled && (demo.api_key || demo.api_secret_has_value)) return 'ok'
+  if (demo.enabled) return 'warn'
+  return 'idle'
+})
+const newsMenuStatus = computed(() => {
+  if (n.newsapi || n.cryptopanic || n.jin10) return 'ok'
+  return 'idle'
+})
+const notifyMenuStatus = computed(() => {
+  if (p.dingtalk || p.feishu || p.smtp_host) return 'ok'
+  return 'idle'
+})
+const aiMenuStatus = computed(() => {
+  if (aiKeys.value.length === 0) return 'idle'
+  if (activeKeyCount.value > 0) return 'ok'
+  return 'error'
+})
+const cpMenuStatus = computed(() => cpWsStatusLightClass.value)
+
 const savingAi = ref(false)
 const testingAi = ref(false)
 
@@ -785,6 +825,40 @@ const editingId = ref(null)
 const savingKey = ref(false)
 const checkingAll = ref(false)
 const lastHealthCheck = ref('')
+
+// 接口池状态 computed
+const activeKeyCount = computed(() => aiKeys.value.filter(k => k.status === 'active').length)
+const failedKeyCount = computed(() => aiKeys.value.filter(k => k.status === 'failed').length)
+const poolStatusClass = computed(() => {
+  if (aiKeys.value.length === 0) return 'idle'
+  if (activeKeyCount.value > 0) return 'ok'
+  return 'error'
+})
+const poolStatusText = computed(() => {
+  if (aiKeys.value.length === 0) return '未配置接口'
+  if (activeKeyCount.value > 0) return `接口池正常 (${activeKeyCount.value}个可用)`
+  return '接口池异常 (无可用)'
+})
+const poolStatusColor = computed(() => {
+  if (aiKeys.value.length === 0) return '#909399'
+  if (activeKeyCount.value > 0) return '#25D07D'
+  return '#EF4444'
+})
+const keyStatusClass = (status) => {
+  if (status === 'active') return 'connected'
+  if (status === 'failed') return 'error'
+  return 'disconnected'
+}
+const keyStatusText = (status) => {
+  if (status === 'active') return '在线'
+  if (status === 'failed') return '故障'
+  return '已禁用'
+}
+const keyStatusColor = (status) => {
+  if (status === 'active') return '#25D07D'
+  if (status === 'failed') return '#EF4444'
+  return '#909399'
+}
 
 const newKey = reactive({
   name: '',
@@ -1050,6 +1124,17 @@ const cpStatusText = computed(() => {
     disconnected: '未连接',
   }
   return map[s] || s
+})
+const cpWsStatusLightClass = computed(() => {
+  const s = cp.wsStatus.status || 'disconnected'
+  const map = {
+    connected: 'ok',
+    connecting: 'warn',
+    error: 'error',
+    fallback: 'warn',
+    disconnected: 'idle',
+  }
+  return map[s] || 'idle'
 })
 
 const loadCryptoPanic = async () => {
@@ -1508,6 +1593,35 @@ onMounted(() => {
   .el-icon {
     font-size: 18px;
   }
+  .menu-status-light {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    margin-left: auto;
+    flex-shrink: 0;
+    &.ok {
+      background: #25D07D;
+      box-shadow: 0 0 4px #25D07D;
+      animation: menu-light-pulse 1.5s ease-in-out infinite;
+    }
+    &.error {
+      background: #EF4444;
+      box-shadow: 0 0 4px #EF4444;
+      animation: menu-light-pulse 1.2s ease-in-out infinite;
+    }
+    &.warn {
+      background: #F59E0B;
+      box-shadow: 0 0 4px #F59E0B;
+      animation: menu-light-pulse 1.8s ease-in-out infinite;
+    }
+    &.idle {
+      background: #4A5568;
+    }
+  }
+  @keyframes menu-light-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
 }
 .cp-status-bar {
   display: flex;
@@ -1521,40 +1635,6 @@ onMounted(() => {
   display: flex;
   align-items: center;
   font-size: 13px;
-}
-.cp-dot {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  display: inline-block;
-  &.connected {
-    background: #25D07D;
-    box-shadow: 0 0 6px #25D07D;
-    animation: cp-blink 2s infinite;
-  }
-  &.connecting {
-    background: #FBBF24;
-    animation: cp-blink 0.5s infinite;
-  }
-  &.error {
-    background: #F87171;
-    animation: cp-pulse 1s infinite;
-  }
-  &.fallback {
-    background: #FBBF24;
-  }
-  &.disconnected {
-    background: #6b7280;
-  }
-}
-@keyframes cp-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.5; }
-}
-@keyframes cp-pulse {
-  0% { box-shadow: 0 0 0 0 rgba(248,113,113,0.5); }
-  70% { box-shadow: 0 0 0 8px rgba(248,113,113,0); }
-  100% { box-shadow: 0 0 0 0 rgba(248,113,113,0); }
 }
 .crawler-stat-card {
   text-align: center;
