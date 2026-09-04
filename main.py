@@ -372,7 +372,7 @@ _openapi_compat = f"{PREFIX}/openapi.json"
 app = FastAPI(
     title=settings.APP_NAME,
     description="策略交易系统 - 支持币安/OKX子账号、新闻+指标+AI综合评分、1H/4H多空策略、回测、财务报表",
-    version="1.2.0",
+    version="1.2.5",
     docs_url=_docs_ok,
     redoc_url=_redoc_ok,
     openapi_url=_openapi_ok,
@@ -563,7 +563,7 @@ from pathlib import Path as _Path
 _INSTALL_MARK_FILE = BASE_DIR / ".installed"  # 项目根下放一个简单的 JSON 标记
 _INSTALL_ENV_EXAMPLE = BASE_DIR / ".env.example"
 _INSTALL_ENV_FILE = BASE_DIR / ".env"
-_INSTALL_APP_VERSION = "1.2.0"
+_INSTALL_APP_VERSION = "1.2.5"
 
 
 def _onepress_is_installed() -> bool:

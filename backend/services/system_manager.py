@@ -76,7 +76,7 @@ def get_system_info(db: Session) -> Dict:
     user_count = db.query(User).count()
 
     return {
-        "version": "v1.2.0",
+        "version": _get_current_version(),
         "python_version": sys.version.split()[0],
         "platform": platform.platform(),
         "project_root": str(BASE_DIR),
@@ -737,7 +737,7 @@ def apply_github_update(db: Session, zip_url: str, tag_name: str,
 
 def _get_current_version() -> str:
     """获取当前版本号"""
-    return "v1.2.4"
+    return "v1.2.5"
 
 
 def _compare_versions(v1: str, v2: str) -> int:

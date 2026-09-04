@@ -276,7 +276,7 @@ def collect_system_status(db: Session) -> Dict:
     status = {
         "collected_at": datetime.now().isoformat(),
         "overall": "healthy",
-        "version": "v1.2.0",
+        "version": "v1.2.5",
         "python_version": platform.python_version(),
         "platform": platform.platform(),
         "uptime_seconds": _get_uptime(),
@@ -655,7 +655,7 @@ def generate_diagnostic_report(db: Session) -> Dict:
     """
     report = {
         "generated_at": datetime.now().isoformat(),
-        "version": "v1.2.0",
+        "version": "v1.2.5",
         "system_status": collect_system_status(db),
         "self_check": run_full_self_check(db),
         "log_summary": get_log_summary(),
