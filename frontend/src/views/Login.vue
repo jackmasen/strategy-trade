@@ -39,10 +39,26 @@
           />
         </el-form-item>
 
+        <el-form-item prop="captcha">
+          <div class="captcha-row">
+            <el-input
+              v-model="form.captcha"
+              :prefix-icon="Key"
+              placeholder="请输入验证码"
+              maxlength="4"
+              autocomplete="off"
+              class="captcha-input"
+            />
+            <div class="captcha-img" @click="refreshCaptcha" title="点击刷新验证码">
+              <canvas ref="captchaCanvas" width="120" height="40"></canvas>
+            </div>
+          </div>
+        </el-form-item>
+
         <div class="tips-row">
-          <div class="hint text-dim">
-            <el-icon><InfoFilled /></el-icon>
-            默认 admin / Admin@2024
+          <div class="hint text-dim" @click="refreshCaptcha" style="cursor:pointer">
+            <el-icon><Refresh /></el-icon>
+            看不清？点击刷新
           </div>
           <el-checkbox v-model="form.remember" size="small">记住我</el-checkbox>
         </div>
@@ -67,10 +83,10 @@
 </template>
 
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Lock, InfoFilled, Right } from '@element-plus/icons-vue'
+import { User, Lock, Key, Right, Refresh } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 
 const router = useRouter()
@@ -78,33 +94,113 @@ const route = useRoute()
 const user = useUserStore()
 const formRef = ref()
 const loading = ref(false)
+const captchaCanvas = ref()
+const captchaCode = ref('')
 
 const form = reactive({
-  username: 'admin',
-  password: 'Admin@2024',
-  remember: true,
+  username: '',
+  password: '',
+  captcha: '',
+  remember: false,
 })
 
 const rules = {
   username: [{ required: true, message: '请输入账号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur', min: 6 }],
+  captcha: [{ required: true, message: '请输入验证码', trigger: 'blur', len: 4 }],
+}
+
+function generateCaptcha() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  let code = ''
+  for (let i = 0; i < 4; i++) {
+    code += chars[Math.floor(Math.random() * chars.length)]
+  }
+  return code
+}
+
+function drawCaptcha() {
+  const canvas = captchaCanvas.value
+  if (!canvas) return
+  const ctx = canvas.getContext('2d')
+  const w = canvas.width
+  const h = canvas.height
+
+  ctx.clearRect(0, 0, w, h)
+  ctx.fillStyle = '#0C151D'
+  ctx.fillRect(0, 0, w, h)
+
+  const code = captchaCode.value
+  const colors = ['#25D07D', '#60A5FA', '#FBBF24', '#F472B6', '#A78BFA']
+  const fonts = ['bold 22px Georgia', 'bold 22px Arial', 'bold 22px Courier New']
+
+  for (let i = 0; i < code.length; i++) {
+    ctx.save()
+    const x = 18 + i * 26 + (Math.random() * 6 - 3)
+    const y = 28 + (Math.random() * 4 - 2)
+    const angle = (Math.random() * 30 - 15) * Math.PI / 180
+    ctx.translate(x, y)
+    ctx.rotate(angle)
+    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)]
+    ctx.font = fonts[Math.floor(Math.random() * fonts.length)]
+    ctx.fillText(code[i], 0, 0)
+    ctx.restore()
+  }
+
+  for (let i = 0; i < 6; i++) {
+    ctx.strokeStyle = colors[Math.floor(Math.random() * colors.length)]
+    ctx.lineWidth = 1
+    ctx.globalAlpha = 0.3
+    ctx.beginPath()
+    ctx.moveTo(Math.random() * w, Math.random() * h)
+    ctx.lineTo(Math.random() * w, Math.random() * h)
+    ctx.stroke()
+  }
+  ctx.globalAlpha = 1
+
+  for (let i = 0; i < 30; i++) {
+    ctx.fillStyle = colors[Math.floor(Math.random() * colors.length)]
+    ctx.globalAlpha = 0.15
+    ctx.fillRect(Math.random() * w, Math.random() * h, 2, 2)
+  }
+  ctx.globalAlpha = 1
+}
+
+function refreshCaptcha() {
+  captchaCode.value = generateCaptcha()
+  nextTick(() => drawCaptcha())
+}
+
+function normalizeCaptcha(s) {
+  return (s || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 }
 
 const onSubmit = async () => {
   if (!formRef.value) return
   try {
     await formRef.value.validate()
+    if (normalizeCaptcha(form.captcha) !== captchaCode.value) {
+      ElMessage.error('验证码错误')
+      refreshCaptcha()
+      form.captcha = ''
+      return
+    }
     loading.value = true
     await user.login({ username: form.username, password: form.password })
     ElMessage.success('登录成功')
     const redirect = route.query.redirect || '/dashboard'
     router.replace(redirect)
   } catch (e) {
-    // 拦截器已报提示
+    refreshCaptcha()
+    form.captcha = ''
   } finally {
     loading.value = false
   }
 }
+
+onMounted(() => {
+  refreshCaptcha()
+})
 </script>
 
 <style lang="scss" scoped>
@@ -168,6 +264,30 @@ const onSubmit = async () => {
   font-size: 12px;
   color: #6B7C90;
   letter-spacing: .5px;
+}
+
+.captcha-row {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  align-items: center;
+}
+.captcha-input {
+  flex: 1;
+}
+.captcha-img {
+  flex-shrink: 0;
+  width: 120px;
+  height: 40px;
+  border-radius: 10px;
+  overflow: hidden;
+  cursor: pointer;
+  border: 1px solid #243447;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  &:hover { border-color: #25D07D; }
+  canvas { display: block; }
 }
 
 .tips-row {
