@@ -66,7 +66,7 @@ SUPPORTED_SYMBOLS = [
 # ===========================
 def ensure_all(
     db: Session | None = None,
-    with_mock_trades: bool = True,
+    with_mock_trades: bool = False,
     admin_username: str | None = None,
     admin_password: str | None = None,
     admin_nickname: str | None = None,
@@ -351,8 +351,12 @@ def _ensure_mock_trades(db: Session, user: User | None) -> int:
     """空库时生成最近 30 天 约 60 条历史仓位记录，用于 Dashboard 展示测试"""
     if not user:
         return 0
-    cnt = db.query(func.count()).select_from(TradePosition).scalar() or 0
-    if cnt > 0:
+    # 检查是否已有 Mock 交易（通过 client_order_id 前缀 "MOCK" 标识），
+    # 而非简单地判断是否有任何仓位——避免真实仓位阻止 Mock 数据写入
+    mock_cnt = db.query(func.count()).select_from(TradeOrder).filter(
+        TradeOrder.client_order_id.like("MOCK%")
+    ).scalar() or 0
+    if mock_cnt > 0:
         return 0
     random.seed(42)
     # 1) 先给用户建一个"模拟演示子账号"（无需真实API）
@@ -549,6 +553,6 @@ if __name__ == "__main__":
     stats = ensure_all(with_mock_trades=not args.no_mock)
     print("[Seed] 写入结果:", stats)
     if stats["admin_user"]:
-        print(f"[Seed] 管理员账号已创建: {DEFAULT_ADMIN_USERNAME} / {DEFAULT_ADMIN_PASSWORD}")
+        print(f"[Seed] 管理员账号已创建: {DEFAULT_ADMIN_USERNAME} / {'*' * 8}（请查阅初始化配置）")
     if stats["editor_user"]:
-        print(f"[Seed] 交易员演示账号已创建: {DEFAULT_EDITOR_USERNAME} / {DEFAULT_EDITOR_PASSWORD}")
+        print(f"[Seed] 交易员演示账号已创建: {DEFAULT_EDITOR_USERNAME} / {'*' * 8}（请查阅初始化配置）")

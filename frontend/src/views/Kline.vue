@@ -605,7 +605,77 @@
       </div>
     </div>
 
-
+    <!-- 底部：当前持仓横排展示 -->
+    <div v-if="layoutMode !== 'custom' && selectedAccount > 0" class="kline-positions-bar">
+      <div class="kpb-header">
+        <div class="kpb-title">
+          <span class="kpb-icon">💼</span>
+          <span>当前持仓</span>
+          <el-tag size="small" type="info" effect="dark" round>{{ myPositions.length }}个</el-tag>
+        </div>
+        <div class="kpb-summary">
+          <span class="kpb-summary-item">
+            <span class="status-light" :class="totalUnrealizedPnl >= 0 ? 'ok' : 'error'" style="margin:0;width:5px;height:5px;"></span>
+            <span class="kpb-sl">未实现盈亏</span>
+            <span class="kpb-sv" :class="totalUnrealizedPnl >= 0 ? 'profit' : 'loss'">
+              {{ totalUnrealizedPnl >= 0 ? '+' : '' }}${{ formatBig(totalUnrealizedPnl) }}
+            </span>
+          </span>
+          <span class="kpb-summary-item">
+            <span class="status-light ok" style="margin:0;width:5px;height:5px;"></span>
+            <span class="kpb-sl">保证金占用</span>
+            <span class="kpb-sv">${{ formatBig(totalMarginUsed) }}</span>
+          </span>
+          <span class="kpb-refresh" @click="loadMyPositions" title="刷新持仓">
+            <el-icon :size="14" :class="{ 'rotating': positionsLoading }"><Refresh /></el-icon>
+          </span>
+        </div>
+      </div>
+      <div class="kpb-body" v-if="myPositions.length > 0">
+        <div v-for="pos in myPositions" :key="pos.id" class="pos-card" :class="pos.side === 1 ? 'long' : 'short'" @click="focusPosition(pos)">
+          <div class="pos-card-header">
+            <span class="pos-symbol" style="display:flex;align-items:center;gap:4px;">
+              <span class="status-light" :class="pos.side === 1 ? 'ok' : 'error'" style="margin:0;"></span>
+              {{ pos.symbol }}
+            </span>
+            <el-tag size="small" effect="dark" :type="pos.side === 1 ? 'success' : 'danger'">
+              {{ pos.side === 1 ? '多' : '空' }} {{ pos.leverage }}x
+            </el-tag>
+          </div>
+          <div class="pos-card-main">
+            <div class="pos-row">
+              <span class="pos-label">数量</span>
+              <span class="pos-value">{{ pos.quantity }}</span>
+            </div>
+            <div class="pos-row">
+              <span class="pos-label">开仓价</span>
+              <span class="pos-value">${{ fmtMoney(pos.entry_price) }}</span>
+            </div>
+            <div class="pos-row">
+              <span class="pos-label">标记价</span>
+              <span class="pos-value">${{ fmtMoney(pos.mark_price) }}</span>
+            </div>
+            <div class="pos-row pos-pnl-row">
+              <span class="pos-label">未实现盈亏</span>
+              <span class="pos-value" :class="pos.unrealized_pnl >= 0 ? 'profit' : 'loss'">
+                {{ pos.unrealized_pnl >= 0 ? '+' : '' }}${{ formatBig(pos.unrealized_pnl) }}
+                <span class="pos-pnl-pct">({{ pos.pnl_pct >= 0 ? '+' : '' }}{{ pos.pnl_pct?.toFixed(2) }}%)</span>
+              </span>
+            </div>
+          </div>
+          <div class="pos-card-liquidation">
+            <span class="pos-liq-label">强平价</span>
+            <span class="pos-liq-value">${{ fmtMoney(pos.liquidation_price) }}</span>
+            <div class="pos-liq-bar">
+              <div class="pos-liq-fill" :style="{ width: liqDistancePct(pos) + '%' }"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="kpb-empty" v-else>
+        <el-empty description="暂无持仓" :image-size="60" />
+      </div>
+    </div>
     <div v-if="layoutMode === 'custom'" class="kline-custom-main" ref="customLayoutRef">
       <!-- 悬浮入口（极小，仅在工具栏被删除或需要快速切换时用） -->
       <div class="custom-fab">

@@ -3,11 +3,13 @@ FastAPI 认证依赖
 - get_current_user: 从 Authorization: Bearer <token> 解析并查库
 - require_roles: 角色权限校验
 """
-from typing import Optional
+from typing import Optional, Set
 from fastapi import Depends, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 import jwt
+import time
+import threading
 
 from backend.db.session import get_db
 from backend.core.exceptions import UnauthorizedException, ForbiddenException
@@ -16,6 +18,33 @@ from backend.models.user import User
 
 
 _bearer = HTTPBearer(auto_error=False)
+
+# ============== Token 黑名单（内存，进程级） ==============
+# 存储 jti -> expiry 时间戳；过期后自动清理
+_blacklist: Set[str] = set()
+_blacklist_lock = threading.Lock()
+_BLACKLIST_CLEANUP_INTERVAL = 300  # 5分钟清理一次
+_last_cleanup = time.time()
+
+
+def _add_to_blacklist(jti: str, exp: int) -> None:
+    """将 jti 加入黑名单"""
+    with _blacklist_lock:
+        _blacklist.add(jti)
+
+
+def _is_blacklisted(jti: str) -> bool:
+    """检查 jti 是否在黑名单中"""
+    global _last_cleanup
+    now = time.time()
+    # 定期清理过期条目
+    if now - _last_cleanup > _BLACKLIST_CLEANUP_INTERVAL:
+        with _blacklist_lock:
+            # 黑名单里的 jti 通常 24h 过期，这里只做简单的容量控制
+            if len(_blacklist) > 10000:
+                _blacklist.clear()
+            _last_cleanup = now
+    return jti in _blacklist
 
 
 def _extract_token(
@@ -42,6 +71,10 @@ def get_current_user(
         payload = decode_token(token)
         if payload.get("type") != "access":
             raise UnauthorizedException("无效的Token类型")
+        # 检查 jti 是否在黑名单中（已登出的 Token 不可再用）
+        jti = payload.get("jti")
+        if jti and _is_blacklisted(jti):
+            raise UnauthorizedException("登录凭证已失效，请重新登录")
         user_id = int(payload["sub"])
     except jwt.ExpiredSignatureError:
         raise UnauthorizedException("登录已过期，请重新登录")

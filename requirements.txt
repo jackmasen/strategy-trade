@@ -40,3 +40,7 @@ qrcode[pil]==7.4.2
 vaderSentiment==3.3.2
 # feedparser：RSS/Atom 解析
 feedparser==6.0.11
+# slowapi：API 速率限制中间件（防暴力破解和滥用）
+slowapi==0.1.9
+# pyotp：2FA TOTP 验证
+pyotp==2.9.0

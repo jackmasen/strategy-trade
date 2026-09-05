@@ -56,8 +56,11 @@
         </el-form-item>
 
         <div class="tips-row">
-          <div class="hint text-dim" @click="refreshCaptcha" style="cursor:pointer">
-            <el-icon><Refresh /></el-icon>
+          <div class="hint text-dim">
+            <el-icon><InfoFilled /></el-icon>
+            首次登录请修改默认密码
+            <span style="margin:0 4px;opacity:.5;">·</span>
+            <el-icon style="cursor:pointer" @click="refreshCaptcha"><Refresh /></el-icon>
             看不清？点击刷新
           </div>
           <el-checkbox v-model="form.remember" size="small">记住我</el-checkbox>
@@ -86,7 +89,7 @@
 import { reactive, ref, onMounted, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { User, Lock, Key, Right, Refresh } from '@element-plus/icons-vue'
+import { User, Lock, Key, Right, Refresh, InfoFilled } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 
 const router = useRouter()

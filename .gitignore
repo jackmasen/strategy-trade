@@ -51,3 +51,6 @@ _local_env_diagnosis.json
 _local_env_diagnosis.log
 _tmp_*.py
 _tmp_*.pyw
+verify_fixes.py
+*交接文档*.html
+*分析报告*.html

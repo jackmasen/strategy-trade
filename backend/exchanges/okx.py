@@ -268,8 +268,8 @@ class OKXFuturesClient(ExchangeClientBase):
                     "posSide": pos_side,
                 })
             except Exception as e:
-                logger.debug(f"[OKX] 设置杠杆 symbol={symbol} lev={leverage} pos={pos_side} mgn={margin_mode} 提示: {e}")
-                # 设置失败不返回 False（可能已生效）
+                logger.warning(f"[OKX] 设置杠杆失败(symbol={symbol} lev={leverage} side={sd}): {e}")
+                ok = False
         return ok
 
     def place_order(
@@ -337,6 +337,7 @@ class OKXFuturesClient(ExchangeClientBase):
             )
 
         # 3. TP/SL —— OKX 用 /api/v5/trade/order-algo；优先绝对价，否则百分比换算
+        tpsl_ok = True
         has_tp = take_profit_price is not None or (take_profit_pct is not None and take_profit_pct > 0)
         has_sl = stop_loss_price is not None or (stop_loss_pct is not None and stop_loss_pct > 0)
         if (has_tp or has_sl) and order.status in (ORDER_STATUS_FILLED, ORDER_STATUS_SUBMITTED) and order.avg_fill_price > 0:
@@ -356,7 +357,10 @@ class OKXFuturesClient(ExchangeClientBase):
             try:
                 self._set_algo_tp_sl_abs(symbol, side, tp_abs, sl_abs)
             except Exception as e:
-                logger.warning(f"[OKX] 设置TP/SL失败(可手动补设): {e}")
+                logger.error(f"[OKX] TP/SL设置失败(order_id={order.exchange_order_id}): {e} — 持仓无止损保护!")
+                tpsl_ok = False
+        if not tpsl_ok:
+            order.error_msg = "TP/SL设置失败，持仓无止损保护"
         return order
 
     def _set_algo_tp_sl_abs(

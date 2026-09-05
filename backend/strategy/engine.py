@@ -26,6 +26,7 @@ from backend.models.exchange import ExchangeAccount
 from backend.models.analytics import RiskEventLog
 from backend.models.user import User
 from backend.db.session import get_db
+from backend.core.logging_config import logger
 from backend.exchanges.market import MarketManager
 from backend.exchanges.base import ExchangeClientBase
 from backend.exchanges._types import ORDER_TYPE_MARKET, SIDE_LONG, SIDE_SHORT
@@ -381,159 +382,169 @@ class StrategyEngine:
             raise ValueError("策略未绑定交易所子账号或已禁用")
         client = self._build_client(acc)
 
-        # 1) 获取最新价 & 计算 TP/SL
-        ticker = client.fetch_ticker(r.symbol)
-        entry = ticker.last_price or r.candle_close_price
-        if entry <= 0:
-            raise ValueError("无效的最新价")
-        if r.direction == SIDE_LONG:
-            tp = entry * (1 + r.suggested_tp_pct / 100)
-            sl = entry * (1 - r.suggested_sl_pct / 100)
-        else:
-            tp = entry * (1 - r.suggested_tp_pct / 100)
-            sl = entry * (1 + r.suggested_sl_pct / 100)
-
-        # 2) 仓位大小 = 账户权益 * single_position_ratio(%) / entry * 杠杆
-        bal = client.fetch_balance()
-        total_usdt = float(bal.total) if float(bal.total) > 0 else float(acc.current_balance or 1000)
-        nominal = total_usdt * float(strategy.single_position_ratio or 10) / 100
-        nominal = max(10.0, min(2000.0, nominal))
-        qty = nominal / entry
-        leverage = max(3, min(10, min(int(r.suggested_leverage), int(acc.leverage_max or 10))))
-
-        # 3) 设置杠杆（交易所侧）
         try:
-            client.set_leverage(r.symbol, leverage)
-        except Exception:
-            pass
+            # 1) 获取最新价 & 计算 TP/SL
+            ticker = client.fetch_ticker(r.symbol)
+            entry = ticker.last_price or r.candle_close_price
+            if entry <= 0:
+                raise ValueError("无效的最新价")
+            if r.direction == SIDE_LONG:
+                tp = entry * (1 + r.suggested_tp_pct / 100)
+                sl = entry * (1 - r.suggested_sl_pct / 100)
+            else:
+                tp = entry * (1 - r.suggested_tp_pct / 100)
+                sl = entry * (1 + r.suggested_sl_pct / 100)
 
-        # 4) 预生成 client_order_id（用于后续精确匹配持仓）
-        client_oid = gen_client_order_id("S")
+            # 2) 仓位大小 = 账户权益 * single_position_ratio(%) / entry * 杠杆
+            bal = client.fetch_balance()
+            total_usdt = float(bal.total) if float(bal.total) > 0 else float(acc.current_balance or 1000)
+            nominal = total_usdt * float(strategy.single_position_ratio or 10) / 100
+            nominal = max(10.0, min(2000.0, nominal))  # 最少10U，最多2000U（可配置）
+            qty = nominal / entry
+            leverage = max(3, min(10, min(int(r.suggested_leverage), int(acc.leverage_max or 10))))
 
-        # 5) 写 TradeOrder（仅 flush 不 commit，保证后续与持仓原子提交）
-        order = TradeOrder(
-            exchange_account_id=acc.id,
-            strategy_id=strategy.id,
-            user_id=user.id,
-            exchange=acc.exchange,
-            client_order_id=client_oid,
-            symbol=r.symbol,
-            side=r.direction,
-            order_type=1,
-            leverage=leverage,
-            quantity_contracts=Decimal(str(qty)),
-            quantity_usdt=Decimal(str(nominal)),
-            avg_fill_price=Decimal(str(entry)),
-            order_price=Decimal(str(entry)),
-            tp_price=Decimal(str(round(tp, 8))),
-            sl_price=Decimal(str(round(sl, 8))),
-            margin_used=Decimal(str(nominal / leverage)),
-            trigger_reason=2,
-            trigger_score=float(r.score_total),
-            status=0,
-            error_msg="",
-        )
-        db.add(order)
-        db.flush()  # 获取 order.id，不 commit
+            # 3) 设置杠杆（交易所侧）
+            try:
+                client.set_leverage(r.symbol, leverage)
+            except Exception:
+                pass
 
-        # 6) 调用交易所下单
-        try:
-            created = client.place_order(
+            # 4) 预生成 client_order_id（用于后续精确匹配持仓）
+            client_oid = gen_client_order_id("S")
+
+            # 5) 写 TradeOrder（仅 flush 不 commit，保证后续与持仓原子提交）
+            order = TradeOrder(
+                exchange_account_id=acc.id,
+                strategy_id=strategy.id,
+                user_id=user.id,
+                exchange=acc.exchange,
+                client_order_id=client_oid,
                 symbol=r.symbol,
                 side=r.direction,
-                order_type=ORDER_TYPE_MARKET,
-                quantity=qty,
-                price=0,
-                take_profit_price=round(tp, 8),
-                stop_loss_price=round(sl, 8),
+                order_type=1,
                 leverage=leverage,
-                client_order_id=client_oid,
+                quantity_contracts=Decimal(str(qty)),
+                quantity_usdt=Decimal(str(nominal)),
+                avg_fill_price=Decimal(str(entry)),
+                order_price=Decimal(str(entry)),
+                tp_price=Decimal(str(round(tp, 8))),
+                sl_price=Decimal(str(round(sl, 8))),
+                margin_used=Decimal(str(nominal / leverage)),
+                trigger_reason=2,  # 评分触发
+                trigger_score=float(r.score_total),
+                status=0,
+                error_msg="",
             )
-            order.client_order_id = created.client_order_id or client_oid
-            order.exchange_order_id = created.exchange_order_id or ""
-            order.status = 2
-            order.avg_fill_price = Decimal(str(created.avg_fill_price or entry))
-            order.quantity_contracts = Decimal(str(created.filled_quantity or qty))
-            order.filled_at = datetime.now()
-            order.submitted_at = datetime.now()
-        except Exception as e:
-            # 交易所下单失败：仅回写失败状态，不创建持仓
-            order.status = 5
-            order.error_msg = str(e)[:500]
-            db.commit()
-            raise e
+            db.add(order)
+            db.flush()  # 获取 order.id，不 commit
 
-        # 7) 持仓落库 — 用 client_order_id 精确匹配，避免多仓位关联错误
-        try:
-            positions = client.fetch_positions()
-            # 查询已关联的持仓 ID，避免匹配到已有订单的持仓
-            linked_pos_ids = set(
-                row[0] for row in db.query(TradeOrder.position_id)
-                .filter(TradeOrder.position_id.isnot(None))
-                .all()
-            )
-            # 优先用 client_order_id / raw_position_id 匹配
-            matched = None
-            for p in positions:
-                if p.symbol != r.symbol or p.side != r.direction:
-                    continue
-                # 如果交易所返回了 raw_position_id 且已在 DB 关联，跳过
-                if p.raw_position_id and p.raw_position_id in linked_pos_ids:
-                    continue
-                # 优先选择有 raw_position_id 且未关联的
-                if p.raw_position_id:
-                    matched = p
-                    break
-            # 回退：取 symbol+side 匹配且未关联的最后一个
-            if not matched:
-                candidates = [
-                    p for p in positions
-                    if p.symbol == r.symbol and p.side == r.direction
-                ]
-                if candidates:
-                    matched = candidates[-1]
-
-            if matched:
-                pos_obj = TradePosition(
-                    user_id=user.id,
-                    exchange_account_id=acc.id,
-                    strategy_id=strategy.id,
-                    exchange=acc.exchange,
+            # 6) 调用交易所下单
+            try:
+                created = client.place_order(
                     symbol=r.symbol,
                     side=r.direction,
+                    order_type=ORDER_TYPE_MARKET,
+                    quantity=qty,
+                    price=0,
+                    take_profit_price=round(tp, 8),
+                    stop_loss_price=round(sl, 8),
                     leverage=leverage,
-                    entry_price=Decimal(str(matched.entry_price or entry)),
-                    mark_price=Decimal(str(matched.mark_price or entry)),
-                    quantity_contracts=Decimal(str(matched.quantity or qty)),
-                    quantity_usdt=Decimal(str(nominal)),
-                    margin_used=Decimal(str(matched.margin or (nominal / leverage))),
-                    tp_price=Decimal(str(round(tp, 8))),
-                    sl_price=Decimal(str(round(sl, 8))),
-                    unrealized_pnl=Decimal(str(matched.unrealized_pnl or 0)),
-                    realized_pnl=Decimal(0),
-                    pnl_ratio=float(matched.unrealized_pnl_pct or 0),
-                    max_drawdown_ratio=0.0,
-                    fee_total=Decimal(0),
-                    status=1,
-                    entry_score=float(r.score_total),
-                    entry_time=datetime.now(),
-                    close_time=None,
-                    close_price=None,
-                    holding_minutes=0,
+                    client_order_id=client_oid,
                 )
-                db.add(pos_obj)
-                db.flush()
-                order.position_id = pos_obj.id
-            else:
-                logger.warning(
-                    f"[Engine] 订单 {order.id} 下单成功但未匹配到持仓 "
-                    f"(symbol={r.symbol}, side={r.direction})，可能为模拟盘或仓位已被平仓"
-                )
-        except Exception as e:
-            # 持仓匹配失败不影响订单记录，但需要记录异常
-            logger.exception(f"[Engine] 订单 {order.id} 持仓匹配异常: {e}")
+                order.client_order_id = created.client_order_id or client_oid
+                order.exchange_order_id = created.exchange_order_id or ""
+                order.status = 2
+                order.avg_fill_price = Decimal(str(created.avg_fill_price or entry))
+                order.quantity_contracts = Decimal(str(created.filled_quantity or qty))
+                order.filled_at = datetime.now()
+                order.submitted_at = datetime.now()
+            except Exception as e:
+                # 交易所下单失败：仅回写失败状态，不创建持仓
+                order.status = 5
+                order.error_msg = str(e)[:500]
+                db.commit()
+                raise e
 
-        # 8) 原子提交：订单 + 持仓一起 commit
-        db.commit()
-        db.refresh(order)
-        return order
+            # 6.1) 提交订单更新（确保持仓同步失败时不丢失订单数据）
+            db.commit()
+
+            # 7) 持仓落库 — 用 client_order_id 精确匹配，避免多仓位关联错误
+            try:
+                positions = client.fetch_positions()
+                # 查询已关联的持仓 ID，避免匹配到已有订单的持仓
+                linked_pos_ids = set(
+                    row[0] for row in db.query(TradeOrder.position_id)
+                    .filter(TradeOrder.position_id.isnot(None))
+                    .all()
+                )
+                # 优先用 client_order_id / raw_position_id 匹配
+                matched = None
+                for p in positions:
+                    if p.symbol != r.symbol or p.side != r.direction:
+                        continue
+                    # 如果交易所返回了 raw_position_id 且已在 DB 关联，跳过
+                    if p.raw_position_id and p.raw_position_id in linked_pos_ids:
+                        continue
+                    # 优先选择有 raw_position_id 且未关联的
+                    if p.raw_position_id:
+                        matched = p
+                        break
+                # 回退：取 symbol+side 匹配且未关联的最后一个
+                if not matched:
+                    candidates = [
+                        p for p in positions
+                        if p.symbol == r.symbol and p.side == r.direction
+                    ]
+                    if candidates:
+                        matched = candidates[-1]
+
+                if matched:
+                    pos_obj = TradePosition(
+                        user_id=user.id,
+                        exchange_account_id=acc.id,
+                        strategy_id=strategy.id,
+                        exchange=acc.exchange,
+                        symbol=r.symbol,
+                        side=r.direction,
+                        leverage=leverage,
+                        entry_price=Decimal(str(matched.entry_price or entry)),
+                        mark_price=Decimal(str(matched.mark_price or entry)),
+                        quantity_contracts=Decimal(str(matched.quantity or qty)),
+                        quantity_usdt=Decimal(str(nominal)),
+                        margin_used=Decimal(str(matched.margin or (nominal / leverage))),
+                        tp_price=Decimal(str(round(tp, 8))),
+                        sl_price=Decimal(str(round(sl, 8))),
+                        unrealized_pnl=Decimal(str(matched.unrealized_pnl or 0)),
+                        realized_pnl=Decimal(0),
+                        pnl_ratio=float(matched.unrealized_pnl_pct or 0),
+                        max_drawdown_ratio=0.0,
+                        fee_total=Decimal(0),
+                        status=1,
+                        entry_score=float(r.score_total),
+                        entry_time=datetime.now(),
+                        close_time=None,
+                        close_price=None,
+                        holding_minutes=0,
+                    )
+                    db.add(pos_obj)
+                    db.flush()
+                    order.position_id = pos_obj.id
+                else:
+                    logger.warning(
+                        f"[Engine] 订单 {order.id} 下单成功但未匹配到持仓 "
+                        f"(symbol={r.symbol}, side={r.direction})，可能为模拟盘或仓位已被平仓"
+                    )
+            except Exception as e:
+                # 持仓匹配失败不影响订单记录，但需要记录异常
+                logger.exception(f"[Engine] 订单 {order.id} 持仓匹配异常: {e}")
+                db.rollback()
+
+            # 8) 提交
+            db.commit()
+            db.refresh(order)
+            return order
+        finally:
+            try:
+                client.close()
+            except Exception:
+                pass

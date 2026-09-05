@@ -26,6 +26,7 @@ from backend.core.auth import get_current_user, require_editor
 from backend.core.exceptions import (
     NotFoundException, ParameterException, RiskControlException, success, BizException,
 )
+from backend.core.security import encrypt_api_key, decrypt_api_key
 from backend.core.schemas import ApiResponse, PaginationParams, paginate
 from backend.models.user import User
 from backend.models.exchange import ExchangeAccount
@@ -123,7 +124,8 @@ def _cached_fetch_klines(client, symbol, timeframe, limit, ttl=None):
     # 缓存未命中，实际请求
     try:
         data = client.fetch_klines(symbol, timeframe, limit=limit)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[Exchange] K线拉取失败(symbol={symbol} tf={timeframe}): {e} — 返回模拟数据")
         data = _gen_mock_klines(symbol, timeframe, limit)
     with _kline_cache_lock:
         _kline_cache[key] = (now, data)
@@ -142,15 +144,21 @@ def _get_account(db: Session, user: User, aid: int) -> ExchangeAccount:
         raise NotFoundException("子账号不存在")
     if account.status == 0:
         raise BizException("该子账号已被禁用")
+    # 审计日志：管理员操作他人账号时记录
+    if user.role == 1 and account.user_id != user.id:
+        logger.warning(
+            f"[AUDIT] 管理员 {user.username}(id={user.id}) 访问了用户 "
+            f"id={account.user_id} 的交易所子账号 id={account.id} ({account.sub_account_name})"
+        )
     return account
 
 
 def _build_client(account: ExchangeAccount) -> ExchangeClientBase:
     client = ExchangeClientBase.create(
         exchange=account.exchange,
-        api_key=account.api_key or "",
-        api_secret=account.api_secret or "",
-        passphrase=account.api_passphrase or "",
+        api_key=decrypt_api_key(account.api_key) or "",
+        api_secret=decrypt_api_key(account.api_secret) or "",
+        passphrase=decrypt_api_key(account.api_passphrase) or "",
         testnet=bool(account.testnet),
         exchange_account_id=account.id,
     )
@@ -228,9 +236,9 @@ def create_account(
         exchange=req.exchange,
         sub_account_name=req.sub_account_name,
         sub_account_id=req.sub_account_id,
-        api_key=req.api_key,  # TODO: 生产环境建议加密存储
-        api_secret=req.api_secret,
-        api_passphrase=req.api_passphrase,
+        api_key=encrypt_api_key(req.api_key),
+        api_secret=encrypt_api_key(req.api_secret),
+        api_passphrase=encrypt_api_key(req.api_passphrase) if req.api_passphrase else "",
         ip_whitelist=req.ip_whitelist,
         leverage_max=req.leverage_max,
         testnet=req.testnet,
@@ -254,11 +262,11 @@ def update_account(
     if req.sub_account_name:
         account.sub_account_name = req.sub_account_name
     if req.api_key:
-        account.api_key = req.api_key
+        account.api_key = encrypt_api_key(req.api_key)
     if req.api_secret:
-        account.api_secret = req.api_secret
+        account.api_secret = encrypt_api_key(req.api_secret)
     if req.api_passphrase is not None:
-        account.api_passphrase = req.api_passphrase
+        account.api_passphrase = encrypt_api_key(req.api_passphrase) if req.api_passphrase else ""
     if req.ip_whitelist is not None:
         account.ip_whitelist = req.ip_whitelist
     if req.leverage_max is not None:
@@ -511,7 +519,8 @@ def _refresh_ticker_cache(mm, symbol):
         if mm._primary_client:
             t = mm._primary_client.fetch_ticker(symbol)
             mm.on_ws_ticker(t)
-    except Exception:
+    except Exception as e:
+        logger.warning(f"[Exchange] Ticker拉取失败(symbol={symbol}): {e} — 返回模拟数据")
         t = _gen_mock_ticker(symbol)
         mm.on_ws_ticker(t)
 
@@ -532,7 +541,8 @@ def get_ticker(symbol: str, account_id: int = 0, db: Session = Depends(get_db), 
             t = client.fetch_ticker(symbol)
             mm.on_ws_ticker(t)
             return success(t.to_dict())
-        except Exception:
+        except Exception as e:
+            logger.warning(f"[Exchange] Ticker拉取失败(symbol={symbol}): {e} — 返回模拟数据")
             t = _gen_mock_ticker(symbol)
             mm.on_ws_ticker(t)
             return success(t.to_dict())
@@ -647,8 +657,8 @@ def _get_client_by_account(db, user, account_id, allow_public: bool = True):
             acc = _get_account(db, user, account_id)
             from backend.exchanges.base import ExchangeClientBase
             client = ExchangeClientBase.create(
-                exchange=acc.exchange, api_key=acc.api_key, api_secret=acc.api_secret,
-                passphrase=acc.api_passphrase or "", testnet=bool(acc.testnet),
+                exchange=acc.exchange, api_key=decrypt_api_key(acc.api_key), api_secret=decrypt_api_key(acc.api_secret),
+                passphrase=decrypt_api_key(acc.api_passphrase) or "", testnet=bool(acc.testnet),
                 exchange_account_id=acc.id,
             )
             client.connect()

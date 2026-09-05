@@ -165,13 +165,34 @@ async def upload_update(
     if not file.filename or not file.filename.endswith('.zip'):
         raise BizException("仅支持 .zip 更新包", code=4000)
 
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    file_path = UPLOAD_DIR / file.filename
+    # 安全文件名：仅保留字母/数字/下划线/连字符/点，防止路径穿越
+    import re
+    safe_name = re.sub(r'[^a-zA-Z0-9_\-.]', '_', file.filename)
+    # 防止双重扩展和隐藏文件
+    if safe_name.startswith('.'):
+        safe_name = '_' + safe_name
+    # 限制文件名长度
+    safe_name = safe_name[:128]
 
-    # 保存上传文件
-    content = await file.read()
-    if len(content) > 200 * 1024 * 1024:  # 200MB 限制
-        raise BizException("更新包过大，最大 200MB", code=4000)
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+    file_path = (UPLOAD_DIR / safe_name).resolve()
+    # 确保解析后的路径仍在 UPLOAD_DIR 内
+    if not str(file_path).startswith(str(UPLOAD_DIR.resolve())):
+        raise BizException("非法文件名", code=4000)
+
+    # 先检查 Content-Length（避免大文件读完才报错）
+    content_length = 0
+    # 流式读取，避免一次性加载大文件到内存
+    content = bytearray()
+    chunk_size = 1024 * 1024  # 1MB chunks
+    max_size = 200 * 1024 * 1024  # 200MB 限制
+    while True:
+        chunk = await file.read(chunk_size)
+        if not chunk:
+            break
+        content.extend(chunk)
+        if len(content) > max_size:
+            raise BizException("更新包过大，最大 200MB", code=4000)
 
     with open(file_path, "wb") as f:
         f.write(content)

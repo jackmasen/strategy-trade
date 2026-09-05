@@ -21,6 +21,7 @@ from backend.core.auth import get_current_user, require_editor, require_trader
 from backend.core.exceptions import (
     NotFoundException, ParameterException, RiskControlException, success, BizException,
 )
+from backend.core.security import decrypt_api_key
 from backend.core.schemas import ApiResponse, PaginationParams, paginate
 from backend.models.user import User
 from backend.models.trade import TradeOrder, TradePosition
@@ -73,15 +74,21 @@ def _get_account_checked(db: Session, user: User, aid: int) -> ExchangeAccount:
         raise NotFoundException("交易所子账号不存在")
     if acc.status != 1:
         raise ParameterException("子账号未启用")
+    # 审计日志：管理员操作他人账号时记录
+    if user.role == 1 and acc.user_id != user.id:
+        logger.warning(
+            f"[AUDIT] 管理员 {user.username}(id={user.id}) 访问了用户 "
+            f"id={acc.user_id} 的交易所子账号 id={acc.id} ({acc.sub_account_name})"
+        )
     return acc
 
 
 def _build_client(acc: ExchangeAccount) -> ExchangeClientBase:
     client = ExchangeClientBase.create(
         exchange=acc.exchange,
-        api_key=acc.api_key or "",
-        api_secret=acc.api_secret or "",
-        passphrase=acc.api_passphrase or "",
+        api_key=decrypt_api_key(acc.api_key) or "",
+        api_secret=decrypt_api_key(acc.api_secret) or "",
+        passphrase=decrypt_api_key(acc.api_passphrase) or "",
         testnet=bool(acc.testnet),
         exchange_account_id=acc.id,
     )
@@ -280,6 +287,9 @@ def manual_order(
         db.commit()
         raise BizException(f"下单失败: {e}", code=5020)
 
+    # 5.1) 提交订单更新（确保持仓同步失败时不丢失订单数据）
+    db.commit()
+
     # 6) 同步持仓并创建/更新 TradePosition
     created_pos = None
     try:
@@ -350,8 +360,25 @@ def manual_order(
             order.position_id = created_pos.id
             db.commit()
     except Exception as e_sync:
-        # 同步失败不影响订单成功
-        pass
+        logger.error(f"持仓同步失败(order_id={order.id}): {e_sync} — 订单已成交但持仓未录入，需人工核查")
+        db.rollback()
+        # Return success but with warning
+        return success({
+            "order_id": order.id,
+            "exchange_order_id": order.exchange_order_id,
+            "position_id": order.position_id,
+            "status": order.status,
+            "symbol": symbol,
+            "side": req.side,
+            "entry_price": entry_price,
+            "execution_price": execution_price,
+            "bid_price": bid_price,
+            "ask_price": ask_price,
+            "tp": tp, "sl": sl,
+            "qty": qty,
+            "margin": round(margin_need, 4),
+            "warning": "订单已成交，但持仓同步失败，请检查持仓列表",
+        }, message="下单成功，持仓同步异常")
 
     return success({
         "order_id": order.id,
@@ -498,7 +525,7 @@ def close_position(
         pos.close_price = Decimal(str(cp))
     except Exception as e:
         # 演示模式 fallback：用标记价模拟平仓（确保演示环境可正常操作）
-        if acc.testnet or not acc.api_key or "NameResolutionError" in str(e) or "ConnectionError" in str(e):
+        if acc.testnet or "NameResolutionError" in str(e) or "ConnectionError" in str(e):
             is_mock_mode = True
             logger.warning(f"[Trade] 演示模式平仓: position={pos.id}, reason={e}")
             # 使用当前标记价，没有则在开仓价附近随机波动模拟
@@ -531,7 +558,16 @@ def close_position(
         pos.holding_minutes = int((pos.close_time - pos.entry_time).total_seconds() // 60)
     pos.max_drawdown_ratio = max(float(pos.max_drawdown_ratio or 0), abs(float(pos.pnl_ratio)) if pnl < 0 else 0)
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception as e:
+        logger.critical(
+            f"平仓DB提交失败(position_id={pos.id}) — 交易所已平仓但数据库未更新!"
+            f"需人工核查防止重复平仓: {e}"
+        )
+        db.rollback()
+        # Re-raise so the API returns an error, prompting manual intervention
+        raise
     return success({
         "pid": pos.id,
         "close_price": float(pos.close_price),
@@ -554,6 +590,8 @@ def update_tpsl(
     pos = db.query(TradePosition).filter(TradePosition.id == pid).first()
     if not pos or pos.status != 1:
         raise NotFoundException("持仓不存在或已平仓")
+    if user.role != 1:
+        _get_account_checked(db, user, pos.exchange_account_id)
 
     old_tp = float(pos.tp_price or 0)
     old_sl = float(pos.sl_price or 0)

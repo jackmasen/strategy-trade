@@ -102,10 +102,10 @@ class AIConfigUpdate(BaseModel):
 
 
 class AIAnalyzeReq(BaseModel):
-    analysis_type: str = "score"
-    symbol: Optional[str] = None
-    timeframe: str = "4h"
-    manual_prompt: str = ""
+    analysis_type: str = Field(default="score", max_length=32)
+    symbol: Optional[str] = Field(default=None, max_length=16)
+    timeframe: str = Field(default="4h", max_length=8)
+    manual_prompt: str = Field(default="", max_length=8000)
     # 测试/运营用：True 时走 mock 模式不发真请求（避免消耗真钱额度）
     # 注意：不以下划线开头，保证 Pydantic v1/v2 都能从 JSON body 正常解析
     mock: bool = False
@@ -937,12 +937,12 @@ backtest_router = APIRouter(prefix="/backtests", tags=["历史回测"])
 class BacktestCreateReq(BaseModel):
     strategy_id: Optional[int] = None
     run_name: str = Field(default="", max_length=255)
-    symbols: List[str] = Field(default_factory=lambda: ["BTC", "ETH"])
-    timeframe: str = "4h"
+    symbols: List[str] = Field(default_factory=lambda: ["BTC", "ETH"], max_length=20)
+    timeframe: str = Field(default="4h", max_length=8)
     date_start: datetime
     date_end: datetime
-    initial_capital: float = 10000.0
-    fee_rate: float = 0.04
+    initial_capital: float = Field(default=10000.0, gt=0, le=100000000)
+    fee_rate: float = Field(default=0.04, ge=0, le=1.0)
     slippage: float = 0.05
     strategy_params: dict = Field(default_factory=dict)
 
@@ -1332,7 +1332,7 @@ def _score_to_signal(score: float, threshold: float = 5.0) -> float:
 # =========================================================
 
 class CryptoPanicConfigReq(BaseModel):
-    token: str = Field(..., description="CryptoPanic API Token")
+    token: str = Field(..., max_length=256, description="CryptoPanic API Token")
     auto_close: bool = Field(default=True, description="突发新闻自动止损")
     auto_trade: bool = Field(default=True, description="突发新闻自动交易")
 

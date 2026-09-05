@@ -1,6 +1,6 @@
 {
   "name": "trading-strategy-frontend",
-  "version": "1.2.5",
+  "version": "1.2.4",
   "private": true,
   "description": "策略交易系统 - 后台管理界面（护眼深色主题 + 大屏仪表盘）",
   "scripts": {

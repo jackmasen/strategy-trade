@@ -94,165 +94,192 @@ def risk_monitor(self):
     checked = 0
     closed = 0
     close_details = []
+    from collections import defaultdict
+    from backend.exchanges.base import ExchangeClientBase
+
     try:
         with session_maker() as db:
             open_positions = (
                 db.query(TradePosition).filter(TradePosition.status == 1).all()
             )  # status=99（处理中）的持仓会被跳过，防止重复平仓
+            # Group positions by exchange account to reuse a single client per account
+            positions_by_account = defaultdict(list)
             for pos in open_positions:
-                checked += 1
+                positions_by_account[pos.exchange_account_id].append(pos)
+
+            for acc_id, positions in positions_by_account.items():
                 acc = db.query(ExchangeAccount).filter(
-                    ExchangeAccount.id == pos.exchange_account_id
+                    ExchangeAccount.id == acc_id
                 ).first()
                 if not acc or acc.status != 1:
                     continue
-                # 1) 刷新最新行情（内存 + 交易所REST 回退）
-                mm = MarketManager.get_instance()
-                mark_price = None
-                t = mm.get_ticker(pos.symbol)
-                if t:
-                    mark_price = t.last_price
-                if not mark_price:
-                    try:
-                        from backend.exchanges.base import ExchangeClientBase
-                        client = ExchangeClientBase.create(
-                            exchange=acc.exchange,
-                            api_key=acc.api_key or "",
-                            api_secret=acc.api_secret or "",
-                            passphrase=acc.api_passphrase or "",
-                            testnet=bool(acc.testnet),
-                            exchange_account_id=acc.id,
-                        )
-                        client.connect()
-                        mm.register_client(client)
-                        ticker = client.fetch_ticker(pos.symbol)
-                        mark_price = ticker.last_price
-                        mm.on_ws_ticker(ticker)
-                    except Exception:
-                        mark_price = float(pos.mark_price or 0)
-                if not mark_price or mark_price <= 0:
-                    continue
-                # 2) 计算当前浮盈浮亏%
-                entry = float(pos.entry_price or 0)
-                if entry <= 0:
-                    continue
-                if pos.side == 1:  # 多
-                    cur_pnl_pct = (mark_price - entry) / entry * 100 * pos.leverage
-                else:
-                    cur_pnl_pct = (entry - mark_price) / entry * 100 * pos.leverage
-                pos.mark_price = Decimal(str(mark_price))
-                pos.unrealized_pnl = Decimal(str(
-                    (mark_price - entry) * float(pos.quantity_contracts) * (1 if pos.side == 1 else -1)
-                ))
-                pos.pnl_ratio = float(cur_pnl_pct)
-                # 记录最大回撤
-                if cur_pnl_pct < 0:
-                    pos.max_drawdown_ratio = max(
-                        float(pos.max_drawdown_ratio or 0),
-                        abs(cur_pnl_pct),
+                # Build client once per account (not per position)
+                client = None
+                try:
+                    client = ExchangeClientBase.create(
+                        exchange=acc.exchange,
+                        api_key=acc.api_key or "",
+                        api_secret=acc.api_secret or "",
+                        passphrase=acc.api_passphrase or "",
+                        testnet=bool(acc.testnet),
+                        exchange_account_id=acc.id,
                     )
+                    client.connect()
+                    mm = MarketManager.get_instance()
+                    mm.register_client(client)
+                except Exception:
+                    client = None
 
-                # 2.5) Trailing Stop 移动止损
-                if pos.trailing_enabled == 1:
-                    activation = float(pos.trailing_activation_pct or 1.0)
-                    distance = float(pos.trailing_distance_pct or 0.5)
-                    trailing_extreme = float(pos.trailing_high_price or 0)
+                try:
+                    for pos in positions:
+                        checked += 1
+                        # 1) 刷新最新行情（内存 + 交易所REST 回退）
+                        mm = MarketManager.get_instance()
+                        mark_price = None
+                        t = mm.get_ticker(pos.symbol)
+                        if t:
+                            mark_price = t.last_price
+                        if not mark_price and client:
+                            try:
+                                ticker = client.fetch_ticker(pos.symbol)
+                                mark_price = ticker.last_price
+                                mm.on_ws_ticker(ticker)
+                            except Exception:
+                                mark_price = float(pos.mark_price or 0)
+                        if not mark_price:
+                            mark_price = float(pos.mark_price or 0)
+                        if not mark_price or mark_price <= 0:
+                            continue
+                        # 2) 计算当前浮盈浮亏%
+                        entry = float(pos.entry_price or 0)
+                        if entry <= 0:
+                            continue
+                        if pos.side == 1:  # 多
+                            cur_pnl_pct = (mark_price - entry) / entry * 100 * pos.leverage
+                        else:
+                            cur_pnl_pct = (entry - mark_price) / entry * 100 * pos.leverage
+                        pos.mark_price = Decimal(str(mark_price))
+                        pos.unrealized_pnl = Decimal(str(
+                            (mark_price - entry) * float(pos.quantity_contracts) * (1 if pos.side == 1 else -1)
+                        ))
+                        pos.pnl_ratio = float(cur_pnl_pct)
+                        # 记录最大回撤
+                        if cur_pnl_pct < 0:
+                            pos.max_drawdown_ratio = max(
+                                float(pos.max_drawdown_ratio or 0),
+                                abs(cur_pnl_pct),
+                            )
 
-                    if pos.side == 1:  # 多
-                        if mark_price > trailing_extreme:
-                            pos.trailing_high_price = Decimal(str(mark_price))
-                            trailing_extreme = mark_price
-                        if trailing_extreme > entry:
-                            profit_pct = (trailing_extreme - entry) / entry * 100
-                            if profit_pct >= activation:
-                                new_sl = trailing_extreme * (1 - distance / 100)
-                                current_sl = float(pos.sl_price or 0)
-                                if new_sl > current_sl:
-                                    pos.sl_price = Decimal(str(round(new_sl, 8)))
-                                    logger.debug(
-                                        f"[Trailing] pos={pos.id} {pos.symbol} LONG "
-                                        f"SL上移 {current_sl:.4f} → {new_sl:.4f} "
-                                        f"(extreme={trailing_extreme:.4f})"
-                                    )
-                    else:  # 空
-                        if trailing_extreme == 0 or mark_price < trailing_extreme:
-                            pos.trailing_high_price = Decimal(str(mark_price))
-                            trailing_extreme = mark_price
-                        if trailing_extreme > 0 and trailing_extreme < entry:
-                            profit_pct = (entry - trailing_extreme) / entry * 100
-                            if profit_pct >= activation:
-                                new_sl = trailing_extreme * (1 + distance / 100)
-                                current_sl = float(pos.sl_price or 0)
-                                if current_sl == 0 or new_sl < current_sl:
-                                    pos.sl_price = Decimal(str(round(new_sl, 8)))
-                                    logger.debug(
-                                        f"[Trailing] pos={pos.id} {pos.symbol} SHORT "
-                                        f"SL下移 {current_sl:.4f} → {new_sl:.4f} "
-                                        f"(extreme={trailing_extreme:.4f})"
-                                    )
+                        # 2.5) Trailing Stop 移动止损
+                        if pos.trailing_enabled == 1:
+                            activation = float(pos.trailing_activation_pct or 1.0)
+                            distance = float(pos.trailing_distance_pct or 0.5)
+                            trailing_extreme = float(pos.trailing_high_price or 0)
 
-                # 3) TP / SL
-                sl_hit = False
-                tp_hit = False
-                tp_price = float(pos.tp_price or 0)
-                sl_price = float(pos.sl_price or 0)
-                if pos.side == 1:
-                    if tp_price > 0 and mark_price >= tp_price:
-                        tp_hit = True
-                    if sl_price > 0 and mark_price <= sl_price:
-                        sl_hit = True
-                else:
-                    if tp_price > 0 and mark_price <= tp_price:
-                        tp_hit = True
-                    if sl_price > 0 and mark_price >= sl_price:
-                        sl_hit = True
+                            if pos.side == 1:  # 多
+                                if mark_price > trailing_extreme:
+                                    pos.trailing_high_price = Decimal(str(mark_price))
+                                    trailing_extreme = mark_price
+                                if trailing_extreme > entry:
+                                    profit_pct = (trailing_extreme - entry) / entry * 100
+                                    if profit_pct >= activation:
+                                        new_sl = trailing_extreme * (1 - distance / 100)
+                                        current_sl = float(pos.sl_price or 0)
+                                        if new_sl > current_sl:
+                                            pos.sl_price = Decimal(str(round(new_sl, 8)))
+                                            logger.debug(
+                                                f"[Trailing] pos={pos.id} {pos.symbol} LONG "
+                                                f"SL上移 {current_sl:.4f} → {new_sl:.4f} "
+                                                f"(extreme={trailing_extreme:.4f})"
+                                            )
+                            else:  # 空
+                                if trailing_extreme == 0 or mark_price < trailing_extreme:
+                                    pos.trailing_high_price = Decimal(str(mark_price))
+                                    trailing_extreme = mark_price
+                                if trailing_extreme > 0 and trailing_extreme < entry:
+                                    profit_pct = (entry - trailing_extreme) / entry * 100
+                                    if profit_pct >= activation:
+                                        new_sl = trailing_extreme * (1 + distance / 100)
+                                        current_sl = float(pos.sl_price or 0)
+                                        if current_sl == 0 or new_sl < current_sl:
+                                            pos.sl_price = Decimal(str(round(new_sl, 8)))
+                                            logger.debug(
+                                                f"[Trailing] pos={pos.id} {pos.symbol} SHORT "
+                                                f"SL下移 {current_sl:.4f} → {new_sl:.4f} "
+                                                f"(extreme={trailing_extreme:.4f})"
+                                            )
 
-                strategy = db.query(StrategyConfig).filter(
-                    StrategyConfig.id == pos.strategy_id
-                ).first() if pos.strategy_id else None
-                max_drawdown_limit = float(strategy.max_single_drawdown or 2) if strategy else 2.0
-                drawdown_hit = (cur_pnl_pct < 0) and (abs(cur_pnl_pct) >= max_drawdown_limit)
+                        # 3) TP / SL
+                        sl_hit = False
+                        tp_hit = False
+                        tp_price = float(pos.tp_price or 0)
+                        sl_price = float(pos.sl_price or 0)
+                        if pos.side == 1:
+                            if tp_price > 0 and mark_price >= tp_price:
+                                tp_hit = True
+                            if sl_price > 0 and mark_price <= sl_price:
+                                sl_hit = True
+                        else:
+                            if tp_price > 0 and mark_price <= tp_price:
+                                tp_hit = True
+                            if sl_price > 0 and mark_price >= sl_price:
+                                sl_hit = True
 
-                # 日亏损限额检查（用户维度）
-                user = db.query(User).filter(User.id == pos.user_id).first()
-                daily_limit_hit = False
-                if user and strategy:
-                    today_start = datetime.combine(date.today(), datetime.min.time())
-                    today_pnl = db.query(func.coalesce(func.sum(TradePosition.realized_pnl), 0)).filter(
-                        TradePosition.exchange_account_id == pos.exchange_account_id,
-                        TradePosition.status == 2,
-                        TradePosition.close_time >= today_start,
-                    ).scalar() or 0
-                    if float(acc.current_balance or 0) > 0:
-                        loss_pct = (-float(today_pnl) / float(acc.current_balance)) * 100
-                        if loss_pct >= float(strategy.daily_max_loss or 5):
-                            daily_limit_hit = True
+                        strategy = db.query(StrategyConfig).filter(
+                            StrategyConfig.id == pos.strategy_id
+                        ).first() if pos.strategy_id else None
+                        max_drawdown_limit = float(strategy.max_single_drawdown or 2) if strategy else 2.0
+                        drawdown_hit = (cur_pnl_pct < 0) and (abs(cur_pnl_pct) >= max_drawdown_limit)
 
-                if tp_hit or sl_hit or drawdown_hit or daily_limit_hit:
-                    try:
-                        _close_position_for_risk(db, pos, acc, mark_price,
-                            tp_hit=tp_hit, sl_hit=sl_hit,
-                            drawdown_hit=drawdown_hit, daily_limit_hit=daily_limit_hit,
-                            strategy=strategy,
-                        )
-                        closed += 1
-                        close_details.append({
-                            "pos_id": pos.id,
-                            "symbol": pos.symbol,
-                            "reason": {
-                                "tp": tp_hit, "sl": sl_hit,
-                                "drawdown": drawdown_hit, "daily_limit": daily_limit_hit,
-                            },
-                            "close_price": mark_price,
-                        })
-                    except Exception as e:
-                        logger.exception(f"风控平仓失败 pos_id={pos.id}: {e}")
-                else:
-                    try:
-                        db.commit()
-                    except Exception:
-                        db.rollback()
-                    continue
+                        # 日亏损限额检查（用户维度）
+                        user = db.query(User).filter(User.id == pos.user_id).first()
+                        daily_limit_hit = False
+                        if user and strategy:
+                            today_start = datetime.combine(date.today(), datetime.min.time())
+                            today_pnl = db.query(func.coalesce(func.sum(TradePosition.realized_pnl), 0)).filter(
+                                TradePosition.exchange_account_id == pos.exchange_account_id,
+                                TradePosition.status == 2,
+                                TradePosition.close_time >= today_start,
+                            ).scalar() or 0
+                            if float(acc.current_balance or 0) > 0:
+                                loss_pct = (-float(today_pnl) / float(acc.current_balance)) * 100
+                                if loss_pct >= float(strategy.daily_max_loss or 5):
+                                    daily_limit_hit = True
+
+                        if tp_hit or sl_hit or drawdown_hit or daily_limit_hit:
+                            try:
+                                result = _close_position_for_risk(db, pos, acc, mark_price,
+                                    tp_hit=tp_hit, sl_hit=sl_hit,
+                                    drawdown_hit=drawdown_hit, daily_limit_hit=daily_limit_hit,
+                                    strategy=strategy, client=client,
+                                )
+                                if result is False:
+                                    continue
+                                closed += 1
+                                close_details.append({
+                                    "pos_id": pos.id,
+                                    "symbol": pos.symbol,
+                                    "reason": {
+                                        "tp": tp_hit, "sl": sl_hit,
+                                        "drawdown": drawdown_hit, "daily_limit": daily_limit_hit,
+                                    },
+                                    "close_price": mark_price,
+                                })
+                            except Exception as e:
+                                logger.exception(f"风控平仓失败 pos_id={pos.id}: {e}")
+                                db.rollback()  # Clear any pending rollback state
+                        else:
+                            try:
+                                db.commit()
+                            except Exception:
+                                db.rollback()
+                            continue
+                finally:
+                    if client:
+                        try:
+                            client.close()
+                        except Exception:
+                            pass
     finally:
         release_lock(lock_key, lock_token)
     logger.info(f"[Scheduled] 风控巡检完成，检查 {checked} 个持仓，平仓 {closed} 个")
@@ -262,16 +289,12 @@ def risk_monitor(self):
 def _close_position_for_risk(
     db, pos: TradePosition, acc: ExchangeAccount, close_price: float,
     *, tp_hit: bool, sl_hit: bool, drawdown_hit: bool, daily_limit_hit: bool,
-    strategy,
+    strategy, client=None,
 ):
     from backend.exchanges.base import ExchangeClientBase
     from backend.exchanges._types import ORDER_TYPE_MARKET, SIDE_LONG, SIDE_SHORT
-
-    # 1) 先标记为处理中（status=99），防止下次巡检重复平仓
-    pos.status = 99
-    db.commit()
-
-    try:
+    _close_client = False
+    if client is None:
         client = ExchangeClientBase.create(
             exchange=acc.exchange,
             api_key=acc.api_key or "",
@@ -281,24 +304,34 @@ def _close_position_for_risk(
             exchange_account_id=acc.id,
         )
         client.connect()
-        try:
-            client.cancel_all_open_orders(pos.symbol)
-        except Exception:
-            pass
+        _close_client = True
+    try:
+        client.cancel_all_open_orders(pos.symbol)
+    except Exception:
+        pass
 
-        # 反向市价平仓
-        close_side = SIDE_SHORT if pos.side == SIDE_LONG else SIDE_LONG
-        try:
-            client.place_order(
-                symbol=pos.symbol, side=close_side,
-                order_type=ORDER_TYPE_MARKET,
-                quantity=float(pos.quantity_contracts),
-                leverage=pos.leverage,
-                client_order_id=f"risk_{pos.id}_{datetime.now().strftime('%H%M%S')}",
-            )
-        except Exception:
-            pass
+    # 反向市价平仓
+    close_side = SIDE_SHORT if pos.side == SIDE_LONG else SIDE_LONG
+    close_success = False
+    try:
+        client.place_order(
+            symbol=pos.symbol, side=close_side,
+            order_type=ORDER_TYPE_MARKET,
+            quantity=float(pos.quantity_contracts),
+            leverage=pos.leverage,
+            client_order_id=f"risk_{pos.id}_{datetime.now().strftime('%H%M%S')}",
+        )
+        close_success = True
+    except Exception as e:
+        logger.error(f"风险平仓交易所API失败(position_id={pos.id}): {e} — 跳过DB标记,下轮重试")
+        if _close_client:
+            try:
+                client.close()
+            except Exception:
+                pass
+        return False  # Don't mark as closed
 
+    if close_success:
         # 更新仓位
         pos.status = 2
         pos.close_time = datetime.now()
@@ -368,14 +401,16 @@ def _close_position_for_risk(
             notified=False,
         )
         db.add(log)
-        db.commit()
-    except Exception as e:
-        # 平仓异常：仍标记为已平仓（status=2），避免持仓卡在 status=99
-        logger.exception(f"[Risk] 平仓异常 pos_id={pos.id}: {e}，强制标记为已平仓")
-        pos.status = 2
-        pos.close_time = datetime.now()
-        pos.close_price = Decimal(str(close_price))
-        db.commit()
+        try:
+            db.commit()
+        except Exception as e:
+            logger.critical(f"风险平仓DB提交失败(position_id={pos.id}): {e}")
+            db.rollback()
+    if _close_client:
+        try:
+            client.close()
+        except Exception:
+            pass
 
 
 # ==========================================================================

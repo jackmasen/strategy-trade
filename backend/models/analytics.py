@@ -4,7 +4,7 @@
 from datetime import datetime
 from sqlalchemy import (
     Column, Integer, String, SmallInteger, DECIMAL, Text,
-    ForeignKey, JSON, DateTime, Index, Float, Boolean
+    ForeignKey, JSON, DateTime, Index, Float, Boolean, UniqueConstraint
 )
 from sqlalchemy.orm import relationship
 
@@ -76,6 +76,8 @@ class NewsArticle(Base):
     __table_args__ = (
         Index("idx_published", "published_at"),
         Index("idx_symbol_sentiment", "related_symbols", "sentiment"),
+        Index("idx_news_url", "url"),
+        UniqueConstraint('source', 'source_id', name='uq_news_source_id'),
     )
 
     source = Column(SmallInteger, default=99, comment="数据源: 1-NewsAPI 2-CryptoPanic 3-金十 ...")

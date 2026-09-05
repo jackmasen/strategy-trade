@@ -34,7 +34,7 @@
         </el-menu>
       </el-scrollbar>
       <div class="sidebar-footer" v-if="!collapse">
-        <div class="version">v1.0.0 · 护眼主题</div>
+        <div class="version">v1.2.4 · 护眼主题</div>
       </div>
     </aside>
 

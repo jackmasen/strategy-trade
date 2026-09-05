@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from typing import Optional
 
-from backend.core.auth import get_current_user
+from backend.core.auth import get_current_user, require_admin
 from backend.db.session import get_db
 from backend.core.exceptions import success, ParameterException
 from backend.models.user import User
@@ -93,7 +93,7 @@ def evolution_proposals(
 def accept_proposal(
     proposal_id: int,
     apply: bool = Query(default=False, description="是否直接应用到策略"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """接受进化方案"""
@@ -114,7 +114,7 @@ def accept_proposal(
 @router.post("/proposals/{proposal_id}/reject")
 def reject_proposal(
     proposal_id: int,
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """拒绝进化方案"""
@@ -132,7 +132,7 @@ def reject_proposal(
 def run_evolution(
     symbol: str = Query(default="ALL", description="分析品种"),
     strategy_id: int = Query(default=None, description="目标策略ID"),
-    user: User = Depends(get_current_user),
+    user: User = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
     """运行一次完整的进化分析"""

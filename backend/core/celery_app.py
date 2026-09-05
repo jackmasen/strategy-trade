@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 from celery import Celery
+from celery.schedules import crontab
 from kombu import Exchange, Queue
 
 from backend.config import get_settings
@@ -74,8 +75,7 @@ app.conf.update(
         # --- 日报（每日 00:05） ---
         "daily-report": {
             "task": "backend.tasks.scheduled.generate_daily_report",
-            "schedule": 60 * 5,                      # 0点5分（crontab更精确，可替换）
-            # "schedule": crontab(hour=0, minute=5),
+            "schedule": crontab(hour=0, minute=5),
             "options": {"queue": "scheduled"},
         },
     },

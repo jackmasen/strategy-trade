@@ -17,11 +17,14 @@ from contextlib import asynccontextmanager
 BASE_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(BASE_DIR.parent))
 
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+import time
+import threading
+from collections import defaultdict
 
 from backend.config import get_settings
 from backend.core.exceptions import register_exception_handlers, success
@@ -108,16 +111,16 @@ async def lifespan(app: FastAPI):
 
         # 新闻采集：每30分钟自动采集+关键词预筛选
         def _scheduled_news_crawl():
+            db = SessionLocal()
             try:
-                from backend.db.session import SessionLocal
                 from backend.news.pipeline import NewsPipeline
-                db = SessionLocal()
                 pipeline = NewsPipeline(lookback_hours=6, max_workers=4)
                 res = pipeline.run_once(db=db)
                 logger.info(f"[Scheduler] 新闻采集完成: 新增{res.total_inserted}条")
-                db.close()
             except Exception as e:
                 logger.error(f"[Scheduler] 新闻采集失败: {e}")
+            finally:
+                db.close()
 
         if not _celery_on:
             scheduler.add_job(
@@ -129,15 +132,15 @@ async def lifespan(app: FastAPI):
 
         # AI深度分析：每2小时对重要新闻做AI分析
         def _scheduled_ai_analysis():
+            db = SessionLocal()
             try:
-                from backend.db.session import SessionLocal
                 from backend.services.news_ai_analyzer import batch_analyze_with_ai
-                db = SessionLocal()
                 result = batch_analyze_with_ai(db, hours=6, limit=15)
                 logger.info(f"[Scheduler] AI分析完成: {result.get('analyzed', 0)}条")
-                db.close()
             except Exception as e:
                 logger.error(f"[Scheduler] AI分析失败: {e}")
+            finally:
+                db.close()
 
         scheduler.add_job(
             _scheduled_ai_analysis,
@@ -150,11 +153,10 @@ async def lifespan(app: FastAPI):
         from apscheduler.triggers.cron import CronTrigger
 
         def _scheduled_cleanup():
+            db = SessionLocal()
             try:
-                from backend.db.session import SessionLocal
                 from backend.models.analytics import NewsArticle, AIAnalysisRecord
                 from datetime import datetime, timedelta
-                db = SessionLocal()
                 now = datetime.now()
 
                 # 清理30天前的普通新闻（impact_level < 3 的非重要新闻）
@@ -190,14 +192,27 @@ async def lifespan(app: FastAPI):
                     ScoreRecord.candle_close_time < score_cutoff,
                 ).delete(synchronize_session=False)
 
+                # 清理超时未成交订单（status=0 超过10分钟 → 标记为失败）
+                from backend.models.trade import TradeOrder
+                stale_cutoff = now - timedelta(minutes=10)
+                stale_orders = db.query(TradeOrder).filter(
+                    TradeOrder.status == 0,
+                    TradeOrder.created_at < stale_cutoff,
+                ).all()
+                for o in stale_orders:
+                    o.status = 5
+                    o.error_msg = "系统超时清理：订单提交后未收到交易所响应"
+                stale_count = len(stale_orders)
+
                 db.commit()
                 logger.info(
                     f"[Scheduler] 数据清理完成: 删除{old_news_count}条旧新闻, "
-                    f"{very_old_count}条过期新闻, {old_ai}条AI记录, {old_scores}条评分记录"
+                    f"{very_old_count}条过期新闻, {old_ai}条AI记录, {old_scores}条评分记录, 清理{stale_count}条超时订单"
                 )
-                db.close()
             except Exception as e:
                 logger.error(f"[Scheduler] 数据清理失败: {e}")
+            finally:
+                db.close()
 
         scheduler.add_job(
             _scheduled_cleanup,
@@ -208,16 +223,16 @@ async def lifespan(app: FastAPI):
 
         # 新闻AI策略：每1小时检查一次新闻情绪并触发交易信号
         def _scheduled_news_strategy():
+            db = SessionLocal()
             try:
-                from backend.db.session import SessionLocal
                 from backend.services.news_strategy import run_all_news_ai_strategies
-                db = SessionLocal()
                 result = run_all_news_ai_strategies(db)
                 if result["total_signals"] > 0:
                     logger.info(f"[Scheduler] 新闻AI策略触发 {result['total_signals']} 个信号")
-                db.close()
             except Exception as e:
                 logger.error(f"[Scheduler] 新闻AI策略执行失败: {e}")
+            finally:
+                db.close()
 
         scheduler.add_job(
             _scheduled_news_strategy,
@@ -297,12 +312,47 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
         )
 
+        # 日报生成（每天凌晨 0:05）
+        def _scheduled_daily_report():
+            try:
+                from backend.tasks.scheduled import generate_daily_report
+                generate_daily_report()
+                logger.info("✅ 日报生成完成")
+            except Exception as e:
+                logger.error(f"❌ 日报生成失败: {e}")
+
+        scheduler.add_job(
+            _scheduled_daily_report,
+            trigger=CronTrigger(hour=0, minute=5),
+            id="daily_report",
+            replace_existing=True,
+        )
+
+        # 自动备份（每天凌晨 2:00）
+        def _scheduled_backup():
+            db = SessionLocal()
+            try:
+                from backend.services.system_manager import create_backup
+                result = create_backup(db, backup_type="auto", include_db=True, include_config=True, description="定时自动备份")
+                logger.info(f"💾 自动备份完成: {result.get('file_name', 'unknown')}")
+            except Exception as e:
+                logger.error(f"❌ 自动备份失败: {e}")
+            finally:
+                db.close()
+
+        scheduler.add_job(
+            _scheduled_backup,
+            trigger=CronTrigger(hour=2, minute=0),
+            id="auto_backup",
+            replace_existing=True,
+        )
+
         scheduler.start()
         app.state.scheduler = scheduler
         _mode = "Celery" if _celery_on else "APScheduler兜底"
         logger.info(
             f"✅ 定时任务已启动（{_mode}）：平仓巡检30s/策略执行1min/新闻采集30min/"
-            f"AI分析2h/新闻策略1h/清理每天3点/代理刷新5min/代理检测10min"
+            f"AI分析2h/新闻策略1h/清理每天3点/代理刷新5min/代理检测10min/日报每天0:05/自动备份每天2:00"
         )
     except ImportError:
         logger.warning("⚠️  apscheduler 未安装，定时任务未启动。pip install apscheduler 可启用。")
@@ -358,13 +408,14 @@ async def lifespan(app: FastAPI):
 
 # ============== 创建 FastAPI 应用 ==============
 #
-# 说明：/docs /openapi.json 固定挂在根路径（不绑 API_PREFIX，也不绑 APP_DEBUG），
-# 这样运维和用户访问 http://127.0.0.1:8000/docs 永远能看到 Swagger UI；
-# 同时保留 {API_PREFIX}/docs 的兼容路径，方便前端或脚本调用。
+# 说明：/docs /openapi.json 固定挂在根路径（不绑 API_PREFIX），
+# 生产环境（APP_ENV=production）自动关闭 Swagger/Redoc/OpenAPI 暴露，
+# 开发/预览环境始终可见，方便运维和前端调试。
 PREFIX = settings.API_PREFIX
-_docs_ok = "/docs"
-_redoc_ok = "/redoc"
-_openapi_ok = "/openapi.json"
+_is_prod = settings.APP_ENV == "production"
+_docs_ok = None if _is_prod else "/docs"
+_redoc_ok = None if _is_prod else "/redoc"
+_openapi_ok = None if _is_prod else "/openapi.json"
 _docs_compat = f"{PREFIX}/docs"
 _redoc_compat = f"{PREFIX}/redoc"
 _openapi_compat = f"{PREFIX}/openapi.json"
@@ -381,21 +432,28 @@ app = FastAPI(
 
 
 # 兼容旧路径：把 /api/v1/docs 等 307 重定向到根路径下的同名端点（Swagger UI 本身会再自动找 openapi.json）
+# 生产环境（_is_prod=True）时 docs 已关闭，这些重定向返回 404
 from fastapi.responses import RedirectResponse
 
 
 @app.get(_docs_compat, include_in_schema=False)
 async def _docs_compat_redirect():
+    if _docs_ok is None:
+        raise HTTPException(status_code=404)
     return RedirectResponse(url=_docs_ok, status_code=307)
 
 
 @app.get(_redoc_compat, include_in_schema=False)
 async def _redoc_compat_redirect():
+    if _redoc_ok is None:
+        raise HTTPException(status_code=404)
     return RedirectResponse(url=_redoc_ok, status_code=307)
 
 
 @app.get(_openapi_compat, include_in_schema=False)
 async def _openapi_compat_redirect():
+    if _openapi_ok is None:
+        raise HTTPException(status_code=404)
     return RedirectResponse(url=_openapi_ok, status_code=307)
 
 # ============== 中间件 ==============
@@ -415,6 +473,49 @@ app.add_middleware(
     expose_headers=["Content-Disposition"],
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024)
+
+# ============== 速率限制中间件 ==============
+# 基于内存的滑动窗口速率限制，防止暴力破解和API滥用
+# 登录接口: 5次/分钟 | 其他API: 100次/分钟
+_rate_limit_store = defaultdict(list)
+_rate_limit_lock = threading.Lock()
+
+RATE_LIMIT_LOGIN = 5       # 登录每分钟最多5次
+RATE_LIMIT_API = 100        # API每分钟最多100次
+RATE_LIMIT_WINDOW = 60      # 窗口60秒
+
+@app.middleware("http")
+async def rate_limit_middleware(request: Request, call_next):
+    path = request.url.path
+    if path.startswith(("/docs", "/openapi.json", "/redoc", "/health", "/static")):
+        return await call_next(request)
+
+    client_ip = request.client.host if request.client else "unknown"
+    now = time.time()
+    key = f"{client_ip}:{path}"
+
+    with _rate_limit_lock:
+        bucket = _rate_limit_store[key]
+
+        while bucket and bucket[0] < now - RATE_LIMIT_WINDOW:
+            bucket.pop(0)
+
+        limit = RATE_LIMIT_LOGIN if "/auth/login" in path else RATE_LIMIT_API
+        if len(bucket) >= limit:
+            return JSONResponse(
+                status_code=429,
+                content={"code": 429, "message": "请求过于频繁，请稍后再试"},
+                headers={"Retry-After": str(RATE_LIMIT_WINDOW)},
+            )
+
+        bucket.append(now)
+        # 定期清理过期key（每1000次请求清理一次）
+        if len(_rate_limit_store) > 10000:
+            expired_keys = [k for k, v in list(_rate_limit_store.items()) if not v or v[-1] < now - RATE_LIMIT_WINDOW * 2]
+            for k in expired_keys:
+                del _rate_limit_store[k]
+
+    return await call_next(request)
 
 
 # ============== 强制修改密码中间件 ==============

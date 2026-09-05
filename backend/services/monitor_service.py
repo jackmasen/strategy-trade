@@ -8,6 +8,7 @@ import os
 import re
 import json
 import time
+import threading
 import uuid
 import shutil
 import platform
@@ -37,8 +38,9 @@ LOG_DIR = BASE_DIR / "logs"
 _redis_client = None
 SHARE_TOKEN_PREFIX = "monitor:share:token:"
 
-# 内存分享令牌存储（fallback：Redis 不可用时使用）
+# 分享令牌内存存储 + 线程锁（fallback：Redis 不可用时使用）
 _share_tokens: Dict[str, Dict] = {}
+_share_tokens_lock = threading.Lock()
 
 
 def _get_redis():
@@ -564,6 +566,16 @@ def run_full_self_check(db: Session) -> Dict:
 # 4. 分享令牌（公开日志链接）
 # ============================================================
 
+def _cleanup_token_later(token: str, delay: float):
+    """在TTL过期后异步清理令牌"""
+    def _cleanup():
+        time.sleep(delay)
+        with _share_tokens_lock:
+            _share_tokens.pop(token, None)
+    t = threading.Thread(target=_cleanup, daemon=True)
+    t.start()
+
+
 def create_share_token(db: Session, user_id: int, ttl_hours: float = 0.5) -> Dict:
     """创建一个分享令牌，用于公开访问监控页面
     
@@ -571,19 +583,23 @@ def create_share_token(db: Session, user_id: int, ttl_hours: float = 0.5) -> Dic
     """
     token = hashlib.sha256(f"{uuid.uuid4()}{time.time()}{user_id}".encode()).hexdigest()[:32]
     expires_at = datetime.now() + timedelta(hours=ttl_hours)
-    
-    _share_tokens[token] = {
-        "token": token,
-        "user_id": user_id,
-        "created_at": datetime.now().isoformat(),
-        "expires_at": expires_at.isoformat(),
-        "ttl_hours": ttl_hours,
-        "access_count": 0,
-    }
-    
+
+    with _share_tokens_lock:
+        _share_tokens[token] = {
+            "token": token,
+            "user_id": user_id,
+            "created_at": datetime.now().isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "ttl_hours": ttl_hours,
+            "access_count": 0,
+        }
+
     # 清理过期的
     _cleanup_expired_tokens()
-    
+
+    # 调度TTL过期后的异步清理
+    _cleanup_token_later(token, ttl_hours * 3600)
+
     return {
         "token": token,
         "expires_at": expires_at.isoformat(),
@@ -594,54 +610,58 @@ def create_share_token(db: Session, user_id: int, ttl_hours: float = 0.5) -> Dic
 
 def validate_share_token(token: str) -> Optional[Dict]:
     """验证分享令牌是否有效"""
-    info = _share_tokens.get(token)
-    if not info:
-        return None
-    
-    # 检查是否过期
-    try:
-        exp = datetime.fromisoformat(info["expires_at"])
-        if datetime.now() > exp:
-            del _share_tokens[token]
+    with _share_tokens_lock:
+        info = _share_tokens.get(token)
+        if not info:
             return None
-    except Exception:
-        return None
-    
-    info["access_count"] += 1
-    return info
+
+        # 检查是否过期
+        try:
+            exp = datetime.fromisoformat(info["expires_at"])
+            if datetime.now() > exp:
+                _share_tokens.pop(token, None)
+                return None
+        except Exception:
+            return None
+
+        info["access_count"] += 1
+        return dict(info)
 
 
 def list_share_tokens(user_id: int = 0) -> List[Dict]:
     """列出有效的分享令牌"""
     _cleanup_expired_tokens()
-    tokens = []
-    for t, info in _share_tokens.items():
-        if user_id and info["user_id"] != user_id:
-            continue
-        tokens.append(info)
+    with _share_tokens_lock:
+        tokens = []
+        for t, info in _share_tokens.items():
+            if user_id and info["user_id"] != user_id:
+                continue
+            tokens.append(dict(info))
     return sorted(tokens, key=lambda x: x["created_at"], reverse=True)
 
 
 def revoke_share_token(token: str) -> bool:
     """撤销分享令牌"""
-    if token in _share_tokens:
-        del _share_tokens[token]
-        return True
+    with _share_tokens_lock:
+        if token in _share_tokens:
+            _share_tokens.pop(token, None)
+            return True
     return False
 
 
 def _cleanup_expired_tokens():
     """清理过期令牌"""
     now = datetime.now()
-    expired = []
-    for t, info in _share_tokens.items():
-        try:
-            if now > datetime.fromisoformat(info["expires_at"]):
+    with _share_tokens_lock:
+        expired = []
+        for t, info in list(_share_tokens.items()):
+            try:
+                if now > datetime.fromisoformat(info["expires_at"]):
+                    expired.append(t)
+            except Exception:
                 expired.append(t)
-        except Exception:
-            expired.append(t)
-    for t in expired:
-        del _share_tokens[t]
+        for t in expired:
+            _share_tokens.pop(t, None)
 
 
 # ============================================================

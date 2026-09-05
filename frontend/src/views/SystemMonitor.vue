@@ -676,7 +676,7 @@
 
     <!-- AI 任务详情弹窗 -->
     <el-dialog v-model="showDetailModal" :title="detailTitle" width="700px" top="5vh">
-      <div class="task-detail-content" v-html="detailContent"></div>
+      <div class="task-detail-content" v-html="sanitizedDetailContent"></div>
       <template #footer>
         <el-button @click="showDetailModal = false">关闭</el-button>
       </template>
@@ -713,6 +713,82 @@ import { Refresh, Monitor, CircleCheck, CircleClose, Warning, Link, Plus, Coin, 
 import { http } from '@/utils/request'
 import { API_PREFIX } from '@/utils/env'
 
+function escapeHtml(str) {
+  if (str == null) return ''
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+function sanitizeHtml(html) {
+  if (!html) return ''
+  // 使用 DOMParser 进行更安全的 HTML 清理
+  // 白名单方式：只允许已知安全标签和属性，其余全部移除
+  const allowedTags = new Set([
+    'div','span','p','br','hr','h1','h2','h3','h4','h5','h6',
+    'table','thead','tbody','tr','td','th','caption','colgroup','col',
+    'ul','ol','li','dl','dt','dd',
+    'strong','b','em','i','u','s','del','ins','sub','sup','small','mark',
+    'code','pre','blockquote','abbr','cite','q',
+    'a','img',
+  ])
+  const allowedAttrs = new Set(['class','style','href','src','alt','title','colspan','rowspan','target','rel'])
+  try {
+    const doc = new DOMParser().parseFromString(html, 'text/html')
+    function cleanNode(node) {
+      const children = Array.from(node.childNodes)
+      for (const child of children) {
+        if (child.nodeType === Node.ELEMENT_NODE) {
+          const tag = child.tagName.toLowerCase()
+          if (!allowedTags.has(tag)) {
+            // 替换为其子节点（保留内容文本）
+            const fragment = document.createDocumentFragment()
+            while (child.firstChild) fragment.appendChild(child.firstChild)
+            node.replaceChild(fragment, child)
+            continue
+          }
+          // 清理危险属性
+          const attrs = Array.from(child.attributes || [])
+          for (const attr of attrs) {
+            const name = attr.name.toLowerCase()
+            if (name.startsWith('on') || !allowedAttrs.has(name)) {
+              child.removeAttribute(attr.name)
+            }
+            // 阻止 javascript: URI
+            if ((name === 'href' || name === 'src') && /^\s*javascript:/i.test(attr.value)) {
+              child.removeAttribute(attr.name)
+            }
+          }
+          // a 标签强制添加安全属性
+          if (tag === 'a') {
+            child.setAttribute('rel', 'noopener noreferrer')
+            const href = child.getAttribute('href') || ''
+            if (!href.startsWith('http') && !href.startsWith('#') && !href.startsWith('mailto:')) {
+              child.removeAttribute('href')
+            }
+          }
+          cleanNode(child)
+        } else if (child.nodeType === Node.TEXT_NODE) {
+          // 文本节点安全，保留
+        } else {
+          // 注释、CDATA 等移除
+          node.removeChild(child)
+        }
+      }
+    }
+    cleanNode(doc.body)
+    return doc.body.innerHTML
+  } catch (e) {
+    // DOMParser 不可用时 fallback 到纯文本
+    const div = document.createElement('div')
+    div.textContent = html
+    return div.innerHTML
+  }
+}
+
 const activeTab = ref('status')
 const refreshing = ref(false)
 const checking = ref(false)
@@ -723,6 +799,7 @@ const showTaskModal = ref(false)
 const showDetailModal = ref(false)
 const detailTitle = ref('')
 const detailContent = ref('')
+const sanitizedDetailContent = computed(() => sanitizeHtml(detailContent.value))
 const taskCreating = ref(false)
 const currentTaskType = ref('')
 const taskForm = reactive({
@@ -910,16 +987,16 @@ function showTaskDetail(task) {
 
 function renderTaskDetailHtml(task) {
   let html = ''
-  html += '<div style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#7A8A9A;font-size:13px;">任务ID</span><span style="font-family:monospace;font-size:13px;">' + task.task_id + '</span></div>'
-  html += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#7A8A9A;font-size:13px;">状态</span><span style="font-size:13px;">' + taskStatusText(task.status) + '</span></div>'
-  html += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#7A8A9A;font-size:13px;">创建时间</span><span style="font-size:13px;">' + (task.created_at || '') + '</span></div>'
+  html += '<div style="margin-bottom:16px;"><div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#7A8A9A;font-size:13px;">任务ID</span><span style="font-family:monospace;font-size:13px;">' + escapeHtml(task.task_id) + '</span></div>'
+  html += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#7A8A9A;font-size:13px;">状态</span><span style="font-size:13px;">' + escapeHtml(taskStatusText(task.status)) + '</span></div>'
+  html += '<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#7A8A9A;font-size:13px;">创建时间</span><span style="font-size:13px;">' + escapeHtml(task.created_at || '') + '</span></div>'
   if (task.duration_seconds) {
     html += '<div style="display:flex;justify-content:space-between;"><span style="color:#7A8A9A;font-size:13px;">耗时</span><span style="font-size:13px;">' + task.duration_seconds.toFixed(1) + 's</span></div>'
   }
   html += '</div>'
 
   if (task.status === 'failed') {
-    html += '<div style="background:rgba(245,108,108,0.1);padding:12px;border-radius:8px;color:#f56c6c;font-size:13px;margin-bottom:16px;">错误: ' + task.error + '</div>'
+    html += '<div style="background:rgba(245,108,108,0.1);padding:12px;border-radius:8px;color:#f56c6c;font-size:13px;margin-bottom:16px;">错误: ' + escapeHtml(task.error) + '</div>'
   }
 
   if (task.result && task.task_type === 'backtest') {
@@ -956,7 +1033,7 @@ function renderTaskDetailHtml(task) {
     if (task.result.conclusion) {
       html += '<div style="background:linear-gradient(135deg,rgba(37,208,125,0.08),rgba(59,130,246,0.08));border:1px solid rgba(37,208,125,0.2);border-radius:10px;padding:14px 18px;">'
       html += '<div style="font-size:13px;font-weight:600;color:#25D07D;margin-bottom:6px;">💡 AI 结论</div>'
-      html += '<div style="font-size:13px;color:#CBD5E1;line-height:1.7;">' + task.result.conclusion + '</div></div>'
+      html += '<div style="font-size:13px;color:#CBD5E1;line-height:1.7;">' + escapeHtml(task.result.conclusion) + '</div></div>'
     }
   } else if (task.result && task.task_type === 'strategy_scan') {
     const s = task.result.summary || {}

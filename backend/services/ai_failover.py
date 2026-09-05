@@ -63,6 +63,7 @@ def _try_primary_config(db: Session, analysis_type: str, symbol: str,
             logger.warning(f"[AI-Failover] 主配置调用失败: {result.error_msg}")
             return None
     except Exception as e:
+        db.rollback()
         logger.warning(f"[AI-Failover] 主配置异常: {e}")
         return None
 
@@ -116,6 +117,7 @@ def _try_key_pool(db: Session, analysis_type: str, symbol: str,
             last_error = result.error_msg or "未知错误"
         except Exception as e:
             last_error = str(e)[:200]
+            db.rollback()
 
         k.fail_count = (k.fail_count or 0) + 1
         k.last_error = last_error

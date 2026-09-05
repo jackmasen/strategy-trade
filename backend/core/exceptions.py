@@ -141,11 +141,18 @@ def register_exception_handlers(app):
     @app.exception_handler(Exception)
     async def unhandled_exception_handler(_: Request, exc: Exception) -> JSONResponse:
         # 兜底：未捕获异常，避免直接返回 500 HTML
+        # 安全：生产环境不泄露异常类名和消息，仅返回通用提示
+        from backend.config import get_settings
+        _settings = get_settings()
+        if _settings.APP_ENV == "production":
+            _msg = "服务器内部错误，请联系管理员"
+        else:
+            _msg = f"服务器内部错误: {exc.__class__.__name__}: {str(exc)[:200]}"
         return JSONResponse(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             content=build_response(
                 code=5000,
-                message=f"服务器内部错误: {exc.__class__.__name__}: {str(exc)[:200]}",
+                message=_msg,
                 data=None,
             ),
         )

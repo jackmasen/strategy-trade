@@ -248,9 +248,8 @@ class BinanceFuturesClient(ExchangeClientBase):
                 })
             return True
         except Exception as e:
-            # 可能已设置相同杠杆，忽略报错但返回 True（已生效或忽略）
-            logger.debug(f"[{self.EXCHANGE_NAME}] 设置杠杆(symbol={symbol} lev={leverage})提示: {e}")
-            return True
+            logger.warning(f"[{self.EXCHANGE_NAME}] 设置杠杆失败(symbol={symbol} lev={leverage}): {e}")
+            return False
 
     def _set_margin_mode(self, symbol: str, mode: str = "cross") -> None:
         try:
@@ -261,8 +260,8 @@ class BinanceFuturesClient(ExchangeClientBase):
                     "symbol": self._to_ex_symbol(symbol),
                     "marginType": mode.upper(),
                 })
-        except Exception:
-            pass  # 已经是该模式会报错，忽略
+        except Exception as e:
+            logger.warning(f"[{self.EXCHANGE_NAME}] 设置保证金模式失败(symbol={symbol} mode={mode}): {e}")
 
     def place_order(
         self,
@@ -332,6 +331,7 @@ class BinanceFuturesClient(ExchangeClientBase):
                 pass
 
         # 2. 设置 TP/SL (条件单) —— 优先绝对价模式，否则百分比模式
+        tpsl_ok = True
         has_tp = take_profit_price is not None or (take_profit_pct is not None and take_profit_pct > 0)
         has_sl = stop_loss_price is not None or (stop_loss_pct is not None and stop_loss_pct > 0)
         if (has_tp or has_sl) and order.status == ORDER_STATUS_FILLED and order.avg_fill_price > 0:
@@ -352,7 +352,10 @@ class BinanceFuturesClient(ExchangeClientBase):
             try:
                 self._set_tp_sl_condorders_abs(symbol, side, tp_abs, sl_abs)
             except Exception as e:
-                logger.warning(f"[{self.EXCHANGE_NAME}] 设置TP/SL失败(可手动补设): {e}")
+                logger.error(f"[{self.EXCHANGE_NAME}] TP/SL设置失败(order_id={order.exchange_order_id}): {e} — 持仓无止损保护!")
+                tpsl_ok = False
+        if not tpsl_ok:
+            order.error_msg = "TP/SL设置失败，持仓无止损保护"
 
         return order
 

@@ -120,7 +120,7 @@ def save_layout(
 
     if req.is_public:
         # 只有管理员才能发布公共布局
-        if user.role != "admin":
+        if user.role != 1:
             raise BizException("仅管理员可发布公共布局", code=4030)
         is_public = True
         user_id = None  # 公共布局不属于任何个人
@@ -171,11 +171,11 @@ def update_layout(
     # 权限校验
     if layout.is_public:
         # 公共布局只有管理员可修改
-        if user.role != "admin":
+        if user.role != 1:
             raise BizException("仅管理员可修改公共布局", code=4030)
     else:
         # 个人布局只有本人可修改
-        if layout.user_id != user.id and user.role != "admin":
+        if layout.user_id != user.id and user.role != 1:
             raise BizException("无权修改此布局", code=4030)
 
     if req.name is not None:
@@ -195,14 +195,14 @@ def update_layout(
         layout.layout_data = req.layout_data
 
     if req.is_public is not None:
-        if user.role != "admin":
+        if user.role != 1:
             raise BizException("仅管理员可修改公共状态", code=4030)
         layout.is_public = req.is_public
         if req.is_public:
             layout.user_id = None
 
     if req.is_default is not None:
-        if user.role != "admin":
+        if user.role != 1:
             raise BizException("仅管理员可设置默认布局", code=4030)
         # 取消其他默认
         if req.is_default:
@@ -236,10 +236,10 @@ def delete_layout(
 
     # 权限校验
     if layout.is_public:
-        if user.role != "admin":
+        if user.role != 1:
             raise BizException("仅管理员可删除公共布局", code=4030)
     else:
-        if layout.user_id != user.id and user.role != "admin":
+        if layout.user_id != user.id and user.role != 1:
             raise BizException("无权删除此布局", code=4030)
 
     name = layout.name

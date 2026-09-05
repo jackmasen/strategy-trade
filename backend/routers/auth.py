@@ -14,6 +14,7 @@ DELETE /users/{uid}         删除用户(管理员)
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
+import pyotp
 
 from backend.db.session import get_db
 from backend.core.auth import get_current_user, require_admin
@@ -34,34 +35,32 @@ user_router = APIRouter(prefix="/users", tags=["用户管理"])
 class LoginReq(BaseModel):
     username: str = Field(..., min_length=2, max_length=64)
     password: str = Field(..., min_length=6, max_length=128)
+    totp_code: str = Field(default="", max_length=10)
 
 
 class LoginResp(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
-    # 注意：必须用 Any/dict 而非 BaseWithId | dict，否则 Pydantic Union 会
-    # 优先匹配 BaseWithId，并因 BaseSchema.extra="ignore" 丢弃 username/role 等字段
     user: dict = {}
 
 
 @router.post("/login", response_model=ApiResponse[LoginResp])
 def login(req: LoginReq, db: Session = Depends(get_db), request: Request = None):
-    """用户名密码登录"""
+    """用户名密码登录（如已启用2FA需提供totp_code）"""
     user: User | None = db.query(User).filter(User.username == req.username).first()
     if not user or not verify_password(req.password, user.password_hash):
         raise UnauthorizedException("用户名或密码错误")
     if user.status != 1:
         raise UnauthorizedException("账号已被禁用，请联系管理员")
 
-    # 2FA 检查：已启用 2FA 的用户需要验证验证码
+    # 2FA 检查：已启用 2FA 的用户需在登录时直接验证 TOTP 验证码（一步式，不签发中间令牌）
     if user.two_factor_enabled and user.two_factor_secret:
-        import pyotp
-        temp_token = create_access_token(
-            user.id,
-            extra={"type": "2fa_pending", "2fa_user": user.id, "role": user.role, "username": user.username},
-        )
-        return success({"need_2fa": True, "temp_token": temp_token})
+        if not req.totp_code:
+            raise UnauthorizedException("需要两步验证(2FA)验证码")
+        totp = pyotp.TOTP(user.two_factor_secret)
+        if not totp.verify(req.totp_code, valid_window=1):
+            raise UnauthorizedException("两步验证码错误")
 
     # 生成Token
     extra = {"role": user.role, "username": user.username}
@@ -121,8 +120,26 @@ def refresh_token(refresh_token: str, db: Session = Depends(get_db)):
 
 
 @router.post("/logout")
-def logout(user: User = Depends(get_current_user)):
-    """登出（前端清除Token即可，后端如需黑名单可扩展Redis）"""
+def logout(
+    request: Request,
+    user: User = Depends(get_current_user),
+):
+    """登出：将当前 Token 的 jti 加入黑名单，使其立即失效"""
+    from backend.core.auth import _add_to_blacklist
+    try:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            token = auth_header[7:]
+        else:
+            token = request.cookies.get("access_token", "")
+        if token:
+            payload = decode_token(token)
+            jti = payload.get("jti")
+            exp = payload.get("exp", 0)
+            if jti:
+                _add_to_blacklist(jti, exp)
+    except Exception:
+        pass  # 即使提取失败也允许登出
     return success(message="已退出登录")
 
 
@@ -267,10 +284,10 @@ class UpdatePasswordReq(BaseModel):
 
 class UpdateMeReq(BaseModel):
     """用户修改自己的基础资料（不可改 username/role/status）"""
-    nickname: str | None = None
-    email: str | None = None
-    phone: str | None = None
-    avatar: str | None = None
+    nickname: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, max_length=128)
+    phone: str | None = Field(default=None, max_length=32)
+    avatar: str | None = Field(default=None, max_length=512)
 
 
 @user_router.put("/me")
@@ -337,26 +354,88 @@ def change_password(
     return success(message="密码修改成功")
 
 
+# ============ 2FA 两步验证 ============
+
+class Setup2FAResp(BaseModel):
+    secret: str
+    qr_uri: str
+
+
+@user_router.post("/me/2fa/setup", response_model=ApiResponse[Setup2FAResp])
+def setup_2fa(
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """生成2FA密钥（需用户用Google Authenticator等扫码绑定）"""
+    secret = pyotp.random_base32()
+    totp = pyotp.TOTP(secret)
+    qr_uri = totp.provisioning_uri(name=user.username, issuer_name="StrategyTrade")
+    user.two_factor_secret = secret
+    db.commit()
+    return success(Setup2FAResp(secret=secret, qr_uri=qr_uri), message="密钥已生成，请用验证器扫码绑定")
+
+
+class Enable2FAReq(BaseModel):
+    totp_code: str = Field(..., min_length=6, max_length=10)
+
+
+@user_router.post("/me/2fa/enable")
+def enable_2fa(
+    req: Enable2FAReq,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """验证TOTP码并启用2FA"""
+    if not user.two_factor_secret:
+        raise ParameterException("请先调用 /2fa/setup 生成密钥")
+    totp = pyotp.TOTP(user.two_factor_secret)
+    if not totp.verify(req.totp_code, valid_window=1):
+        raise ParameterException("验证码错误")
+    user.two_factor_enabled = True
+    db.commit()
+    return success(message="2FA已启用")
+
+
+@user_router.post("/me/2fa/disable")
+def disable_2fa(
+    req: Enable2FAReq,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """关闭2FA（需验证当前TOTP码）"""
+    if not user.two_factor_enabled:
+        raise ParameterException("2FA未启用")
+    totp = pyotp.TOTP(user.two_factor_secret)
+    if not totp.verify(req.totp_code, valid_window=1):
+        raise ParameterException("验证码错误")
+    user.two_factor_enabled = False
+    user.two_factor_secret = ""
+    db.commit()
+    return success(message="2FA已关闭")
+
+
 # ============ 用户管理（仅管理员） ============
 
 class CreateUserReq(BaseModel):
     username: str = Field(..., min_length=2, max_length=64)
     password: str = Field(..., min_length=6, max_length=128)
-    nickname: str = ""
-    email: str = ""
-    phone: str = ""
+    nickname: str = Field(default="", max_length=64)
+    email: str = Field(default="", max_length=128)
+    phone: str = Field(default="", max_length=32)
+    avatar: str = Field(default="", max_length=512)
     role: int = Field(default=3, ge=1, le=3)
     status: int = 1
 
 
 class UpdateUserReq(BaseModel):
     """管理员修改用户（Body JSON；字段为 None 代表保持原值）"""
-    nickname: str | None = None
-    email: str | None = None
-    phone: str | None = None
+    nickname: str | None = Field(default=None, max_length=64)
+    email: str | None = Field(default=None, max_length=128)
+    phone: str | None = Field(default=None, max_length=32)
+    avatar: str | None = Field(default=None, max_length=512)
     role: int | None = Field(default=None, ge=1, le=3)
     status: int | None = None
-    reset_password: str | None = None
+    reset_password: str | None = Field(default=None, max_length=128)
 
 
 @user_router.get("", response_model=ApiResponse[dict])
@@ -395,6 +474,7 @@ def create_user(
         nickname=req.nickname or req.username,
         email=req.email,
         phone=req.phone,
+        avatar=req.avatar,
         role=req.role,
         status=req.status,
         must_change_password=True,
@@ -422,6 +502,8 @@ def update_user(
         user.email = req.email
     if req.phone is not None:
         user.phone = req.phone
+    if req.avatar is not None:
+        user.avatar = req.avatar
     if req.role is not None:
         user.role = req.role
     if req.status is not None:

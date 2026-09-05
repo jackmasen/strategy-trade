@@ -311,7 +311,7 @@ def create_backup(db: Session, backup_type: str = "manual", include_db: bool = T
         status=1,
     )
     db.add(record)
-    db.commit()
+    db.flush()  # Get ID without committing
 
     start = datetime.now()
     try:
@@ -321,6 +321,8 @@ def create_backup(db: Session, backup_type: str = "manual", include_db: bool = T
                 db_file = _get_db_file_path()
                 if db_file and db_file.exists():
                     zf.write(db_file, "data/app.db")
+                elif not db_file:
+                    logger.warning("MySQL数据库无法通过文件复制备份，请使用mysqldump手动备份")
 
             # 配置文件
             if include_config:
@@ -352,10 +354,13 @@ def create_backup(db: Session, backup_type: str = "manual", include_db: bool = T
             "duration_sec": round(duration, 1),
         }
     except Exception as e:
-        record.status = 3
-        record.error_msg = str(e)
-        record.finished_at = datetime.now()
-        db.commit()
+        db.rollback()
+        record = db.query(SystemBackupRecord).filter(SystemBackupRecord.id == record.id).first()
+        if record:
+            record.status = 3
+            record.error_msg = str(e)[:500]
+            record.finished_at = datetime.now()
+            db.commit()
         logger.error(f"[System] 备份失败: {e}")
         raise RuntimeError(f"备份失败: {e}")
 
@@ -502,11 +507,22 @@ def apply_update_from_upload(db: Session, file_path: str, version: str = "",
                            description=f"更新前自动备份 → v{version or 'custom'}")
         record.backup_id = bk["id"]
 
-        # 2) 解压
+        # 2) 解压（防 Zip Slip：校验每个条目解析后仍在 temp_dir 内）
         temp_dir = BASE_DIR / f".update_{record.id}"
         temp_dir.mkdir(parents=True, exist_ok=True)
+        temp_dir_resolved = temp_dir.resolve()
         with zipfile.ZipFile(fp, "r") as zf:
-            zf.extractall(temp_dir)
+            for member in zf.infolist():
+                # 跳过目录条目
+                if member.is_dir():
+                    continue
+                # 解析目标路径并确保不逃逸 temp_dir
+                target = (temp_dir / member.filename).resolve()
+                if not str(target).startswith(str(temp_dir_resolved)):
+                    logger.warning(f"[System] Zip Slip 拦截: {member.filename}")
+                    continue
+                # 提取单个文件
+                zf.extract(member, temp_dir)
 
         # 2.1) GitHub zip 可能有多一层根目录（如 strategy-trade-v1.2.1/），自动提升一层
         has_direct_backend = (temp_dir / "backend").exists()
