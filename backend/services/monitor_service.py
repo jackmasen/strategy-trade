@@ -12,6 +12,9 @@ import threading
 import uuid
 import shutil
 import platform
+import subprocess
+import socket
+import ssl
 import psutil
 import hashlib
 from pathlib import Path
@@ -292,15 +295,26 @@ def collect_system_status(db: Session) -> Dict:
         mem = psutil.virtual_memory()
         disk = shutil.disk_usage(str(BASE_DIR))
         
+        # Load Average + Swap + 网络连接数
+        load_avg = os.getloadavg() if hasattr(os, 'getloadavg') else (0, 0, 0)
+        swap = psutil.swap_memory()
+        net_conn_count = len(psutil.net_connections(kind='inet'))
+
         status["resources"] = {
             "cpu_percent": cpu_percent,
+            "load_avg_1": round(load_avg[0], 2),
+            "load_avg_5": round(load_avg[1], 2),
+            "load_avg_15": round(load_avg[2], 2),
             "memory_percent": mem.percent,
             "memory_used_mb": round(mem.used / 1024 / 1024, 1),
             "memory_total_mb": round(mem.total / 1024 / 1024, 1),
+            "swap_percent": swap.percent,
+            "swap_used_mb": round(swap.used / 1024 / 1024, 1),
             "disk_percent": round(disk.used / disk.total * 100, 1),
             "disk_used_gb": round(disk.used / 1024**3, 2),
             "disk_total_gb": round(disk.total / 1024**3, 2),
             "disk_free_gb": round(disk.free / 1024**3, 2),
+            "network_connections": net_conn_count,
         }
         
         if cpu_percent > 90:
@@ -324,6 +338,19 @@ def collect_system_status(db: Session) -> Dict:
         from backend.models.trade import TradePosition, TradeOrder
         from backend.models.analytics import NewsArticle
         
+        # MySQL 连接数等指标
+        mysql_info = {}
+        try:
+            from sqlalchemy import text as _text
+            threads = db.execute(_text("SHOW STATUS LIKE 'Threads_connected'")).fetchone()
+            if threads:
+                mysql_info["threads_connected"] = int(threads[1])
+            slow = db.execute(_text("SHOW STATUS LIKE 'Slow_queries'")).fetchone()
+            if slow:
+                mysql_info["slow_queries"] = int(slow[1])
+        except Exception:
+            pass
+
         status["database"] = {
             "connection": "ok",
             "users": db.query(User).count(),
@@ -331,6 +358,7 @@ def collect_system_status(db: Session) -> Dict:
             "open_positions": db.query(TradePosition).filter(TradePosition.status == 1).count(),
             "total_orders": db.query(TradeOrder).count(),
             "news_articles": db.query(NewsArticle).count(),
+            **mysql_info,
         }
     except Exception as e:
         status["database"] = {"connection": "error", "error": str(e)}
@@ -356,22 +384,30 @@ def collect_system_status(db: Session) -> Dict:
         if settings.CELERY_ENABLED:
             issues.append({"level": "warning", "msg": f"Redis不可用(Celery模式): {e}"})
     
-    # 2.4 定时任务状态
+    # 2.4 定时任务状态（真实检测）
     try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        from main import scheduler as _sched
+        jobs = _sched.get_jobs() if _sched else []
+        task_list = []
+        for j in jobs:
+            next_run = j.next_run_time.isoformat() if j.next_run_time else None
+            task_list.append({
+                "id": j.id,
+                "name": j.name,
+                "next_run": next_run,
+                "status": "running" if next_run else "paused",
+            })
         status["scheduler"] = {
             "enabled": True,
-            "status": "running",
+            "status": "running" if len(task_list) > 0 else "no_jobs",
             "mode": "apscheduler" if not settings.CELERY_ENABLED else "celery",
-            "tasks": [
-                {"name": "平仓巡检", "interval": "30s", "status": "running"},
-                {"name": "策略执行", "interval": "1min", "status": "running"},
-                {"name": "新闻采集", "interval": "30min", "status": "running"},
-                {"name": "AI分析", "interval": "2h", "status": "running"},
-                {"name": "新闻策略", "interval": "1h", "status": "running"},
-            ],
+            "task_count": len(task_list),
+            "tasks": task_list,
         }
-    except Exception:
-        status["scheduler"] = {"enabled": False}
+    except Exception as e:
+        status["scheduler"] = {"enabled": False, "error": str(e)[:100]}
+        issues.append({"level": "warning", "msg": f"定时任务状态获取失败: {e}"})
     
     # 2.5 日志摘要
     try:
@@ -399,6 +435,84 @@ def collect_system_status(db: Session) -> Dict:
     except Exception:
         status["exchange_accounts"] = []
     
+    # 2.7 基础设施服务状态（Nginx/Supervisor）
+    try:
+        infra = {}
+        # Nginx
+        try:
+            r = subprocess.run(["systemctl", "is-active", "nginx"], capture_output=True, text=True, timeout=3)
+            infra["nginx"] = "running" if r.returncode == 0 else "stopped"
+        except Exception:
+            infra["nginx"] = "unknown"
+        # Supervisor（通过端口或进程）
+        try:
+            r = subprocess.run(["pgrep", "-f", "supervisord"], capture_output=True, text=True, timeout=3)
+            infra["supervisor"] = "running" if r.returncode == 0 else "stopped"
+        except Exception:
+            infra["supervisor"] = "unknown"
+        status["infrastructure"] = infra
+        if infra.get("nginx") == "stopped":
+            issues.append({"level": "critical", "msg": "Nginx 未运行"})
+    except Exception:
+        status["infrastructure"] = {}
+
+    # 2.8 交易所 WebSocket 状态
+    try:
+        from backend.exchanges.market import MarketManager
+        mkt = MarketManager.get_instance()
+        ws_status = []
+        if mkt and mkt._clients:
+            for name, client in mkt._clients.items():
+                ws_ok = getattr(client, '_ws_connected', False)
+                ws_status.append({"name": name, "ws_connected": ws_ok})
+        status["market_ws"] = ws_status
+        if ws_status and not all(w["ws_connected"] for w in ws_status):
+            disconnected = [w["name"] for w in ws_status if not w["ws_connected"]]
+            issues.append({"level": "warning", "msg": f"交易所WS断开: {', '.join(disconnected)}"})
+    except Exception:
+        status["market_ws"] = []
+
+    # 2.9 AI 接口可用性
+    try:
+        from backend.models.ai_config import AIConfig
+        ai_cfg = db.query(AIConfig).first()
+        ai_has_key = bool(ai_cfg and ai_cfg.api_key_encrypted)
+        status["ai_service"] = {"configured": ai_has_key, "provider": ai_cfg.provider_name if ai_cfg else None}
+    except Exception as e:
+        status["ai_service"] = {"configured": False, "error": str(e)[:100]}
+
+    # 2.10 API 响应时间（自测）
+    try:
+        import httpx
+        t0 = time.time()
+        httpx.get("http://127.0.0.1:8000/health", timeout=5)
+        api_ms = round((time.time() - t0) * 1000, 1)
+        status["api_latency_ms"] = api_ms
+        if api_ms > 3000:
+            issues.append({"level": "warning", "msg": f"API响应慢: {api_ms}ms"})
+    except Exception:
+        status["api_latency_ms"] = -1
+
+    # 2.11 SSL 证书过期检测
+    try:
+        ssl_days = None
+        try:
+            ctx = ssl.create_default_context()
+            with socket.create_connection(("127.0.0.1", 443), timeout=3) as sock:
+                with ctx.wrap_socket(sock, server_hostname="localhost") as ssock:
+                    cert = ssock.getpeercert()
+                    if cert and "notAfter" in cert:
+                        import datetime as dt
+                        expire = dt.datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z")
+                        ssl_days = (expire - dt.datetime.utcnow()).days
+        except Exception:
+            pass
+        status["ssl"] = {"days_to_expire": ssl_days}
+        if ssl_days is not None and ssl_days < 30:
+            issues.append({"level": "warning", "msg": f"SSL证书将在{ssl_days}天后过期"})
+    except Exception:
+        status["ssl"] = {"days_to_expire": None}
+
     # 计算总体状态
     critical_count = sum(1 for i in issues if i["level"] == "critical")
     warning_count = sum(1 for i in issues if i["level"] == "warning")

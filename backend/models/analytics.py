@@ -285,6 +285,7 @@ class FalseSignalPattern(Base):
     """
 
     __tablename__ = "false_signal_patterns"
+    model_config = {"protected_namespaces": ()}
     __table_args__ = (
         Index("idx_fsp_pattern_key", "pattern_key", unique=True),
     )

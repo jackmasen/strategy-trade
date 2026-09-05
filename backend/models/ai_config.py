@@ -15,6 +15,8 @@ class AIConfig(Base):
     推荐所有写入都走 ai_config_service.upsert_current() 保证单例约束
     """
 
+    model_config = {"protected_namespaces": ()}
+
     SINGLETON_ID = 1
 
     # 供应商常量（与 AIAnalysisRecord 的 PROVIDER_* 对齐）

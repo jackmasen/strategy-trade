@@ -8,6 +8,7 @@ from backend.db.base import Base
 
 class AiApiKey(Base):
     __tablename__ = "ai_api_keys"
+    model_config = {"protected_namespaces": ()}
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(64), nullable=False, comment="名称（主用/备用1/备用2）")

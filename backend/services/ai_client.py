@@ -171,7 +171,7 @@ class AIClient:
         total_attempts: int,
     ) -> AIResult:
         provider_name = self.cfg.provider_name
-        timeout = max(5, int(self.cfg.request_timeout_sec or 30))
+        timeout = max(5, min(15, int(self.cfg.request_timeout_sec or 15)))
 
         system_prompt = SYSTEM_PROMPT_BASE
         if force_json_strict:

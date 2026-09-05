@@ -7,6 +7,8 @@ FastAPI 应用入口
 - 启动/关闭事件（建表、初始化超级管理员、APScheduler）
 """
 from __future__ import annotations
+import warnings
+warnings.filterwarnings("ignore", message="Field \"model_name\" has conflict", category=UserWarning)
 
 import os
 import sys
@@ -41,6 +43,8 @@ setup_logger()
 
 
 # ============== 生命周期事件 ==============
+
+scheduler = None  # 全局定时任务调度器
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -98,11 +102,11 @@ async def lifespan(app: FastAPI):
         logger.error(f"❌ 种子数据初始化失败: {e}")
 
     # 3. APScheduler 定时任务（新闻采集 / 策略执行引擎 / 日报生成）
-    scheduler = None
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from apscheduler.triggers.interval import IntervalTrigger
 
+        global scheduler
         scheduler = BackgroundScheduler()
 
         # Celery 未启用时，由 APScheduler 兜底执行交易类定时任务；
@@ -273,6 +277,8 @@ async def lifespan(app: FastAPI):
                 IntervalTrigger(minutes=1),
                 id="strategy_auto_run",
                 replace_existing=True,
+                max_instances=1,
+                coalesce=True,
             )
 
         # 代理池定时刷新：从订阅URL重新拉取节点（每 refresh_minutes 分钟）

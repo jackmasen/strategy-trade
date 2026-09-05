@@ -28,6 +28,7 @@ router = APIRouter(prefix="/settings/ai-keys", tags=["AI多API故障转移"])
 # ============= Pydantic =============
 
 class AiKeyCreate(BaseModel):
+    model_config = {"protected_namespaces": ()}
     name: str = Field(..., min_length=1, max_length=64, description="名称")
     provider: str = Field("custom", description="供应商")
     model_name: str = Field("gpt-4o", description="模型名")
@@ -36,11 +37,12 @@ class AiKeyCreate(BaseModel):
     priority: int = Field(10, ge=1, le=100, description="优先级")
     temperature: int = Field(3, ge=0, le=10)
     max_tokens: int = Field(800, ge=128, le=8192)
-    request_timeout_sec: int = Field(30, ge=5, le=120)
+    request_timeout_sec: int = Field(15, ge=5, le=60)
     max_retries: int = Field(2, ge=0, le=5)
 
 
 class AiKeyUpdate(BaseModel):
+    model_config = {"protected_namespaces": ()}
     name: str = ""
     provider: str = ""
     model_name: str = ""
@@ -120,7 +122,7 @@ def _try_ai_key(k: AiApiKey, prompt: str = "请回复'连接成功'") -> tuple:
             "temperature": 0,
         }
 
-        timeout = min(k.request_timeout_sec or 30, 30)
+        timeout = min(k.request_timeout_sec or 15, 15)
         start = time.time()
         resp = httpx.post(url, json=payload, headers=headers, timeout=timeout)
         latency = int((time.time() - start) * 1000)

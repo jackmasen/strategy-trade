@@ -91,6 +91,7 @@ def _cfg_to_public_dict(cfg: AIConfig) -> dict:
 
 # ========== Pydantic 契约（兼容前端 AI.vue 现有 4 字段 + 扩展字段可选） ==========
 class AIConfigUpdate(BaseModel):
+    model_config = {"protected_namespaces": ()}
     provider: str = Field(default="custom", description="openai/anthropic/custom/local")
     model_name: str = "gpt-4o"
     api_endpoint: str = ""
@@ -102,6 +103,7 @@ class AIConfigUpdate(BaseModel):
 
 
 class AIAnalyzeReq(BaseModel):
+    model_config = {"protected_namespaces": ()}
     analysis_type: str = Field(default="score", max_length=32)
     symbol: Optional[str] = Field(default=None, max_length=16)
     timeframe: str = Field(default="4h", max_length=8)
@@ -729,6 +731,7 @@ def auto_collect_news(
 # ==================== 新闻AI多API配置（轮询/故障转移） ====================
 
 class NewsAIConfigCreate(BaseModel):
+    model_config = {"protected_namespaces": ()}
     name: str = Field(..., max_length=64, description="配置名称，如'主API''备用API1'")
     provider: str = "custom"
     api_endpoint: str = ""
@@ -739,6 +742,7 @@ class NewsAIConfigCreate(BaseModel):
 
 
 class NewsAIConfigUpdate(BaseModel):
+    model_config = {"protected_namespaces": ()}
     name: Optional[str] = None
     provider: Optional[str] = None
     api_endpoint: Optional[str] = None
@@ -749,6 +753,7 @@ class NewsAIConfigUpdate(BaseModel):
 
 
 class NewsAIConfigTest(BaseModel):
+    model_config = {"protected_namespaces": ()}
     provider: str = "custom"
     api_endpoint: str = ""
     api_key: str = ""

@@ -158,6 +158,7 @@ class SmtpTestReq(BaseModel):
 
 
 class AITestReq(BaseModel):
+    model_config = {"protected_namespaces": ()}
     provider: str = "custom"
     model_name: str = "gpt-4o"
     api_endpoint: str = ""

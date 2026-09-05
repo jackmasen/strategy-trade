@@ -103,7 +103,7 @@ def send_email(
     smtp_pwd = smtp_pwd.replace("\xa0", " ").strip()
 
     if not smtp_host or not smtp_user or not smtp_pwd or not smtp_to:
-        logger.warning("[Email] SMTP 配置不完整，跳过邮件发送")
+        logger.debug("[Email] SMTP 配置不完整，跳过邮件发送")
         return False
 
     try:
