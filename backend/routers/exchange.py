@@ -682,9 +682,12 @@ def _try_get_demo_client(db) -> 'ExchangeClientBase | None':
         if not enabled:
             return None
         exchange_str = _get_config_value(db, "demo_api_exchange", "binance") or "binance"
-        api_key = _get_config_value(db, "demo_api_key", "") or ""
-        api_secret = _get_config_value(db, "demo_api_secret", "") or ""
+        api_key_enc = _get_config_value(db, "demo_api_key", "") or ""
+        api_secret_enc = _get_config_value(db, "demo_api_secret", "") or ""
         testnet = _get_config_value(db, "demo_api_testnet", True)
+        from backend.core.security import decrypt_api_key
+        api_key = decrypt_api_key(api_key_enc) if api_key_enc.startswith("gAAAA") else api_key_enc
+        api_secret = decrypt_api_key(api_secret_enc) if api_secret_enc.startswith("gAAAA") else api_secret_enc
         if not api_key or not api_secret:
             return None
         exchange_id = {"binance": 1, "okx": 2, "bybit": 3}.get(exchange_str, 2)
