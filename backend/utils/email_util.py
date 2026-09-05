@@ -23,6 +23,7 @@ def _get_smtp_config() -> dict:
         "password": "",
         "to": "",
         "ssl": True,
+        "enabled": True,
     }
 
     # 1) 尝试从数据库读取（管理员在设置页面配置的）
@@ -89,6 +90,9 @@ def send_email(
         bool: 是否发送成功
     """
     smtp = _get_smtp_config()
+    if not smtp.get("enabled", True):
+        logger.debug("[Email] 邮件推送已关闭，跳过")
+        return False
     smtp_host = smtp["host"]
     smtp_port = smtp["port"]
     smtp_pwd = smtp["password"]

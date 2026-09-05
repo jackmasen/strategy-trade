@@ -25,9 +25,24 @@ def _ensure_ai_keys_table(db: Session):
 
 def _get_available_keys(db: Session) -> list:
     _ensure_ai_keys_table(db)
-    return db.query(AiApiKey).filter(
+    keys = db.query(AiApiKey).filter(
         AiApiKey.status == "active"
     ).order_by(AiApiKey.priority.asc(), AiApiKey.id.asc()).all()
+    if keys:
+        return keys
+    # 没有 active 的 Key，自动重置 failed 的 Key（给它们重试机会）
+    failed_keys = db.query(AiApiKey).filter(
+        AiApiKey.status == "failed"
+    ).all()
+    if failed_keys:
+        for k in failed_keys:
+            k.status = "active"
+            k.fail_count = 0
+            k.last_error = ""
+        db.commit()
+        logger.info(f"[AI-Failover] 无可用Key，自动重置 {len(failed_keys)} 个 failed Key 为重试")
+        return sorted(failed_keys, key=lambda x: (x.priority or 0, x.id))
+    return []
 
 
 def _try_primary_config(db: Session, analysis_type: str, symbol: str,

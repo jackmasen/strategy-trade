@@ -145,6 +145,7 @@ class NotifyConfigUpdate(BaseModel):
     smtp_pwd: str = ""  # 空串=不修改
     smtp_to: str = ""
     smtp_ssl: bool = True
+    smtp_enabled: bool = True
     events: List[str] = Field(default_factory=lambda: ["tp", "sl", "risk", "daily"])
 
 

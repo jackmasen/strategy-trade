@@ -1385,7 +1385,7 @@ def _fetch_all_polymarket_odds() -> Dict[str, float]:
     try:
         url = "https://clob.polymarket.com/markets"
         params = {"next_cursor": "MA=="}
-        r = httpx.get(url, params=params, timeout=3)  # 3秒超时，不卡主流程
+        r = httpx.get(url, params=params, timeout=8.0)  # 8秒超时
         if r.status_code != 200:
             return result
         data = r.json()
@@ -1781,7 +1781,7 @@ def get_prediction(
 
     poly_odds = {}
     try:
-        poly_odds = _run_with_timeout(_fetch_all_polymarket_odds, timeout_sec=5.0)
+        poly_odds = _run_with_timeout(_fetch_all_polymarket_odds, timeout_sec=10.0)
     except TimeoutError:
         logger.warning("[Prediction] Polymarket获取超时，跳过")
     except Exception as e:

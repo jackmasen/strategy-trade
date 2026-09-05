@@ -106,12 +106,35 @@ def _fetch_bybit_klines(symbol: str, timeframe: str, limit: int = 100) -> List:
         return []
 
 
+def _fetch_binance_price(symbol: str) -> Optional[float]:
+    """Binance 合约价格（第三价格源）"""
+    import requests as _requests
+    bybit_sym = _BYBIT_SYMBOL_MAP.get(symbol)
+    if not bybit_sym:
+        return None
+    try:
+        r = _requests.get(
+            f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={bybit_sym}",
+            timeout=5,
+        )
+        price = float(r.json().get("price", 0))
+        if price > 0:
+            return price
+    except Exception as e:
+        logger.debug(f"[QuantSignal] Binance {symbol} failed: {e}")
+    return None
+
+
 def _fetch_commodity_price(symbol: str) -> Optional[float]:
-    """Fetch non-crypto price: OKX first, then Bybit fallback"""
+    """多源获取非加密品种价格：OKX + Bybit + Binance，取中位数校准"""
     import requests as _requests
     cache = _commodity_price_cache.get(symbol, {})
     if cache and time.time() - cache.get("ts", 0) < 5:
         return cache.get("price")
+
+    prices = []
+
+    # 源1: OKX
     inst_ids = _OKX_INST_MAP.get(symbol)
     if inst_ids:
         for inst_id in inst_ids:
@@ -124,16 +147,34 @@ def _fetch_commodity_price(symbol: str) -> Optional[float]:
                 data = r.json().get("data", [{}])[0]
                 price = float(data.get("last", 0))
                 if price > 0:
-                    _commodity_price_cache[symbol] = {"price": price, "ts": time.time()}
-                    logger.info(f"[QuantSignal] OKX {symbol} price: {price}")
-                    return price
+                    prices.append(price)
+                    break
             except Exception as e:
                 logger.debug(f"[QuantSignal] OKX {inst_id} {symbol} failed: {e}")
+
+    # 源2: Bybit
     bybit_price = _fetch_bybit_price(symbol)
     if bybit_price and bybit_price > 0:
-        _commodity_price_cache[symbol] = {"price": bybit_price, "ts": time.time()}
-        return bybit_price
-    return None
+        prices.append(bybit_price)
+
+    # 源3: Binance 合约
+    binance_price = _fetch_binance_price(symbol)
+    if binance_price and binance_price > 0:
+        prices.append(binance_price)
+
+    if not prices:
+        return None
+
+    # 取中位数校准（避免单一数据源异常）
+    prices.sort()
+    if len(prices) % 2 == 1:
+        final_price = prices[len(prices) // 2]
+    else:
+        final_price = (prices[len(prices) // 2 - 1] + prices[len(prices) // 2]) / 2
+
+    _commodity_price_cache[symbol] = {"price": final_price, "ts": time.time()}
+    logger.info(f"[QuantSignal] {symbol} 多源价格 {prices} -> 中位数 {final_price}")
+    return final_price
 
 # ========== 工具：确保信号表存在 ==========
 def _ensure_signal_table():

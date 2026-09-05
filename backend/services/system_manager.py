@@ -759,7 +759,7 @@ def _get_current_version() -> str:
             return f"v{_main._INSTALL_APP_VERSION}"
     except Exception:
         pass
-    return "v1.2.6"
+    return "v1.2.7"
 
 
 def _compare_versions(v1: str, v2: str) -> int:

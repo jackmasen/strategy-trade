@@ -652,7 +652,11 @@ def run_full_self_check(db: Session) -> Dict:
         if d.exists():
             add_check(f"目录: {display}", True)
         else:
-            add_check(f"目录: {display}", False, error=f"{dir_name}/ 不存在")
+            try:
+                d.mkdir(parents=True, exist_ok=True)
+                add_check(f"目录: {display}", True, note="已自动创建")
+            except Exception as e:
+                add_check(f"目录: {display}", False, error=f"{dir_name}/ 不存在且创建失败: {e}")
     
     # 汇总
     elapsed = int((time.monotonic() - start) * 1000)
