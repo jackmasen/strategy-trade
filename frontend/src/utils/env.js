@@ -14,8 +14,7 @@ export const SYMBOL_META = {
   XAG:  { name: '白银',   color: '#C0C0C0', icon: '🥈' },
   // ===== 能源 =====
   WTI:  { name: '原油',   color: '#6B7280', icon: '🛢️' },
-  SAND: { name: '沙盒',   color: '#00ADEF', icon: 'S' },
-  HBAR: { name: '海代拉', color: '#222222', icon: 'H' },
+
   // ===== 美股-科技 =====
   TSLA: { name: '特斯拉', color: '#E31937', icon: 'T' },
   NVDA: { name: '英伟达', color: '#76B900', icon: 'N' },

@@ -41,8 +41,7 @@ class ExchangeClientBase(ABC):
         "BTC": "BTCUSDT",
         "ETH": "ETHUSDT",
         "SOL": "SOLUSDT",
-        "SAND": "SANDUSDT",
-        "HBAR": "HBARUSDT",
+
         # 贵金属
         "XAU": "XAUUSDT",   # 如交易所不支持贵金属，子类覆盖
         "XAG": "XAGUSDT",   # 白银
@@ -105,6 +104,12 @@ class ExchangeClientBase(ABC):
         elif exchange == 2:
             from .okx import OKXFuturesClient
             return OKXFuturesClient(
+                api_key=api_key, api_secret=api_secret, passphrase=passphrase,
+                testnet=testnet, exchange_account_id=exchange_account_id,
+            )
+        elif exchange == 3:
+            from .bybit import BybitFuturesClient
+            return BybitFuturesClient(
                 api_key=api_key, api_secret=api_secret, passphrase=passphrase,
                 testnet=testnet, exchange_account_id=exchange_account_id,
             )

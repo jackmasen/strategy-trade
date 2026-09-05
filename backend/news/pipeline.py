@@ -2,20 +2,22 @@
 统一新闻管道（主入口：NewsPipeline.run_once）
 
 流程（单次调用执行）：
-  1) 多源并发抓取（ThreadPoolExecutor，8 个源并行）
-  2) source + source_id 联合去重（数据库内已存在的跳过）
-  3) analyzer.analyze() → 情绪 / 品种关联 / 影响级别
-  4) 批量写 NewsArticle（analyzed_at 填当前时间）
+  1) Miniflux RSS 优先抓取（可靠源，不会被封锁）
+  2) 其他源并发抓取（ThreadPoolExecutor，自动跳过连续失败的爬虫）
+  3) source + source_id 联合去重（数据库内已存在的跳过）
+  4) analyzer.analyze() → 情绪 / 品种关联 / 影响级别
+  5) 批量写 NewsArticle（analyzed_at 填当前时间）
 
 被 2 个地方调用：
   A. scheduled.py 的 celery task / APScheduler cron 每 15min
-  B. 前端"立即采集新闻"按钮（POST /api/analytics/news/fetch 路由，后续加）
+  B. 前端"立即采集新闻"按钮（POST /api/analytics/news/fetch 路由）
 """
 from __future__ import annotations
 
 import traceback
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Dict, List, Optional, Sequence, Type
 
@@ -25,7 +27,7 @@ from backend.core.logging_config import logger
 from backend.db.session import SessionLocal
 from backend.models.analytics import NewsArticle
 from .base import NewsCrawlerBase, RawNews
-from .crawlers import ALL_CRAWLERS
+from .crawlers import ALL_CRAWLERS, MinifluxCrawler
 from . import analyzer
 
 
@@ -36,15 +38,64 @@ class PipelineRunResult:
     total_skipped_dup: int = 0
     per_source: Dict[str, dict] = None
     errors: List[str] = None
+    blocked_crawlers: List[str] = None
+    active_crawlers: int = 0
 
     def __post_init__(self):
         if self.per_source is None: self.per_source = {}
         if self.errors is None: self.errors = []
+        if self.blocked_crawlers is None: self.blocked_crawlers = []
+
+
+class CrawlerHealthTracker:
+    """爬虫健康状态跟踪器：记录连续失败次数，自动跳过被封锁的爬虫"""
+    MAX_CONSECUTIVE_FAILURES = 3  # 连续失败3次后自动跳过
+
+    def __init__(self):
+        self._fail_counts: Dict[str, int] = {}
+        self._success_counts: Dict[str, int] = {}
+        self._last_success: Dict[str, float] = {}
+        self._blocked: Dict[str, bool] = {}
+
+    def record_success(self, source: str, count: int = 0):
+        self._fail_counts[source] = 0
+        self._success_counts[source] = self._success_counts.get(source, 0) + 1
+        self._last_success[source] = time.time()
+        if self._blocked.get(source):
+            logger.info(f"[News/Health] 爬虫 {source} 已恢复正常")
+        self._blocked[source] = False
+
+    def record_failure(self, source: str, error: str = ""):
+        self._fail_counts[source] = self._fail_counts.get(source, 0) + 1
+        if self._fail_counts[source] >= self.MAX_CONSECUTIVE_FAILURES:
+            if not self._blocked.get(source):
+                logger.warning(f"[News/Health] 爬虫 {source} 连续失败 {self._fail_counts[source]} 次，已自动跳过 (最后错误: {error[:100]})")
+            self._blocked[source] = True
+
+    def is_blocked(self, source: str) -> bool:
+        return self._blocked.get(source, False)
+
+    def get_blocked_list(self) -> List[str]:
+        return [s for s, b in self._blocked.items() if b]
+
+    def get_health_report(self) -> Dict[str, dict]:
+        return {
+            s: {
+                "consecutive_failures": self._fail_counts.get(s, 0),
+                "total_successes": self._success_counts.get(s, 0),
+                "blocked": self._blocked.get(s, False),
+            }
+            for s in set(list(self._fail_counts.keys()) + list(self._success_counts.keys()))
+        }
+
+
+_health_tracker = CrawlerHealthTracker()
 
 
 class NewsPipeline:
     """
     采集 + 分析 + 入库。无状态：每次 run_once 都是独立事务。
+    Miniflux 优先策略：先执行 Miniflux（可靠源），再并行其他爬虫。
     """
 
     def __init__(
@@ -65,7 +116,7 @@ class NewsPipeline:
         if own_session:
             db = SessionLocal()
         try:
-            # 1) 并发抓取所有源
+            # 1) Miniflux 优先抓取 + 其他源并发
             raw_by_source: Dict[str, List[RawNews]] = self._concurrent_fetch(res)
 
             # 2) 已存在 source+source_id 的去重
@@ -75,6 +126,7 @@ class NewsPipeline:
                     all_raw.append(r)
             res.total_fetched = len(all_raw)
             if not all_raw:
+                logger.warning("[News/Pipeline] 所有源均未获取到新闻，建议检查 Miniflux 配置和爬虫健康状态")
                 return res
             deduped = self._dedupe_against_db(db, all_raw, res)
 
@@ -111,9 +163,56 @@ class NewsPipeline:
     # ============= 内部步骤 =============
     def _concurrent_fetch(self, res: PipelineRunResult) -> Dict[str, List[RawNews]]:
         out: Dict[str, List[RawNews]] = {}
+
+        # 分离 Miniflux（优先）和其他爬虫
+        miniflux_classes = []
+        other_classes = []
+        for cls in self.crawlers_classes:
+            if cls == MinifluxCrawler:
+                miniflux_classes.append(cls)
+            else:
+                other_classes.append(cls)
+
+        # Step 1: 先执行 Miniflux（不跳过，不受健康状态影响）
+        for cls in miniflux_classes:
+            try:
+                crawler = cls()
+                src = crawler.SOURCE_DISPLAY
+                items = crawler.crawl(self.lookback_hours) or []
+                out[src] = list(items)
+                res.per_source[src] = {"fetched": len(items), "status": "ok"}
+                _health_tracker.record_success(src, len(items))
+                logger.info(f"[News/Pipeline] Miniflux 获取 {len(items)} 条（优先源）")
+            except Exception as e:
+                err = f"Miniflux 抓取异常: {e}"
+                logger.warning(f"[News/Pipeline] {err}")
+                res.errors.append(err)
+                res.per_source[src] = {"fetched": 0, "status": "error", "error": str(e)[:200]}
+                _health_tracker.record_failure(src, str(e))
+
+        # Step 2: 并发执行其他爬虫（跳过被封锁的）
+        active_crawlers = []
+        skipped_crawlers = []
+        for cls in other_classes:
+            try:
+                display = cls.SOURCE_DISPLAY
+            except AttributeError:
+                display = cls.__name__
+            if _health_tracker.is_blocked(display):
+                skipped_crawlers.append(display)
+                res.per_source[display] = {"fetched": 0, "status": "blocked"}
+                continue
+            active_crawlers.append(cls)
+
+        res.blocked_crawlers = _health_tracker.get_blocked_list()
+        res.active_crawlers = len(active_crawlers) + len(miniflux_classes)
+
+        if skipped_crawlers:
+            logger.info(f"[News/Pipeline] 跳过 {len(skipped_crawlers)} 个被封锁的爬虫: {skipped_crawlers}")
+
         with ThreadPoolExecutor(max_workers=self.max_workers) as ex:
             future_map = {}
-            for cls in self.crawlers_classes:
+            for cls in active_crawlers:
                 try:
                     crawler = cls()
                     future = ex.submit(crawler.crawl, self.lookback_hours)
@@ -127,14 +226,14 @@ class NewsPipeline:
                 try:
                     items = fu.result() or []
                     out[src] = list(items)
-                    res.per_source[src] = {
-                        "fetched": len(items),
-                    }
+                    res.per_source[src] = {"fetched": len(items), "status": "ok"}
+                    _health_tracker.record_success(src, len(items))
                 except Exception as e:
                     err = f"抓取源 {src} 异常: {e}"
                     logger.warning(f"[News/Pipeline] {err}")
                     res.errors.append(err)
-                    res.per_source.setdefault(src, {})["error"] = str(e)
+                    res.per_source[src] = {"fetched": 0, "status": "error", "error": str(e)[:200]}
+                    _health_tracker.record_failure(src, str(e))
         return out
 
     def _match_source_code(self, source_name: str, display_to_code: Dict[str, int]) -> int:

@@ -47,7 +47,7 @@ def _build_analysis_prompt(article: NewsArticle) -> str:
     "key_factors": ["关键因素1", "关键因素2"]
 }}"""
 
-ANALYSIS_SYSTEM_PROMPT = """你是专业的金融新闻分析师，擅长分析新闻对加密货币(BTC/ETH/SOL/SAND/HBAR)、黄金(XAU)、原油(WTI)、半导体股票(SKHYNIX-海力士/SNDK-闪迪)的影响。
+ANALYSIS_SYSTEM_PROMPT = """你是专业的金融新闻分析师，擅长分析新闻对加密货币(BTC/ETH/SOL)、黄金(XAU)、原油(WTI)、美股(TSLA/NVDA/AAPL/MSFT/TCEHY)、半导体股票(SKHYNIX-海力士/SNDK-闪迪)的影响。
 你的分析结果将用于量化交易系统的新闻情绪评分（占总评分30%权重）。
 
 分析原则：

@@ -38,7 +38,7 @@ router = APIRouter(prefix="/trades", tags=["交易订单/持仓"])
 SYMBOL_LEVERAGE_LIMITS = {
     # 加密货币
     "BTC": 10, "ETH": 10, "SOL": 10,
-    "SAND": 10, "HBAR": 10,
+
     # 贵金属/能源
     "XAU": 5, "XAG": 5, "WTI": 5,
     # 美股-科技（代币化股票杠杆通常较低）

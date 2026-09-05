@@ -91,13 +91,18 @@ def _gen_mock_klines(symbol, timeframe, limit):
     return candles
 
 SUPPORTED_SYMBOLS = [
-    {"symbol": "BTC", "name": "比特币", "binance": "BTCUSDT", "okx": "BTC-USDT-SWAP", "type": "crypto"},
-    {"symbol": "ETH", "name": "以太坊", "binance": "ETHUSDT", "okx": "ETH-USDT-SWAP", "type": "crypto"},
-    {"symbol": "SOL", "name": "索拉纳", "binance": "SOLUSDT", "okx": "SOL-USDT-SWAP", "type": "crypto"},
-    {"symbol": "XAU", "name": "黄金",   "binance": "",        "okx": "XAU-USDT-SWAP", "type": "commodity"},
-    {"symbol": "WTI", "name": "石油",   "binance": "",        "okx": "WTI-USDT-SWAP", "type": "commodity"},
-    {"symbol": "SAND", "name": "沙盒", "binance": "SANDUSDT", "okx": "SAND-USDT-SWAP", "type": "crypto"},
-    {"symbol": "HBAR", "name": "海代拉", "binance": "HBARUSDT", "okx": "HBAR-USDT-SWAP", "type": "crypto"},
+    {"symbol": "BTC", "name": "比特币", "binance": "BTCUSDT", "okx": "BTC-USDT-SWAP", "bybit": "BTCUSDT", "type": "crypto"},
+    {"symbol": "ETH", "name": "以太坊", "binance": "ETHUSDT", "okx": "ETH-USDT-SWAP", "bybit": "ETHUSDT", "type": "crypto"},
+    {"symbol": "SOL", "name": "索拉纳", "binance": "SOLUSDT", "okx": "SOL-USDT-SWAP", "bybit": "SOLUSDT", "type": "crypto"},
+    {"symbol": "XAU", "name": "黄金",   "binance": "",        "okx": "XAU-USDT-SWAP", "bybit": "XAUUSDT", "type": "commodity"},
+    {"symbol": "WTI", "name": "石油",   "binance": "",        "okx": "WTI-USDT-SWAP", "bybit": "CLUSDT",  "type": "commodity"},
+    {"symbol": "TSLA", "name": "特斯拉", "binance": "", "okx": "TSLA-USDT-SWAP", "bybit": "TSLAUSDT", "type": "stock"},
+    {"symbol": "NVDA", "name": "英伟达", "binance": "", "okx": "NVDA-USDT-SWAP", "bybit": "NVDAUSDT", "type": "stock"},
+    {"symbol": "AAPL", "name": "苹果",   "binance": "", "okx": "AAPL-USDT-SWAP", "bybit": "AAPLUSDT", "type": "stock"},
+    {"symbol": "MSFT", "name": "微软",   "binance": "", "okx": "MSFT-USDT-SWAP", "bybit": "MSFTUSDT", "type": "stock"},
+    {"symbol": "TCEHY", "name": "腾讯",  "binance": "", "okx": "TCEHY-USDT-SWAP", "bybit": "TCEHYUSDT", "type": "stock"},
+    {"symbol": "SKHYNIX", "name": "SK海力士", "binance": "", "okx": "SKHYNIX-USDT-SWAP", "bybit": "SKHYNIXUSDT", "type": "stock"},
+    {"symbol": "SNDK", "name": "闪迪",   "binance": "", "okx": "SNDK-USDT-SWAP", "bybit": "SNDKUSDT", "type": "stock"},
 ]
 
 
@@ -121,6 +126,20 @@ def _cached_fetch_klines(client, symbol, timeframe, limit, ttl=None):
             ts, data = _kline_cache[key]
             if now - ts < ttl:
                 return data
+
+    # 年线特殊处理：从日线数据聚合成年线
+    if timeframe == "1y":
+        daily_limit = max(limit * 365, 365)
+        try:
+            daily_data = client.fetch_klines(symbol, "1d", limit=daily_limit)
+            data = _aggregate_yearly_klines(daily_data, symbol)
+        except Exception as e:
+            logger.warning(f"[Exchange] 年线聚合失败(symbol={symbol}): {e} — 返回模拟数据")
+            data = _gen_mock_klines(symbol, timeframe, limit)
+        with _kline_cache_lock:
+            _kline_cache[key] = (now, data)
+        return data
+
     # 缓存未命中，实际请求
     try:
         data = client.fetch_klines(symbol, timeframe, limit=limit)
@@ -130,6 +149,45 @@ def _cached_fetch_klines(client, symbol, timeframe, limit, ttl=None):
     with _kline_cache_lock:
         _kline_cache[key] = (now, data)
     return data
+
+
+def _aggregate_yearly_klines(daily_candles, symbol):
+    """将日线K线聚合成年线K线"""
+    from datetime import datetime as _dt
+    yearly = {}
+    for c in daily_candles:
+        dt = _dt.fromtimestamp(c.open_time_ms / 1000)
+        year = dt.year
+        if year not in yearly:
+            yearly[year] = {
+                "open_time_ms": c.open_time_ms,
+                "open": c.open,
+                "high": c.high,
+                "low": c.low,
+                "close": c.close,
+                "volume": c.volume,
+                "close_time_ms": c.close_time_ms,
+            }
+        else:
+            y = yearly[year]
+            y["high"] = max(y["high"], c.high)
+            y["low"] = min(y["low"], c.low)
+            y["close"] = c.close
+            y["volume"] += c.volume
+            y["close_time_ms"] = c.close_time_ms
+
+    candles = []
+    for year in sorted(yearly.keys()):
+        y = yearly[year]
+        candles.append(CandleType(
+            symbol=symbol, timeframe="1y",
+            open_time_ms=y["open_time_ms"],
+            open=y["open"], high=y["high"], low=y["low"],
+            close=y["close"], volume=y["volume"],
+            close_time_ms=y["close_time_ms"],
+        ))
+    logger.info(f"[Exchange] 年线聚合完成: {len(daily_candles)} 根日线 -> {len(candles)} 根年线")
+    return candles
 
 
 # ==========================================================
@@ -170,7 +228,7 @@ def _build_client(account: ExchangeAccount) -> ExchangeClientBase:
 #  基础 CRUD
 # ==========================================================
 class CreateAccountReq(BaseModel):
-    exchange: int = Field(..., ge=1, le=2, description="1-币安 2-OKX")
+    exchange: int = Field(..., ge=1, le=3, description="1-币安 2-OKX 3-Bybit")
     sub_account_name: str = Field(..., min_length=1, max_length=64)
     sub_account_id: str = ""
     api_key: str = Field(..., min_length=8)
@@ -629,7 +687,7 @@ def _try_get_demo_client(db) -> 'ExchangeClientBase | None':
         testnet = _get_config_value(db, "demo_api_testnet", True)
         if not api_key or not api_secret:
             return None
-        exchange_id = 1 if exchange_str == "binance" else 2
+        exchange_id = {"binance": 1, "okx": 2, "bybit": 3}.get(exchange_str, 2)
         client = ExchangeClientBase.create(
             exchange=exchange_id, api_key=api_key, api_secret=api_secret,
             passphrase="", testnet=bool(testnet), exchange_account_id=0,
@@ -1152,8 +1210,8 @@ def kline_analysis(
     timeframe = timeframe.lower()
     if timeframe == "1m" and tf_raw.endswith("M"):
         timeframe = "1M"  # 月线
-    if timeframe not in ("1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M"):
-        raise ParameterException("timeframe 必须为 1m/5m/15m/1h/4h/1d/1w/1M")
+    if timeframe not in ("1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M", "1y"):
+        raise ParameterException("timeframe 必须为 1m/5m/15m/1h/4h/1d/1w/1M/1y")
     limit = max(50, min(500, limit))
 
     client = _get_client_by_account(db, user, account_id)

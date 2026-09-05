@@ -459,8 +459,8 @@ const history = ref([
   { time: '11:05', type_name: '新闻解读', symbol: 'SOL', timeframe: '1h', score: 1.2, direction: 'neutral', prompt: 2980, completion: 322, latency: 1850, cost: 0.0082, success: true },
   { time: '10:22', type_name: '综合评分', symbol: 'XAU', timeframe: '4h', score: 0.8, direction: 'short', prompt: 3280, completion: 286, latency: 2100, cost: 0.0079, success: true },
   { time: '09:48', type_name: '综合评分', symbol: 'WTI', timeframe: '1h', score: 0, direction: 'short', prompt: 0, completion: 0, latency: 0, cost: 0, success: false },
-  { time: '08:30', type_name: '综合评分', symbol: 'SAND', timeframe: '1h', score: 1.5, direction: 'long', prompt: 2680, completion: 298, latency: 1650, cost: 0.0068, success: true },
-  { time: '07:15', type_name: '新闻解读', symbol: 'HBAR', timeframe: '4h', score: 0.9, direction: 'neutral', prompt: 3120, completion: 342, latency: 1980, cost: 0.0089, success: true },
+  { time: '08:30', type_name: '综合评分', symbol: 'TSLA', timeframe: '1h', score: 1.5, direction: 'long', prompt: 2680, completion: 298, latency: 1650, cost: 0.0068, success: true },
+  { time: '07:15', type_name: '新闻解读', symbol: 'NVDA', timeframe: '4h', score: 0.9, direction: 'neutral', prompt: 3120, completion: 342, latency: 1980, cost: 0.0089, success: true },
 ])
 
 const aiLevel = computed(() => scoreLevel((lastResult.value?.ai_score || 0) / 3 * 10))

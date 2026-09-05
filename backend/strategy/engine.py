@@ -65,7 +65,7 @@ class StrategyEngine:
             try:
                 mm.register_client(client)
                 if not mm._running:
-                    mm.start(list(strategy.symbols) or ["BTC", "ETH", "SOL", "XAU", "WTI", "SAND", "HBAR"])
+                    mm.start(list(strategy.symbols) or ["BTC", "ETH", "SOL", "XAU", "WTI"])
                 klines = client.fetch_klines(symbol, timeframe, limit=limit)
             except Exception:
                 pass

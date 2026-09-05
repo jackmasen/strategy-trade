@@ -54,10 +54,7 @@ SUPPORTED_SYMBOLS = [
      "default_price": 1476.0, "binance": "SKHYNIXUSDT", "okx": ""},
     {"symbol": "SNDK", "name": "闪迪",   "type": "stock",
      "default_price": 50.0,   "binance": "SNDKUSDT",    "okx": ""},
-    {"symbol": "SAND", "name": "沙盒", "type": "crypto",
-     "default_price": 0.5, "binance": "SANDUSDT", "okx": "SAND-USDT-SWAP"},
-    {"symbol": "HBAR", "name": "海代拉", "type": "crypto",
-     "default_price": 0.1, "binance": "HBARUSDT", "okx": "HBAR-USDT-SWAP"},
+
 ]
 
 

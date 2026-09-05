@@ -43,8 +43,7 @@ class OKXFuturesClient(ExchangeClientBase):
         "BTC": "BTC-USDT-SWAP",
         "ETH": "ETH-USDT-SWAP",
         "SOL": "SOL-USDT-SWAP",
-        "SAND": "SAND-USDT-SWAP",
-        "HBAR": "HBAR-USDT-SWAP",
+
         # 贵金属
         "XAU": "XAU-USDT-SWAP",  # OKX 有 XAU 合约
         "XAG": "XAG-USDT-SWAP",  # OKX 有 XAG 合约

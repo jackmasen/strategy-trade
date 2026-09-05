@@ -280,8 +280,8 @@ const chart = computed(() => {
     { name:'SOL', value: 1520.8, count: 236, wr: 58, pf: 1.8 },
     { name:'XAU', value: 680.4,  count: 124, wr: 65, pf: 2.1 },
     { name:'WTI', value: -260.0, count: 96,  wr: 42, pf: 0.9 },
-    { name:'SAND', value: 0,      count: 0,   wr: 0,  pf: 0   },
-    { name:'HBAR', value: 0,      count: 0,   wr: 0,  pf: 0   },
+    { name:'TSLA', value: 0,      count: 0,   wr: 0,  pf: 0   },
+    { name:'NVDA', value: 0,      count: 0,   wr: 0,  pf: 0   },
   ]
   if (chartType.value === 'daily') {
     return {

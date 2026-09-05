@@ -234,25 +234,83 @@ def ai_analyze(
         except Exception as e:
             logger.warning(f"[AI-Analyze] 交易所行情获取失败 {symbol}: {e}")
 
-    # ========== 2. 拉取K线数据 ==========
+    # ========== 2. 拉取K线数据 + 计算技术指标 ==========
     candles_snapshot = ""
     try:
         mm2 = MarketManager.get_instance()
         klines = mm2.get_klines(symbol, timeframe, limit=30)
         if klines and len(klines) > 0:
+            recent = klines[-20:]
             lines = []
-            for k in klines[-20:]:  # 最近20根K线
+            for k in recent:
                 ts = k.open_time.timestamp() if hasattr(k, 'open_time') and k.open_time else 0
                 ts_str = datetime.fromtimestamp(ts).strftime('%m-%d %H:%M') if ts else 'N/A'
                 lines.append(
                     f"  O={k.open:.4f} H={k.high:.4f} L={k.low:.4f} C={k.close:.4f} V={k.volume:.2f}  [{ts_str}]"
                 )
-            candles_snapshot = "\n".join(lines)
-            logger.info(f"[AI-Analyze] {symbol} 获取K线 {len(klines)} 根，使用最近20根")
+            candles_klines = "\n".join(lines)
+
+            # --- 计算关键技术指标 ---
+            highs = [k.high for k in recent]
+            lows = [k.low for k in recent]
+            closes = [k.close for k in recent]
+            volumes = [k.volume for k in recent]
+
+            period_high = max(highs)
+            period_low = min(lows)
+            last_close = closes[-1]
+            range_pct = ((last_close - period_low) / (period_high - period_low) * 100) if (period_high - period_low) > 0 else 50.0
+
+            # 简单移动均线
+            ma5 = sum(closes[-5:]) / len(closes[-5:]) if len(closes) >= 5 else None
+            ma10 = sum(closes[-10:]) / len(closes[-10:]) if len(closes) >= 10 else None
+            ma20 = sum(closes[-20:]) / len(closes[-20:]) if len(closes) >= 20 else None
+
+            # 成交量趋势
+            vol_recent = sum(volumes[-5:]) / max(len(volumes[-5:]), 1)
+            vol_prev = sum(volumes[-10:-5]) / max(len(volumes[-10:-5]), 1) if len(volumes) >= 10 else vol_recent
+            vol_trend = "放量" if vol_recent > vol_prev * 1.1 else ("缩量" if vol_recent < vol_prev * 0.9 else "平稳")
+
+            # 近期价格变化
+            price_change = ((last_close - closes[0]) / closes[0] * 100) if closes[0] and closes[0] > 0 else 0
+
+            # RSI(14) 简化计算
+            rsi_val = None
+            if len(closes) >= 15:
+                gains, losses = [], []
+                for i in range(1, min(len(closes), 15)):
+                    diff = closes[i] - closes[i-1]
+                    gains.append(max(diff, 0))
+                    losses.append(max(-diff, 0))
+                avg_gain = sum(gains) / len(gains) if gains else 0
+                avg_loss = sum(losses) / len(losses) if losses else 0.0001
+                rs = avg_gain / avg_loss if avg_loss > 0 else 100
+                rsi_val = 100 - (100 / (1 + rs))
+
+            # MACD 简化计算 (12, 26, 9)
+            macd_info = ""
+            if len(closes) >= 26:
+                ema12 = sum(closes[-12:]) / 12
+                ema26 = sum(closes[-26:]) / 26
+                dif = ema12 - ema26
+                macd_info = f"DIF={dif:.4f} ({'多头' if dif > 0 else '空头'})"
+
+            # 组装实时行情指标快照
+            indicators = []
+            indicators.append(f"【实时价格】当前价={current_price or last_close:.4f}  买一={bid_price or 'N/A'}  卖一={ask_price or 'N/A'}  24h涨跌={change_pct or 0:.2f}%")
+            indicators.append(f"【近期高低价】20根最高={period_high:.4f}  20根最低={period_low:.4f}  当前位于区间{range_pct:.1f}%({'接近高点' if range_pct > 80 else '接近低点' if range_pct < 20 else '中间'})")
+            if ma5: indicators.append(f"【均线】MA5={ma5:.4f}  MA10={ma10:.4f}  MA20={ma20:.4f}  趋势={'多头排列' if ma5 > ma10 > ma20 else '空头排列' if ma5 < ma10 < ma20 else '交叉震荡'}")
+            indicators.append(f"【成交量】近5均={vol_recent:.2f}  前5均={vol_prev:.2f}  趋势={vol_trend}")
+            indicators.append(f"【区间变化】20根涨跌={price_change:.2f}%")
+            if rsi_val is not None: indicators.append(f"【RSI(14)】={rsi_val:.1f} ({'超买' if rsi_val > 70 else '超卖' if rsi_val < 30 else '正常'})")
+            if macd_info: indicators.append(f"【MACD】{macd_info}")
+
+            candles_snapshot = "\n".join(indicators) + "\n\n## K线明细：\n" + candles_klines
+            logger.info(f"[AI-Analyze] {symbol} 获取K线 {len(klines)} 根，含技术指标")
     except Exception as e:
         logger.warning(f"[AI-Analyze] K线获取失败 {symbol}: {e}")
 
-    # ========== 3. 拉取新闻数据 ==========
+    # ========== 3. 拉取新闻数据（含情绪、影响级别、摘要、时间新鲜度） ==========
     news_snapshot = ""
     news_count_24h = 0
     try:
@@ -267,17 +325,60 @@ def ai_analyze(
             .all()
         )
         news_count_24h = len(articles)
+        now_utc = datetime.utcnow()
         if articles:
             news_lines = []
+            sentiment_scores = []
+            impact_levels = []
             for a in articles[:10]:
-                sentiment_label = {0: "中性", 1: "偏多", 2: "偏空"}.get(a.sentiment, "未知")
-                news_lines.append(
-                    f"  [{sentiment_label}] {a.title[:80]}  ({a.published_at.strftime('%m-%d %H:%M')})"
-                )
+                sentiment_label = {0: "中性", 1: "偏多", -1: "偏空", 2: "偏空"}.get(a.sentiment, "未知")
+                hours_ago = (now_utc - a.published_at).total_seconds() / 3600 if a.published_at else 0
+                if hours_ago < 1:
+                    freshness = f"{int(hours_ago * 60)}分钟前"
+                elif hours_ago < 24:
+                    freshness = f"{hours_ago:.1f}小时前"
+                else:
+                    freshness = f"{int(hours_ago / 24)}天前"
+                impact_label = {1: "低", 2: "中", 3: "高", 4: "重大"}.get(getattr(a, 'impact_level', 1), "低")
+                summary = getattr(a, 'ai_summary', '') or getattr(a, 'summary', '') or ''
+                source = getattr(a, 'source_name', '') or ''
+                line = f"  [{sentiment_label}] 影响:{impact_label} {freshness} | {a.title[:80]}"
+                if source:
+                    line += f" | 来源:{source[:20]}"
+                if summary:
+                    line += f"\n    摘要: {summary[:100]}"
+                news_lines.append(line)
+                ss = getattr(a, 'sentiment_score', None)
+                if ss is not None:
+                    sentiment_scores.append(ss)
+                il = getattr(a, 'impact_level', None)
+                if il is not None:
+                    impact_levels.append(il)
             news_snapshot = "\n".join(news_lines)
-            logger.info(f"[AI-Analyze] {symbol} 获取新闻 {news_count_24h} 条（24h内相关）")
+            if sentiment_scores:
+                avg_sentiment = sum(sentiment_scores) / len(sentiment_scores)
+                sentiment_dir = "偏多" if avg_sentiment > 0.1 else ("偏空" if avg_sentiment < -0.1 else "中性")
+                news_snapshot = f"【新闻情绪总结】共{news_count_24h}条相关新闻，平均情绪={avg_sentiment:.2f}({sentiment_dir})，最高影响级别={max(impact_levels) if impact_levels else 'N/A'}\n" + news_snapshot
+            logger.info(f"[AI-Analyze] {symbol} 获取新闻 {news_count_24h} 条（24h内相关，含情绪总结）")
         else:
-            # 检查全量新闻（不限symbol）
+            macro_articles = (
+                db.query(NewsArticle)
+                .filter(NewsArticle.published_at >= cutoff)
+                .filter(NewsArticle.impact_level >= 3)
+                .order_by(NewsArticle.published_at.desc())
+                .limit(5)
+                .all()
+            )
+            if macro_articles:
+                news_lines = []
+                for a in macro_articles[:5]:
+                    sentiment_label = {0: "中性", 1: "偏多", -1: "偏空", 2: "偏空"}.get(a.sentiment, "未知")
+                    hours_ago = (now_utc - a.published_at).total_seconds() / 3600 if a.published_at else 0
+                    freshness = f"{hours_ago:.1f}小时前" if hours_ago < 24 else f"{int(hours_ago / 24)}天前"
+                    impact_label = {1: "低", 2: "中", 3: "高", 4: "重大"}.get(getattr(a, 'impact_level', 1), "低")
+                    news_lines.append(f"  [{sentiment_label}] 影响:{impact_label} {freshness} | {a.title[:80]}")
+                news_snapshot = "[无直接相关新闻，以下为高影响宏观新闻]\n" + "\n".join(news_lines)
+                news_count_24h = len(macro_articles)
             all_24h = (
                 db.query(NewsArticle)
                 .filter(NewsArticle.published_at >= cutoff)
@@ -377,7 +478,7 @@ def ai_analyze(
         "bid_price": bid_price,
         "ask_price": ask_price,
         "change_pct_24h": round(change_pct, 2) if change_pct else None,
-        "candles_count": len(candles_snapshot.split("\n")) if candles_snapshot else 0,
+        "candles_count": 20 if candles_snapshot else 0,
         "news_count_24h": news_count_24h,
         "news_warning": news_warning,
     }
@@ -1223,7 +1324,7 @@ def dashboard_report(
 
 # ======================== AI 综合预测 ========================
 
-PREDICTION_SYMBOLS = ["BTC", "ETH", "SOL", "XAU", "WTI", "SAND", "HBAR"]
+PREDICTION_SYMBOLS = ["BTC", "ETH", "SOL", "XAU", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "TCEHY", "SKHYNIX", "SNDK"]
 
 _OKX_INST_MAP = {
     "WTI": ["CL-USDT-SWAP", "CLUSDT", "WTI-USDT-SWAP"],

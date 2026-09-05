@@ -20,8 +20,8 @@
           <div class="conn-indicator" :title="connStatus === 'ok' ? `数据正常 · ${connLastUpdate ? new Date(connLastUpdate).toLocaleTimeString() : ''}` : '数据连接异常'">
             <span class="conn-dot" :class="connStatus"></span>
           </div>
-          <el-select v-model="selectedSymbol" placeholder="选择/搜索品种" size="default" style="width:160px;" filterable allow-create default-first-option @change="onSymbolChange">
-            <el-option v-for="(m, k) in SYMBOL_META" :key="k" :label="`${m.icon} ${k} ${m.name}`" :value="k" />
+          <el-select v-model="selectedSymbol" placeholder="选择/搜索品种" size="default" style="width:180px;" filterable @change="onSymbolChange" :filter-method="filterSymbol">
+            <el-option v-for="k in filteredSymbols" :key="k" :label="`${SYMBOL_META[k].icon} ${k} ${SYMBOL_META[k].name}`" :value="k" />
           </el-select>
           <el-select v-model="selectedAccount" placeholder="选择子账号" size="small" style="width:180px;" @change="loadAll">
             <el-option :value="0" label="🌐 公开行情" />
@@ -723,8 +723,8 @@
               <template v-if="item.i === 'toolbar'">
                 <div class="custom-toolbar">
                   <div class="ct-left">
-                    <el-select v-model="selectedSymbol" size="small" class="ct-symbol" filterable allow-create default-first-option @change="onSymbolChange">
-                      <el-option v-for="(m, k) in SYMBOL_META" :key="k" :label="`${m.icon} ${k} ${m.name}`" :value="k" />
+                    <el-select v-model="selectedSymbol" size="small" class="ct-symbol" filterable @change="onSymbolChange" :filter-method="filterSymbol">
+                      <el-option v-for="k in filteredSymbols" :key="k" :label="`${SYMBOL_META[k].icon} ${k} ${SYMBOL_META[k].name}`" :value="k" />
                     </el-select>
                     <el-select v-model="selectedAccount" size="small" class="ct-account" @change="loadAll">
                       <el-option label="公共行情" :value="0" />
@@ -1223,6 +1223,18 @@ const userStorageKey = (key) => {
 }
 
 const selectedSymbol = ref('BTC')
+const filteredSymbols = ref(Object.keys(SYMBOL_META))
+const filterSymbol = (query) => {
+  if (!query) {
+    filteredSymbols.value = Object.keys(SYMBOL_META)
+  } else {
+    const q = query.toLowerCase()
+    filteredSymbols.value = Object.keys(SYMBOL_META).filter(k => {
+      const m = SYMBOL_META[k]
+      return k.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q)
+    })
+  }
+}
 const timeframe = ref('1h')
 const selectedAccount = ref(0)
 const accounts = ref([])

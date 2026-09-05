@@ -289,7 +289,7 @@ const tickerLoading = ref(false)
 const tickerTimer = ref(null)
 
 function getPrecision(symbol) {
-  const p = { BTC: 2, ETH: 2, SOL: 2, XAU: 2, XAG: 2, WTI: 2, TSLA: 2, NVDA: 2, AAPL: 2, MSFT: 2, TCEHY: 2, SAND: 4, HBAR: 4 }
+  const p = { BTC: 2, ETH: 2, SOL: 2, XAU: 2, XAG: 2, WTI: 2, TSLA: 2, NVDA: 2, AAPL: 2, MSFT: 2, TCEHY: 2, SKHYNIX: 4, SNDK: 4 }
   return p[symbol] || 4
 }
 

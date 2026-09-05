@@ -12,9 +12,10 @@ class ExchangeAccount(Base):
 
     EXCHANGE_BINANCE = 1
     EXCHANGE_OKX = 2
+    EXCHANGE_BYBIT = 3
 
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True, comment="所属用户ID")
-    exchange = Column(SmallInteger, index=True, comment="交易所: 1-币安 2-OKX")
+    exchange = Column(SmallInteger, index=True, comment="交易所: 1-币安 2-OKX 3-Bybit")
     sub_account_name = Column(String(64), default="", comment="子账号名称(展示用)")
     sub_account_id = Column(String(128), default="", comment="交易所分配的子账号ID")
     api_key = Column(String(255), nullable=False, comment="API Key(加密存储)")

@@ -311,7 +311,8 @@ def health_check_all(
 # ============= 故障转移调用函数（供其他模块调用） =============
 
 def call_ai_with_failover(db: Session, analysis_type: str, symbol: str, timeframe: str,
-                          manual_prompt: str, candles_snapshot: str = "") -> dict:
+                          manual_prompt: str, candles_snapshot: str = "",
+                          news_snapshot: str = "") -> dict:
     """
     按优先级尝试所有API Key，第一个成功就返回，失败的自动切换
     返回 {"success": bool, "result": ..., "used_key_id": int, "error": str}
@@ -340,6 +341,7 @@ def call_ai_with_failover(db: Session, analysis_type: str, symbol: str, timefram
                 timeframe=timeframe,
                 manual_prompt=manual_prompt,
                 candles_snapshot=candles_snapshot,
+                news_snapshot=news_snapshot,
             )
             if result.success:
                 # 成功，重置失败计数

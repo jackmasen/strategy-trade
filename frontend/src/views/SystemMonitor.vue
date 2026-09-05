@@ -657,7 +657,9 @@
         </div>
         <div class="form-item" v-if="currentTaskConfig.fields.includes('test_symbol')">
           <label>测试币种</label>
-          <el-input v-model="taskForm.test_symbol" placeholder="如 BTC/USDT" />
+          <el-select v-model="taskForm.test_symbol" placeholder="选择币种" style="width:100%;" filterable>
+            <el-option v-for="(m, k) in SYMBOL_META" :key="k" :label="`${m.icon} ${k} ${m.name}`" :value="k + '/USDT'" />
+          </el-select>
         </div>
         <div class="form-item" v-if="currentTaskConfig.fields.includes('test_timeframe')">
           <label>测试时间级别</label>
@@ -711,7 +713,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Monitor, CircleCheck, CircleClose, Warning, Link, Plus, Coin, Lightning, Timer, InfoFilled } from '@element-plus/icons-vue'
 import { http } from '@/utils/request'
-import { API_PREFIX } from '@/utils/env'
+import { API_PREFIX, SYMBOL_META } from '@/utils/env'
 
 function escapeHtml(str) {
   if (str == null) return ''
@@ -808,7 +810,7 @@ const taskForm = reactive({
   strategy: 'emv',
   days: 90,
   initial_capital: 10000,
-  symbols: 'BTC/USDT,ETH/USDT,SOL/USDT,SAND/USDT,HBAR/USDT,BNB/USDT,XRP/USDT',
+  symbols: 'BTC/USDT,ETH/USDT,SOL/USDT,XAU/USDT,WTI/USDT,TSLA/USDT,NVDA/USDT',
   timeframes: '15m,1h,4h',
   top_n: 10,
   analysis_type: 'comprehensive',

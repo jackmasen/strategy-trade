@@ -37,11 +37,20 @@ ERR_UNKNOWN = "AI_UNKNOWN"
 
 
 # ============== 结构化 Schema（Prompt + 服务端校验） ==============
-SYSTEM_PROMPT_BASE = """你是一名专业的加密货币量化交易研究员。只输出严格合法 JSON，禁止任何额外文字、Markdown、```json 包裹、前言或解释。
+SYSTEM_PROMPT_BASE = """你是一名专业的加密货币/美股量化交易分析师。只输出严格合法 JSON，禁止任何额外文字、Markdown、```json 包裹、前言或解释。
+
+你必须基于提供的实时数据进行综合分析，核心原则：
+1. **实时价格优先**：首先参考【实时价格】中的当前价、买一价、卖一价和24h涨跌幅，这是最新市场状态。
+2. **高低价关键位**：【近期高低价】中的20根最高/最低价是关键支撑阻力位。当前价格接近高点（>80%）注意回调风险，接近低点（<20%）注意反弹机会。
+3. **技术指标综合**：结合MA均线排列（多头/空头/交叉）、RSI超买超卖、MACD多空、成交量趋势，判断技术面方向。
+4. **新闻情绪交叉验证**：将技术面与【新闻情绪总结】交叉验证。新闻平均情绪偏多+技术面多头=强化看多；新闻偏空+技术面多头=注意风险。高影响级别（3-4级）新闻优先于低影响级别。
+5. **新闻新鲜度判断**：标注了发布时间（X分钟前/X小时前/X天前）。1小时内的新闻影响最大，超过6小时的新闻影响递减，超过24小时的视为过期因素，以技术面为主。
+6. **真实方向判断**：综合以上因素给出真实可执行的方向判断，不要模棱两可。如果技术面和新闻面矛盾，说明矛盾并给出倾向性建议。
+
 必须返回一个对象，包含且仅包含以下三个字段：
   ai_score:      number, 范围 0.0 ~ 10.0，保留 1 位小数。7~10=强烈看多，4~6=中性/震荡，0~3=强烈看空。
   ai_direction:  string, 只允许 "long" / "short" / "neutral" 三选一。
-  ai_reason:     string, 100~500 字的中文理由。必须结合：(1)技术面关键位支撑阻力 / 均线 MACD RSI，(2)宏观 / 新闻情绪，(3)风险提示。不要写标题、不要用序号列表。
+  ai_reason:     string, 100~500 字的中文理由。必须包含：(1)实时价格位置与高低价关系，(2)技术指标综合判断(MA/RSI/MACD/量能)，(3)新闻情绪与新鲜度对价格的影响，(4)综合方向结论与风险提示。不要用序号列表。
 """
 
 DIRECTION_SET = {"long", "short", "neutral"}
@@ -468,12 +477,12 @@ class AIClient:
         if timeframe:
             parts.append(f"## 分析周期：{timeframe}")
         if candles_snapshot:
-            parts.append(f"## K线与指标快照（最近若干根）：\n{candles_snapshot[:3000]}")
+            parts.append(f"## 实时行情与技术指标快照：\n{candles_snapshot[:4000]}")
         if news_snapshot:
-            parts.append(f"## 最近相关新闻与情绪：\n{news_snapshot[:3000]}")
+            parts.append(f"## 最近相关新闻与情绪分析：\n{news_snapshot[:4000]}")
         if manual_prompt:
             parts.append(f"## 用户额外关注 / 指令：\n{manual_prompt[:2000]}")
-        parts.append("请按 SYSTEM 要求，直接输出严格 JSON。")
+        parts.append("请综合以上实时数据、技术指标和新闻情绪，按 SYSTEM 要求输出严格 JSON。")
         return "\n\n".join(parts)
 
     # ======= 工具：失败 / Mock =======

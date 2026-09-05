@@ -45,8 +45,7 @@ SYMBOL_KEYWORDS: List[Tuple[str, List[str]]] = [
     ("BTC", ["bitcoin", " btc ", "btc/", "btc$", "#btc", "xbt", "satoshi"]),
     ("ETH", ["ethereum", " eth ", "eth/", "ether", "vitalik", "eip-", "erc-"]),
     ("SOL", ["solana", " sol ", "sol/", "sbf"]),
-    ("SAND", ["sandbox", " sand ", "sand/", "the sandbox", "sand token"]),
-    ("HBAR", ["hedera", "hbar", "hashgraph", "hederahashgraph"]),
+
     # Precious metals
     ("XAU", ["gold ", "gold,", "golden", "xau", "precious metal", "rally in gold", "safe haven"]),
     ("XAG", ["silver", " xag ", "silver price", "white metal"]),
@@ -54,22 +53,31 @@ SYMBOL_KEYWORDS: List[Tuple[str, List[str]]] = [
     ("WTI", ["wti", "crude oil", "u.s. crude", "us crude", "brent", "opec", "oil invent", "oil price",
              "eia weekly", "crude stock", "gasoline stock", "strategic petroleum reserve"]),
     # US Stocks - Tech
-    ("TSLA", ["tesla", " tsla ", "tsla/", "musk", "elon", "gigafactory", "cybertruck"]),
-    ("NVDA", ["nvidia", " nvda ", "nvda/", "gpu", "graphic card", "ai chip", "h100", "a100", "黄仁勋"]),
-    ("AAPL", ["apple", " aapl ", "aapl/", "iphone", "ipad", "macbook", "tim cook", "库克"]),
-    ("MSFT", ["microsoft", " msft ", "msft/", "azure", "windows", "office 365", "satya", "盖茨", "openai"]),
+    ("TSLA", ["tesla", " tsla ", "tsla/", "musk", "elon", "gigafactory", "cybertruck", "model 3", "model y", "model s", "model x", "autopilot", "dojo", "megapack", "powerwall"]),
+    ("NVDA", ["nvidia", " nvda ", "nvda/", "gpu", "graphic card", "ai chip", "h100", "a100", "h200", "b100", "gb200", "黄仁勋", "cuda", "geforce", "rtx", "data center", "accelerated computing"]),
+    ("AAPL", ["apple", " aapl ", "aapl/", "iphone", "ipad", "macbook", "tim cook", "库克", "vision pro", "apple intelligence", "app store", "apple watch", "airpods", "macos", "ios"]),
+    ("MSFT", ["microsoft", " msft ", "msft/", "azure", "windows", "office 365", "satya", "盖茨", "openai", "copilot", "bing", "github", "linkedin", "teams", "xbox", "surface", "active directory"]),
     # US Stocks - China
-    ("TCEHY", ["tencent", " tcehy ", "tcehy/", "腾讯", "wechat", "微信", "pony ma", "马化腾"]),
+    ("TCEHY", ["tencent", " tcehy ", "tcehy/", "腾讯", "wechat", "微信", "pony ma", "马化腾", "honor of kings", "weixin", "tiktok", "pubg mobile", "league of legends"]),
     # Semiconductor / Memory
-    ("SKHYNIX", ["sk hynix", "skhynix", "海力士", "hbm", "高带宽存储", "dram", "晶圆", "000660"]),
-    ("SNDK", ["sandisk", "sndk", "闪迪", "nand flash", "nand", "闪存", "ssd"]),
+    ("SKHYNIX", ["sk hynix", "skhynix", "海力士", "hbm", "高带宽存储", "dram", "晶圆", "000660", "hbm3", "hbm3e", "ddr5", "lpddr"]),
+    ("SNDK", ["sandisk", "sndk", "闪迪", "nand flash", "nand", "闪存", "ssd", "western digital", "wd", "uflash"]),
 ]
 
-# 宏观类关键词：命中的会把品种扩散成全部（宏观对所有 5 种都可能有影响）
+# 宏观类关键词：命中的会把品种扩散成全部（宏观对所有品种都可能有影响）
 MACRO_KEYWORDS = [
     "fed", "fomc", "powell", "interest rate", "rate decision", "rate hike", "rate cut",
     "cpi", "inflation", "nonfarm", "nfp", "unemploy", "recession", "treasur", "yield",
     "debt ceiling", "dollar index", "dxy",
+    "earnings season", "earnings report", "quarterly results", "guidance", "revenue miss",
+    "revenue beat", "eps", "stock market", "s&p 500", "nasdaq", "dow jones", "bull market",
+    "bear market", "market crash", "correction", "volatility index", "vix", "fear and greed",
+    "risk appetite", "risk off", "risk on", "safe haven", "flight to safety",
+    "geopolitical", "trade war", "tariff", "sanction", "embargo",
+    "jobless claims", "job cuts", "layoff", "hiring freeze",
+    "pmi", "manufacturing", "industrial production", "retail sales", "consumer confidence",
+    "housing market", "mortgage", "real estate",
+    "ai bubble", "tech sell-off", "tech rally", "magnificent seven", "mag 7",
 ]
 
 # 加密宏观：比特币 ETF、监管类
@@ -172,12 +180,12 @@ def score_sentiment(title: str, summary: str) -> Tuple[float, List[str]]:
 
 
 # =========================================================
-# 关联品种识别（只返回本系统关心的 5 种）
+# 关联品种识别（返回本系统关心的所有品种）
 # =========================================================
 def match_symbols(title: str, summary: str, category: str) -> Tuple[List[str], List[str]]:
     """
     返回：
-      - related_symbols: ["BTC","XAU","WTI",...]
+      - related_symbols: ["BTC","XAU","WTI","TSLA",...]
       - extra_tags: ["regulation","macro",...]
     """
     text = f"{title}\n{summary}".lower()
@@ -191,10 +199,10 @@ def match_symbols(title: str, summary: str, category: str) -> Tuple[List[str], L
             if sym not in related:
                 related.append(sym)
 
-    # 宏观关键词命中 → 扩散 5 个品种都加入（因为加息降息对所有品种都影响）
+    # 宏观关键词命中 → 扩散所有品种都加入（因为加息降息/股市大盘对所有品种都影响）
     hit_macro = any(k in text for k in MACRO_KEYWORDS)
     if hit_macro:
-        for sym in ("BTC", "ETH", "SOL", "XAU", "WTI"):
+        for sym in ("BTC", "ETH", "SOL", "XAU", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "TCEHY", "SKHYNIX", "SNDK"):
             if sym not in related:
                 related.append(sym)
         extra_tags.append("macro")

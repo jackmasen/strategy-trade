@@ -469,7 +469,7 @@ async function loadOverview() {
   loading.value = true
   try {
     const res = await http.get(`${API_PREFIX}/quant-signal/overview`, {
-      params: { symbols: 'BTC,ETH,SOL,XAU,WTI,SAND,HBAR', timeframe: timeframe.value }
+      params: { symbols: 'BTC,ETH,SOL,XAU,WTI,TSLA,NVDA,AAPL,MSFT,TCEHY,SKHYNIX,SNDK', timeframe: timeframe.value }
     })
     signals.value = res.signals || []
     if (!selectedSignal.value && signals.value.length > 0) {
