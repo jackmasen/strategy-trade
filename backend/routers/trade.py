@@ -465,7 +465,7 @@ def list_positions(
                 "realized_pnl": float(p.realized_pnl or 0),
                 "fee_total": float(p.fee_total or 0),
                 "entry_score": float(p.entry_score or 0),
-                "holding_minutes": p.holding_minutes or 0,
+                "holding_minutes": (p.holding_minutes if p.status != 1 and p.holding_minutes else (int((__import__("datetime").datetime.now() - p.entry_time).total_seconds() // 60) if p.entry_time else 0)),
                 "strategy_id": p.strategy_id,
                 "exchange": p.exchange,
                 "status": p.status,

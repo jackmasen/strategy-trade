@@ -1,4 +1,4 @@
-"""
+﻿"""
 AI量化信号引擎 API — 真实数据版
 =================================
 - OI/资金费率：从MarketManager实时获取（加密货币来自交易所API）
@@ -26,41 +26,114 @@ router = APIRouter(prefix="/quant-signal", tags=["量化信号"])
 
 _engine = QuantSignalEngine()
 
-# ======================== 商品(WTI/XAU)价格回退 ========================
+# ======================== 非加密品种价格回退（OKX + Bybit） ========================
 _OKX_INST_MAP = {
     "WTI": ["CL-USDT-SWAP", "CLUSDT", "WTI-USDT-SWAP"],
     "XAU": ["XAU-USDT-SWAP", "XAUUSDT"],
     "XAG": ["XAG-USDT-SWAP", "XAGUSDT"],
 }
+_BYBIT_SYMBOL_MAP = {
+    "XAU": "XAUUSDT", "XAG": "XAGUSDT", "WTI": "CLUSDT",
+    "TSLA": "TSLAUSDT", "NVDA": "NVDAUSDT", "AAPL": "AAPLUSDT",
+    "MSFT": "MSFTUSDT", "TCEHY": "TCEHYUSDT",
+    "SKHYNIX": "SKHYNIXUSDT", "SNDK": "SNDKUSDT",
+}
+_NON_CRYPTO_SYMBOLS = {"XAU", "XAG", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "TCEHY", "SKHYNIX", "SNDK"}
 _commodity_price_cache: Dict[str, dict] = {}
 
 
-def _fetch_commodity_price(symbol: str) -> Optional[float]:
-    """从OKX公共API获取商品价格（WTI/XAU等），带5秒缓存"""
+def _fetch_bybit_price(symbol: str) -> Optional[float]:
+    """Bybit v5 public API price for non-crypto symbols"""
     import requests as _requests
-    inst_ids = _OKX_INST_MAP.get(symbol)
-    if not inst_ids:
+    bybit_sym = _BYBIT_SYMBOL_MAP.get(symbol)
+    if not bybit_sym:
         return None
+    cache = _commodity_price_cache.get(f"bybit_{symbol}", {})
+    if cache and time.time() - cache.get("ts", 0) < 5:
+        return cache.get("price")
+    try:
+        r = _requests.get(
+            "https://api.bybit.com/v5/market/tickers",
+            params={"category": "linear", "symbol": bybit_sym},
+            timeout=5,
+        )
+        data = r.json().get("result", {}).get("list", [{}])
+        if data:
+            price = float(data[0].get("lastPrice", 0))
+            if price > 0:
+                _commodity_price_cache[f"bybit_{symbol}"] = {"price": price, "ts": time.time()}
+                logger.info(f"[QuantSignal] Bybit {symbol} price: {price}")
+                return price
+    except Exception as e:
+        logger.debug(f"[QuantSignal] Bybit {symbol} price failed: {e}")
+    return None
+
+
+def _fetch_bybit_klines(symbol: str, timeframe: str, limit: int = 100) -> List:
+    """Bybit v5 public API klines for non-crypto symbols"""
+    import requests as _requests
+    from backend.exchanges._types import Candle
+    bybit_sym = _BYBIT_SYMBOL_MAP.get(symbol)
+    if not bybit_sym:
+        return []
+    tf_map = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "4h": "240", "1d": "D"}
+    interval = tf_map.get(timeframe, "240")
+    try:
+        r = _requests.get(
+            "https://api.bybit.com/v5/market/kline",
+            params={"category": "linear", "symbol": bybit_sym, "interval": interval, "limit": limit},
+            timeout=10,
+        )
+        result = r.json().get("result", {})
+        kline_list = result.get("list", [])
+        kline_list.reverse()
+        candles = []
+        for k in kline_list:
+            try:
+                candles.append(Candle(
+                    symbol=symbol, timeframe=timeframe,
+                    open_time_ms=int(k[0]), close_time_ms=int(k[0]) + 1,
+                    open=float(k[1]), high=float(k[2]),
+                    low=float(k[3]), close=float(k[4]),
+                    volume=float(k[5]),
+                ))
+            except (ValueError, IndexError):
+                continue
+        logger.info(f"[QuantSignal] Bybit {symbol} {timeframe} klines: {len(candles)}")
+        return candles
+    except Exception as e:
+        logger.debug(f"[QuantSignal] Bybit klines {symbol} {timeframe} failed: {e}")
+        return []
+
+
+def _fetch_commodity_price(symbol: str) -> Optional[float]:
+    """Fetch non-crypto price: OKX first, then Bybit fallback"""
+    import requests as _requests
     cache = _commodity_price_cache.get(symbol, {})
     if cache and time.time() - cache.get("ts", 0) < 5:
         return cache.get("price")
-    for inst_id in inst_ids:
-        try:
-            r = _requests.get(
-                "https://www.okx.com/api/v5/market/ticker",
-                params={"instId": inst_id},
-                timeout=5,
-            )
-            data = r.json().get("data", [{}])[0]
-            price = float(data.get("last", 0))
-            if price > 0:
-                _commodity_price_cache[symbol] = {"price": price, "ts": time.time()}
-                logger.info(f"[QuantSignal] OKX获取{symbol}价格成功: {price} (instId={inst_id})")
-                return price
-        except Exception as e:
-            logger.debug(f"[QuantSignal] OKX {inst_id} 获取{symbol}价格失败: {e}")
+    inst_ids = _OKX_INST_MAP.get(symbol)
+    if inst_ids:
+        for inst_id in inst_ids:
+            try:
+                r = _requests.get(
+                    "https://www.okx.com/api/v5/market/ticker",
+                    params={"instId": inst_id},
+                    timeout=5,
+                )
+                data = r.json().get("data", [{}])[0]
+                price = float(data.get("last", 0))
+                if price > 0:
+                    _commodity_price_cache[symbol] = {"price": price, "ts": time.time()}
+                    logger.info(f"[QuantSignal] OKX {symbol} price: {price}")
+                    return price
+            except Exception as e:
+                logger.debug(f"[QuantSignal] OKX {inst_id} {symbol} failed: {e}")
+    bybit_price = _fetch_bybit_price(symbol)
+    if bybit_price and bybit_price > 0:
+        _commodity_price_cache[symbol] = {"price": bybit_price, "ts": time.time()}
+        return bybit_price
     return None
-
 
 # ========== 工具：确保信号表存在 ==========
 def _ensure_signal_table():
@@ -284,21 +357,27 @@ def signal_overview(
             # 获取K线数据
             klines = mm.get_klines(sym, timeframe, limit=100)
             if not klines or len(klines) < 30:
-                # 商品类（WTI/XAU）无Binance K线，尝试从OKX获取当前价格
-                current_price = _fetch_commodity_price(sym)
-                if current_price and current_price > 0:
-                    # 用模拟kline构造最小数据集，使信号引擎能计算
-                    klines = []
-                    for i in range(35):
-                        from backend.exchanges._types import Candle
-                        ts = int(time.time() * 1000) - (35 - i) * 14400000  # 4h周期
-                        close_var = current_price * (1 + (i % 7 - 3) * 0.002)
-                        klines.append(Candle(
-                            symbol=sym, timeframe=timeframe,
-                            open_time_ms=ts, close_time_ms=ts + 1,
-                            open=close_var, high=close_var * 1.001,
-                            low=close_var * 0.999, close=close_var, volume=0,
-                        ))
+                # Non-crypto: try Bybit klines first
+                if sym in _NON_CRYPTO_SYMBOLS:
+                    bybit_klines = _fetch_bybit_klines(sym, timeframe, limit=100)
+                    if bybit_klines and len(bybit_klines) >= 30:
+                        klines = bybit_klines
+                if not klines or len(klines) < 30:
+                    # 商品类（WTI/XAU）无Binance K线，尝试从OKX获取当前价格
+                    current_price = _fetch_commodity_price(sym)
+                    if current_price and current_price > 0:
+                        # 用模拟kline构造最小数据集，使信号引擎能计算
+                        klines = []
+                        for i in range(35):
+                            from backend.exchanges._types import Candle
+                            ts = int(time.time() * 1000) - (35 - i) * 14400000  # 4h周期
+                            close_var = current_price * (1 + (i % 7 - 3) * 0.002)
+                            klines.append(Candle(
+                                symbol=sym, timeframe=timeframe,
+                                open_time_ms=ts, close_time_ms=ts + 1,
+                                open=close_var, high=close_var * 1.001,
+                                low=close_var * 0.999, close=close_var, volume=0,
+                            ))
                 if not klines or len(klines) < 30:
                     results.append({
                         "symbol": sym,

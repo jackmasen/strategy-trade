@@ -172,7 +172,22 @@ def call_ai_unified(db: Session, analysis_type: str, symbol: str = "",
             "error": "",
         }
 
-    # 3. 全部失败
+    # 3. AI API 全部不可用 → 规则引擎降级分析（基于技术指标）
+    logger.info("[AI-Failover] AI API不可用，启用规则引擎降级分析...")
+    fallback_result = _rule_based_fallback(
+        analysis_type, symbol, timeframe, candles_snapshot, news_snapshot
+    )
+    if fallback_result:
+        return {
+            "success": True,
+            "result": fallback_result,
+            "source": "rule_fallback",
+            "used_key_id": None,
+            "used_key_name": "",
+            "error": "",
+        }
+
+    # 4. 规则引擎也无法生成（无数据）
     return {
         "success": False,
         "result": None,
@@ -181,6 +196,123 @@ def call_ai_unified(db: Session, analysis_type: str, symbol: str = "",
         "used_key_name": "",
         "error": pool_result["error"],
     }
+
+
+def _rule_based_fallback(analysis_type: str, symbol: str, timeframe: str,
+                          candles_snapshot: str, news_snapshot: str) -> Optional[AIResult]:
+    """无AI API时，基于K线快照进行规则分析，生成基础评分和方向判断"""
+    import json as _json
+    import re
+
+    try:
+        candles = []
+        if candles_snapshot:
+            text = candles_snapshot.strip()
+            if text.startswith("```"):
+                text = re.sub(r"^```[a-z]*\n?", "", text)
+                text = re.sub(r"\n?```$", "", text).strip()
+            try:
+                data = _json.loads(text)
+                if isinstance(data, list):
+                    candles = data
+                elif isinstance(data, dict) and "candles" in data:
+                    candles = data["candles"]
+            except _json.JSONDecodeError:
+                lines = [l.strip() for l in text.split("\n") if l.strip()]
+                for line in lines:
+                    parts = re.split(r"[,\s]+", line)
+                    if len(parts) >= 5:
+                        try:
+                            candles.append({
+                                "open": float(parts[1]), "high": float(parts[2]),
+                                "low": float(parts[3]), "close": float(parts[4]),
+                                "volume": float(parts[5]) if len(parts) > 5 else 0,
+                            })
+                        except (ValueError, IndexError):
+                            continue
+
+        if not candles or len(closes := [c.get("close", c.get("c", 0)) for c in candles]) < 5:
+            return None
+
+        closes = [float(c) for c in closes if c and float(c) > 0]
+        if len(closes) < 5:
+            return None
+
+        highs = [float(c.get("high", c.get("h", 0))) for c in candles]
+        lows = [float(c.get("low", c.get("l", 0))) for c in candles]
+        volumes = [float(c.get("volume", c.get("v", 0))) for c in candles]
+
+        current_price = closes[-1]
+        recent_high = max(highs[-20:]) if len(highs) >= 20 else max(highs)
+        recent_low = min(lows[-20:]) if len(lows) >= 20 else min(lows)
+
+        # RSI (14)
+        gains, losses = [], []
+        for i in range(1, min(15, len(closes))):
+            diff = closes[i] - closes[i-1]
+            gains.append(max(0, diff))
+            losses.append(max(0, -diff))
+        avg_gain = sum(gains) / len(gains) if gains else 0
+        avg_loss = sum(losses) / len(losses) if losses else 0.001
+        rsi = 100 - (100 / (1 + avg_gain / avg_loss)) if avg_loss > 0 else 100
+
+        # MA
+        ma5 = sum(closes[-5:]) / len(closes[-5:]) if len(closes) >= 5 else current_price
+        ma20 = sum(closes[-20:]) / len(closes[-20:]) if len(closes) >= 20 else sum(closes) / len(closes)
+
+        # 方向判断
+        bullish_signals = 0
+        bearish_signals = 0
+        if rsi < 30:
+            bullish_signals += 2
+        elif rsi > 70:
+            bearish_signals += 2
+        if current_price > ma5:
+            bullish_signals += 1
+        else:
+            bearish_signals += 1
+        if ma5 > ma20:
+            bullish_signals += 1
+        else:
+            bearish_signals += 1
+        if current_price > recent_low * 1.02:
+            bullish_signals += 1
+        if current_price < recent_high * 0.98:
+            bearish_signals += 1
+
+        if bullish_signals > bearish_signals:
+            direction = "bullish"
+            score = min(8.0, 5.0 + (bullish_signals - bearish_signals) * 0.8)
+        elif bearish_signals > bullish_signals:
+            direction = "bearish"
+            score = min(8.0, 5.0 + (bearish_signals - bullish_signals) * 0.8)
+        else:
+            direction = "neutral"
+            score = 5.0
+
+        confidence = min(0.85, 0.4 + abs(bullish_signals - bearish_signals) * 0.1)
+
+        summary = (
+            f"[规则引擎降级分析] {symbol} {timeframe}\n"
+            f"当前价格: ${current_price:.2f}\n"
+            f"RSI(14): {rsi:.1f} | MA5: ${ma5:.2f} | MA20: ${ma20:.2f}\n"
+            f"近20根高/低: ${recent_high:.2f} / ${recent_low:.2f}\n"
+            f"方向: {direction} (评分: {score:.1f}, 置信度: {confidence*100:.0f}%)\n"
+            f"注: AI API未配置，此分析基于技术指标规则引擎生成"
+        )
+
+        return AIResult(
+            success=True,
+            ai_score=round(score, 1),
+            ai_direction=direction,
+            confidence=round(confidence, 2),
+            summary=summary,
+            error_code="",
+            error_msg="",
+        )
+    except Exception as e:
+        logger.warning(f"[AI-Failover] 规则引擎降级分析失败: {e}")
+        return None
 
 
 def check_ai_status(db: Session) -> Dict[str, Any]:

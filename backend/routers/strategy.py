@@ -122,6 +122,13 @@ def create_strategy(
     user: User = Depends(require_trader),
 ):
     """创建策略"""
+    # Check for duplicate strategy name
+    existing = db.query(StrategyConfig).filter(
+        StrategyConfig.user_id == user.id,
+        StrategyConfig.strategy_name == req.strategy_name
+    ).first()
+    if existing:
+        raise ParameterException(f"策略名称 '{req.strategy_name}' 已存在")
     if not 0 <= req.score_threshold <= 10:
         raise ParameterException("评分阈值应在0-10之间")
     # 新闻AI策略不需要技术指标权重校验
@@ -510,7 +517,7 @@ def latest_scores(
     # 按 (strategy_id, symbol, timeframe) 去重取最新
     dedup = {}
     for r in items:
-        key = (r.strategy_id, r.symbol, r.timeframe)
+        key = (r.symbol, r.timeframe)
         if key not in dedup:
             dedup[key] = r
     latest = list(dedup.values())
