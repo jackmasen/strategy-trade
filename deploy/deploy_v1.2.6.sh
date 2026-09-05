@@ -85,13 +85,48 @@ else
     ok "前端构建完成"
 fi
 
-# ---------- 6. 修复权限 ----------
+# ---------- 6. 修复版本检测逻辑（防止硬编码旧版本导致无法更新）----------
+log "修复版本检测逻辑..."
+python3 -c "
+import re, os, sys
+sm_path = os.path.join('$PROJECT_DIR', 'backend', 'services', 'system_manager.py')
+with open(sm_path, 'r', encoding='utf-8') as f:
+    content = f.read()
+old_func = '''def _get_current_version() -> str:
+    \"\"\"获取当前版本号\"\"\"
+    try:
+        import main as _main
+        if hasattr(_main, \"_INSTALL_APP_VERSION\"):
+            return f\"v{_main._INSTALL_APP_VERSION}\"
+    except Exception:
+        pass
+    return \"v1.2.6\"'''
+new_func = '''def _get_current_version() -> str:
+    \"\"\"获取当前版本号（动态读取 main._INSTALL_APP_VERSION）\"\"\"
+    try:
+        import main as _main
+        if hasattr(_main, \"_INSTALL_APP_VERSION\"):
+            return f\"v{_main._INSTALL_APP_VERSION}\"
+    except Exception:
+        pass
+    return \"v1.2.6\"'''
+if 'return \"v1.2.5\"' in content:
+    content = content.replace('return \"v1.2.5\"', 'return \"v1.2.6\"')
+    with open(sm_path, 'w', encoding='utf-8') as f:
+        f.write(content)
+    print('  已修复硬编码版本号 v1.2.5 -> v1.2.6')
+else:
+    print('  版本检测逻辑正常，无需修复')
+"
+ok "版本检测修复完成"
+
+# ---------- 7. 修复权限 ----------
 log "修复权限..."
 chown -R www:www "$PROJECT_DIR" 2>/dev/null || true
 chmod 750 "$PROJECT_DIR/.env" 2>/dev/null || true
 ok "权限修复完成"
 
-# ---------- 7. 重启服务 ----------
+# ---------- 8. 重启服务 ----------
 log "重启服务..."
 SUPERVISOR_CONF="/etc/supervisor/conf.d/strategy-trade.conf"
 if [ -f "$SUPERVISOR_CONF" ] || command -v supervisorctl &>/dev/null; then
@@ -109,7 +144,7 @@ else
     ok "旧进程已清理"
 fi
 
-# ---------- 8. 验证 ----------
+# ---------- 9. 验证 ----------
 echo ""
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}  升级完成！${NC}"
