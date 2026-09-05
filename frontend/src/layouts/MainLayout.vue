@@ -60,7 +60,30 @@
             风险 中低
           </div>
           <!-- 搜索 -->
-          <el-input placeholder="搜索订单/策略/品种..." :prefix-icon="Search" size="default" class="search" clearable />
+          <div class="search-wrapper">
+            <el-autocomplete
+              v-model="searchKeyword"
+              :fetch-suggestions="fetchSearchSuggestions"
+              :prefix-icon="Search"
+              placeholder="搜索品种..."
+              size="small"
+              class="search"
+              clearable
+              value-key="label"
+              popper-class="search-popper"
+              @select="onSearchSelect"
+              @keydown.enter="onSearchEnter"
+            >
+              <template #default="{ item }">
+                <span style="display:flex;align-items:center;gap:6px;">
+                  <span style="font-size:14px;">{{ item.icon }}</span>
+                  <span style="font-weight:600;font-family:monospace;">{{ item.value }}</span>
+                  <span style="color:#97A6B6;">{{ item.name }}</span>
+                </span>
+              </template>
+            </el-autocomplete>
+            <el-button :icon="Search" size="small" class="search-btn" @click="onSearchEnter" />
+          </div>
           <!-- 通知 -->
           <el-badge :value="unreadCount" :hidden="unreadCount === 0" class="notify" :max="99">
             <el-button :icon="Bell" circle text @click="showNotifications = true" />
@@ -144,6 +167,44 @@ import {
 import { useUserStore } from '@/store/user'
 import router from '@/router'
 import { http, API_PREFIX } from '@/utils/request'
+import { SYMBOL_META } from '@/utils/env'
+
+const searchKeyword = ref('')
+const fetchSearchSuggestions = (query, cb) => {
+  if (!query) { cb([]); return }
+  const q = query.toLowerCase()
+  const results = Object.entries(SYMBOL_META)
+    .filter(([k, m]) => k.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q))
+    .map(([k, m]) => ({ value: k, label: `${m.icon} ${k} ${m.name}`, icon: m.icon, name: m.name }))
+  cb(results)
+}
+const onSearchSelect = (item) => {
+  if (item?.value) {
+    r.push({ path: '/kline', query: { symbol: item.value } })
+    searchKeyword.value = ''
+  }
+}
+const onSearchEnter = () => {
+  const q = (searchKeyword.value || '').trim()
+  if (!q) return
+  const match = Object.entries(SYMBOL_META).find(
+    ([k, m]) => k.toLowerCase() === q.toLowerCase() || (m.name || '') === q
+  )
+  if (match) {
+    r.push({ path: '/kline', query: { symbol: match[0] } })
+    searchKeyword.value = ''
+  } else {
+    const partial = Object.entries(SYMBOL_META).find(
+      ([k, m]) => k.toLowerCase().includes(q.toLowerCase()) || (m.name || '').toLowerCase().includes(q.toLowerCase())
+    )
+    if (partial) {
+      r.push({ path: '/kline', query: { symbol: partial[0] } })
+      searchKeyword.value = ''
+    } else {
+      ElMessage.warning(`未找到品种: ${q}`)
+    }
+  }
+}
 
 // 捕获子组件错误（快速切换页面时常见），防止全屏报错
 onErrorCaptured((err, instance, info) => {
@@ -380,7 +441,7 @@ const onCommand = async (c) => {
 .header-right {
   display: flex;
   align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 .clock {
   background: #152330;
@@ -406,8 +467,23 @@ const onCommand = async (c) => {
   align-items: center;
   gap: 4px;
 }
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
 .search {
-  width: 240px;
+  width: 140px;
+}
+.search-btn {
+  background: #1A382A !important;
+  border-color: #25D07D !important;
+  color: #25D07D !important;
+  padding: 0 8px;
+}
+.search-btn:hover {
+  background: #253D2E !important;
+  color: #4ADE80 !important;
 }
 .notify :deep(.el-badge__content) {
   background: #F87171;
@@ -490,5 +566,18 @@ const onCommand = async (c) => {
   color: #909399;
   margin-top: 4px;
   line-height: 1.5;
+}
+</style>
+
+<style>
+.search-popper.el-popper {
+  min-width: 180px !important;
+  width: auto !important;
+}
+.search-popper .el-autocomplete-suggestion__wrap {
+  max-height: 260px;
+}
+.search-popper li {
+  padding: 6px 10px;
 }
 </style>

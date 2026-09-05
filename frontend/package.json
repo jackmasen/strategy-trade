@@ -13,7 +13,7 @@
     "axios": "^1.7.0",
     "dayjs": "^1.11.10",
     "echarts": "^5.5.0",
-    "element-plus": "^2.7.0",
+    "element-plus": "^2.14.3",
     "nprogress": "^0.2.0",
     "pinia": "^2.1.7",
     "pinia-plugin-persistedstate": "^3.2.1",

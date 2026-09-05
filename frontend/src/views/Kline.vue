@@ -20,8 +20,8 @@
           <div class="conn-indicator" :title="connStatus === 'ok' ? `数据正常 · ${connLastUpdate ? new Date(connLastUpdate).toLocaleTimeString() : ''}` : '数据连接异常'">
             <span class="conn-dot" :class="connStatus"></span>
           </div>
-          <el-select v-model="selectedSymbol" placeholder="选择/搜索品种" size="default" style="width:180px;" filterable @change="onSymbolChange" :filter-method="filterSymbol">
-            <el-option v-for="k in filteredSymbols" :key="k" :label="`${SYMBOL_META[k].icon} ${k} ${SYMBOL_META[k].name}`" :value="k" />
+          <el-select v-model="selectedSymbol" placeholder="选择/搜索品种" size="default" style="width:180px;" filterable @change="onSymbolChange">
+            <el-option v-for="k in symbolKeys" :key="k" :label="`${SYMBOL_META[k].icon} ${k} ${SYMBOL_META[k].name}`" :value="k" />
           </el-select>
           <el-select v-model="selectedAccount" placeholder="选择子账号" size="small" style="width:180px;" @change="loadAll">
             <el-option :value="0" label="🌐 公开行情" />
@@ -723,8 +723,8 @@
               <template v-if="item.i === 'toolbar'">
                 <div class="custom-toolbar">
                   <div class="ct-left">
-                    <el-select v-model="selectedSymbol" size="small" class="ct-symbol" filterable @change="onSymbolChange" :filter-method="filterSymbol">
-                      <el-option v-for="k in filteredSymbols" :key="k" :label="`${SYMBOL_META[k].icon} ${k} ${SYMBOL_META[k].name}`" :value="k" />
+                    <el-select v-model="selectedSymbol" size="small" class="ct-symbol" filterable @change="onSymbolChange">
+                      <el-option v-for="k in symbolKeys" :key="k" :label="`${SYMBOL_META[k].icon} ${k} ${SYMBOL_META[k].name}`" :value="k" />
                     </el-select>
                     <el-select v-model="selectedAccount" size="small" class="ct-account" @change="loadAll">
                       <el-option label="公共行情" :value="0" />
@@ -1205,6 +1205,7 @@
 
 <script setup>
 import { ref, reactive, onMounted, onBeforeUnmount, computed, watch, nextTick, markRaw } from 'vue'
+import { useRoute } from 'vue-router'
 import * as echarts from 'echarts'
 import { Bell, Cpu, Warning, Close, Grid, ArrowDown, Edit, RefreshLeft, Setting, Upload } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -1214,6 +1215,7 @@ import { Refresh } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
 
 const userStore = useUserStore()
+const route = useRoute()
 const isAdmin = computed(() => userStore.isAdmin)
 
 // 按用户区分的本地存储 key，避免不同用户布局串用
@@ -1223,18 +1225,7 @@ const userStorageKey = (key) => {
 }
 
 const selectedSymbol = ref('BTC')
-const filteredSymbols = ref(Object.keys(SYMBOL_META))
-const filterSymbol = (query) => {
-  if (!query) {
-    filteredSymbols.value = Object.keys(SYMBOL_META)
-  } else {
-    const q = query.toLowerCase()
-    filteredSymbols.value = Object.keys(SYMBOL_META).filter(k => {
-      const m = SYMBOL_META[k]
-      return k.toLowerCase().includes(q) || (m.name || '').toLowerCase().includes(q)
-    })
-  }
-}
+const symbolKeys = computed(() => Object.keys(SYMBOL_META))
 const timeframe = ref('1h')
 const selectedAccount = ref(0)
 const accounts = ref([])
@@ -2403,6 +2394,11 @@ function onResize() {
 }
 
 onMounted(async () => {
+  // 从全局搜索跳转时读取品种参数
+  const querySymbol = route.query.symbol
+  if (querySymbol && SYMBOL_META[querySymbol]) {
+    selectedSymbol.value = querySymbol
+  }
   // 先加载用户布局配置（确保用户信息已就绪）
   loadUserLayout()
   initAlertSymbols()
