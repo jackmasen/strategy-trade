@@ -660,3 +660,129 @@ def _build_daily_report(db, user_id: int, acc_id, report_date: str):
     obj.per_symbol_summary = per_sym
     db.commit()
 
+
+# ==========================================================================
+# Task 5: 数据清理（每天 3:00 执行）
+#   - 清理30天前的新闻、90天前的AI分析记录、180天前的评分记录
+# ==========================================================================
+@celery.task(name="backend.tasks.scheduled.data_cleanup", bind=True)
+def data_cleanup(self):
+    """清理过期数据，保持数据库体积合理"""
+    from sqlalchemy import delete
+    from backend.models.analytics import NewsArticle, AIAnalysisRecord, ScoreRecord as ARScoreRecord
+    from backend.models.strategy import ScoreRecord
+
+    logger.info("[Scheduled] 开始数据清理...")
+    cleaned = {}
+
+    try:
+        with session_maker() as db:
+            now = datetime.utcnow()
+
+            # 30天前的新闻（保留高影响级别的）
+            cutoff_news = now - timedelta(days=30)
+            news_del = db.query(NewsArticle).filter(
+                NewsArticle.published_at < cutoff_news,
+                NewsArticle.impact_level < 3,
+            ).delete(synchronize_session=False)
+            cleaned["news_30d"] = news_del
+
+            # 90天前的新闻（全量清理）
+            cutoff_news_all = now - timedelta(days=90)
+            news_all_del = db.query(NewsArticle).filter(
+                NewsArticle.published_at < cutoff_news_all,
+            ).delete(synchronize_session=False)
+            cleaned["news_90d"] = news_all_del
+
+            # 180天前的AI分析记录
+            cutoff_ai = now - timedelta(days=180)
+            ai_del = db.query(AIAnalysisRecord).filter(
+                AIAnalysisRecord.created_at < cutoff_ai,
+            ).delete(synchronize_session=False)
+            cleaned["ai_records_180d"] = ai_del
+
+            # 180天前的评分记录
+            score_del = db.query(ScoreRecord).filter(
+                ScoreRecord.created_at < cutoff_ai,
+            ).delete(synchronize_session=False)
+            cleaned["score_records_180d"] = score_del
+
+            # 超时订单清理（24小时前的Pending订单）
+            cutoff_order = now - timedelta(hours=24)
+            from backend.models.trade import TradeOrder
+            order_del = db.query(TradeOrder).filter(
+                TradeOrder.created_at < cutoff_order,
+                TradeOrder.status == 0,
+            ).update({TradeOrder.status: 4}, synchronize_session=False)
+            cleaned["timeout_orders"] = order_del
+
+            db.commit()
+            logger.info(f"[Scheduled] 数据清理完成: {cleaned}")
+    except Exception as e:
+        logger.exception(f"[Scheduled] 数据清理失败: {e}")
+        return {"status": "error", "msg": str(e)}
+
+    return {"status": "ok", "cleaned": cleaned}
+
+
+# ==========================================================================
+# Task 6: 自动备份（每天 2:00 执行）
+#   - 备份数据库到 data/backups/ 目录
+# ==========================================================================
+@celery.task(name="backend.tasks.scheduled.auto_backup", bind=True)
+def auto_backup(self):
+    """自动备份数据库"""
+    import os
+    import shutil
+    import gzip
+
+    logger.info("[Scheduled] 开始自动备份...")
+
+    try:
+        from backend.config import get_settings
+        settings = get_settings()
+
+        backup_dir = os.path.join(os.getcwd(), "data", "backups")
+        os.makedirs(backup_dir, exist_ok=True)
+
+        today = datetime.now().strftime("%Y%m%d")
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # SQLite 备份
+        db_url = str(settings.DATABASE_URL or settings.DB_SQLITE_FALLBACK or "")
+        backed_up = []
+
+        if "sqlite" in db_url:
+            db_path = db_url.replace("sqlite:///", "").replace("sqlite:///", "")
+            if os.path.exists(db_path):
+                backup_path = os.path.join(backup_dir, f"db_{timestamp}.db.gz")
+                with open(db_path, "rb") as f_in:
+                    with gzip.open(backup_path, "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                backed_up.append(f"SQLite -> {backup_path}")
+                logger.info(f"[Scheduled] SQLite备份完成: {backup_path}")
+
+        # 清理7天前的备份
+        for f in os.listdir(backup_dir):
+            fpath = os.path.join(backup_dir, f)
+            if os.path.isfile(fpath):
+                file_mtime = os.path.getmtime(fpath)
+                if (datetime.now().timestamp() - file_mtime) > 7 * 86400:
+                    os.remove(fpath)
+                    logger.info(f"[Scheduled] 清理过期备份: {f}")
+
+        # 保留最近10个备份
+        backups = sorted(
+            [os.path.join(backup_dir, f) for f in os.listdir(backup_dir)
+             if os.path.isfile(os.path.join(backup_dir, f))],
+            key=os.path.getmtime,
+            reverse=True
+        )
+        for old in backups[10:]:
+            os.remove(old)
+
+        return {"status": "ok", "backed_up": backed_up, "backup_dir": backup_dir}
+    except Exception as e:
+        logger.exception(f"[Scheduled] 自动备份失败: {e}")
+        return {"status": "error", "msg": str(e)}
+

@@ -22,6 +22,12 @@ app = Celery(
     "strategy-trade",
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
+    include=[
+        "backend.tasks.scheduled",
+        "backend.tasks.trade",
+        "backend.tasks.ai",
+        "backend.tasks.backtest",
+    ],
 )
 
 # -------- 通用配置 --------
@@ -54,13 +60,13 @@ app.conf.update(
     },
     # 定时任务（Beat）
     beat_schedule={
-        # --- 行情 + 评分（每 1 分钟） ---
+        # --- 策略评分 + 自动下单（每 1 分钟） ---
         "update-score-every-min": {
             "task": "backend.tasks.scheduled.update_all_scores",
             "schedule": 60.0,
             "options": {"queue": "scheduled"},
         },
-        # --- 止盈止损巡检（每 30 秒） ---
+        # --- 止盈止损风控巡检（每 30 秒） ---
         "risk-monitor": {
             "task": "backend.tasks.scheduled.risk_monitor",
             "schedule": 30.0,
@@ -70,6 +76,30 @@ app.conf.update(
         "news-crawl": {
             "task": "backend.tasks.scheduled.crawl_news",
             "schedule": 300.0,
+            "options": {"queue": "scheduled"},
+        },
+        # --- 新闻AI深度分析（每 2 小时） ---
+        "news-ai-analysis": {
+            "task": "backend.tasks.ai.batch_news_ai_analysis",
+            "schedule": 7200.0,
+            "options": {"queue": "ai"},
+        },
+        # --- 新闻情绪策略信号（每 1 小时） ---
+        "news-strategy-signal": {
+            "task": "backend.tasks.ai.news_strategy_signal",
+            "schedule": 3600.0,
+            "options": {"queue": "ai"},
+        },
+        # --- 数据清理（每天 3:00） ---
+        "data-cleanup": {
+            "task": "backend.tasks.scheduled.data_cleanup",
+            "schedule": crontab(hour=3, minute=0),
+            "options": {"queue": "scheduled"},
+        },
+        # --- 自动备份（每天 2:00） ---
+        "auto-backup": {
+            "task": "backend.tasks.scheduled.auto_backup",
+            "schedule": crontab(hour=2, minute=0),
             "options": {"queue": "scheduled"},
         },
         # --- 日报（每日 00:05） ---
