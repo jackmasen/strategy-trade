@@ -684,7 +684,7 @@ from pathlib import Path as _Path
 _INSTALL_MARK_FILE = BASE_DIR / ".installed"  # 项目根下放一个简单的 JSON 标记
 _INSTALL_ENV_EXAMPLE = BASE_DIR / ".env.example"
 _INSTALL_ENV_FILE = BASE_DIR / ".env"
-_INSTALL_APP_VERSION = "1.2.5"
+_INSTALL_APP_VERSION = "1.2.6"
 
 
 def _onepress_is_installed() -> bool:
