@@ -786,3 +786,40 @@ def auto_backup(self):
         logger.exception(f"[Scheduled] 自动备份失败: {e}")
         return {"status": "error", "msg": str(e)}
 
+
+def daily_strategy_evolution():
+    """
+    每日策略自我进化（盘后执行）
+    1. 分析假信号模式
+    2. 分析因子重要性
+    3. 生成优化方案
+    4. 高置信度方案自动应用到策略配置
+    """
+    logger.info("[Scheduled] ===== 每日策略自我进化开始 =====")
+    try:
+        from backend.services.strategy_evolution import get_evolution_service
+        from backend.db.session import SessionLocal
+
+        db = SessionLocal()
+        try:
+            svc = get_evolution_service()
+            result = svc.auto_evolve(db, auto_apply_threshold=75.0)
+
+            logger.info(
+                f"[Scheduled] 进化完成: run_id={result.get('run_id')}, "
+                f"模式={result.get('patterns_found')}, "
+                f"方案={result.get('proposals_generated')}, "
+                f"自动应用={result.get('auto_applied')}, "
+                f"跳过(低置信)={result.get('skipped_low_confidence')}"
+            )
+            for r in result.get("apply_results", []):
+                logger.info(
+                    f"[Scheduled]   方案#{r['proposal_id']}({r['type']}) "
+                    f"置信度={r['confidence']} → {'✓' if r['success'] else '✗'} {r['message']}"
+                )
+            return result
+        finally:
+            db.close()
+    except Exception as e:
+        logger.exception(f"[Scheduled] 每日进化失败: {e}")
+        return {"status": "error", "msg": str(e)}

@@ -694,6 +694,195 @@ class StrategyEvolutionService:
         }
 
 
+    # ============================================================
+    # 6. 方案应用（真正修改策略参数）
+    # ============================================================
+    def apply_proposal_to_strategy(
+        self, db: Session, proposal: EvolutionProposal, strategy_id: Optional[int] = None
+    ) -> Tuple[bool, str]:
+        try:
+            strategy = None
+            if strategy_id:
+                strategy = db.query(StrategyConfig).filter(
+                    StrategyConfig.id == strategy_id
+                ).first()
+            if not strategy:
+                strategy = db.query(StrategyConfig).filter(
+                    StrategyConfig.is_active == True
+                ).first()
+            if not strategy:
+                return False, "没有找到活跃策略"
+
+            snapshot = self._save_strategy_snapshot(strategy)
+            proposed = proposal.proposed_config or {}
+            ptype = proposal.proposal_type
+            changes = []
+
+            if ptype == "weight":
+                fw = proposed.get("factor_weights", {})
+                tech_w = sum(v for k, v in fw.items() if "tech" in k.lower() or "rsi" in k.lower() or "macd" in k.lower() or "boll" in k.lower())
+                news_w = sum(v for k, v in fw.items() if "news" in k.lower() or "sentiment" in k.lower())
+                ai_w = sum(v for k, v in fw.items() if "ai" in k.lower() or "ml" in k.lower())
+                total = tech_w + news_w + ai_w
+                if total > 0:
+                    new_tech = round(tech_w / total, 4)
+                    new_news = round(news_w / total, 4)
+                    new_ai = round(ai_w / total, 4)
+                    if abs(new_tech - strategy.weight_technical) > 0.05:
+                        new_tech = round(strategy.weight_technical + 0.05 * (1 if new_tech > strategy.weight_technical else -1), 4)
+                    if abs(new_news - strategy.weight_news) > 0.05:
+                        new_news = round(strategy.weight_news + 0.05 * (1 if new_news > strategy.weight_news else -1), 4)
+                    new_ai = round(1.0 - new_tech - new_news, 4)
+                    s = new_tech + new_news + new_ai
+                    strategy.weight_technical = round(new_tech / s, 4)
+                    strategy.weight_news = round(new_news / s, 4)
+                    strategy.weight_ai = round(new_ai / s, 4)
+                    changes.append(f"权重技术{strategy.weight_technical}/新闻{strategy.weight_news}/AI{strategy.weight_ai}")
+
+            elif ptype == "threshold":
+                new_th = proposed.get("score_threshold")
+                if new_th is not None:
+                    new_th = max(4.0, min(7.0, float(new_th)))
+                    if abs(new_th - strategy.score_threshold) > 1.0:
+                        new_th = round(strategy.score_threshold + 1.0 * (1 if new_th > strategy.score_threshold else -1), 1)
+                    strategy.score_threshold = round(new_th, 1)
+                    changes.append(f"开仓阈值{strategy.score_threshold}")
+
+            elif ptype == "parameter":
+                new_tp = proposed.get("tp_ratio")
+                new_sl = proposed.get("sl_ratio")
+                if new_tp is not None:
+                    new_tp = max(2.0, min(8.0, float(new_tp)))
+                    if abs(new_tp - strategy.tp_ratio) > 2.0:
+                        new_tp = round(strategy.tp_ratio + 2.0 * (1 if new_tp > strategy.tp_ratio else -1), 1)
+                    strategy.tp_ratio = round(new_tp, 1)
+                    changes.append(f"止盈{strategy.tp_ratio}%")
+                if new_sl is not None:
+                    new_sl = max(1.0, min(4.0, float(new_sl)))
+                    if abs(new_sl - strategy.sl_ratio) > 1.0:
+                        new_sl = round(strategy.sl_ratio + 1.0 * (1 if new_sl > strategy.sl_ratio else -1), 1)
+                    strategy.sl_ratio = round(new_sl, 1)
+                    changes.append(f"止损{strategy.sl_ratio}%")
+
+            elif ptype == "regime_filter":
+                bonus = proposed.get("ranging_threshold_bonus", 0.5)
+                strategy.score_threshold = round(min(7.0, strategy.score_threshold + bonus), 1)
+                changes.append(f"震荡市过滤阈值+{bonus}")
+
+            proposal.current_config = snapshot
+            proposal.status = "applied"
+            proposal.applied_at = datetime.utcnow()
+            db.commit()
+
+            logger.info(f"[Evolution] 方案#{proposal.id}已应用: {'; '.join(changes)}")
+            return True, "; ".join(changes)
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"[Evolution] 应用方案失败: {e}")
+            return False, str(e)
+
+    def _save_strategy_snapshot(self, strategy: StrategyConfig) -> dict:
+        return {
+            "strategy_id": strategy.id,
+            "score_threshold": strategy.score_threshold,
+            "strong_score_threshold": strategy.strong_score_threshold,
+            "weight_technical": strategy.weight_technical,
+            "weight_news": strategy.weight_news,
+            "weight_ai": strategy.weight_ai,
+            "tp_ratio": strategy.tp_ratio,
+            "sl_ratio": strategy.sl_ratio,
+            "leverage_fixed": strategy.leverage_fixed,
+        }
+
+    def rollback_proposal(self, db: Session, proposal: EvolutionProposal) -> Tuple[bool, str]:
+        try:
+            snapshot = proposal.current_config or {}
+            if not snapshot:
+                return False, "没有快照数据"
+            strategy = db.query(StrategyConfig).filter(
+                StrategyConfig.id == snapshot.get("strategy_id")
+            ).first()
+            if not strategy:
+                return False, "策略不存在"
+            strategy.score_threshold = snapshot.get("score_threshold", strategy.score_threshold)
+            strategy.weight_technical = snapshot.get("weight_technical", strategy.weight_technical)
+            strategy.weight_news = snapshot.get("weight_news", strategy.weight_news)
+            strategy.weight_ai = snapshot.get("weight_ai", strategy.weight_ai)
+            strategy.tp_ratio = snapshot.get("tp_ratio", strategy.tp_ratio)
+            strategy.sl_ratio = snapshot.get("sl_ratio", strategy.sl_ratio)
+            strategy.leverage_fixed = snapshot.get("leverage_fixed", strategy.leverage_fixed)
+            proposal.status = "rolled_back"
+            db.commit()
+            logger.info(f"[Evolution] 方案#{proposal.id}已回滚")
+            return True, "回滚成功"
+        except Exception as e:
+            db.rollback()
+            return False, str(e)
+
+    def auto_evolve(self, db: Session, auto_apply_threshold: float = 75.0) -> dict:
+        logger.info(f"[Evolution] ===== 自动进化开始（阈值={auto_apply_threshold}）=====")
+        result = {
+            "run_id": None, "patterns_found": 0, "proposals_generated": 0,
+            "auto_applied": 0, "skipped_low_confidence": 0, "apply_results": [],
+        }
+        try:
+            run = self.run_full_evolution(db)
+            result["run_id"] = run.id
+            result["patterns_found"] = run.patterns_found or 0
+            result["proposals_generated"] = run.proposals_generated or 0
+            if run.status != "completed":
+                return result
+            proposals = db.query(EvolutionProposal).filter(
+                EvolutionProposal.status == "pending"
+            ).order_by(EvolutionProposal.confidence.desc()).all()
+            if not proposals:
+                logger.info("[Evolution] 没有待处理方案")
+                return result
+            for p in proposals:
+                if p.confidence >= auto_apply_threshold:
+                    success, msg = self.apply_proposal_to_strategy(db, p)
+                    result["apply_results"].append({
+                        "proposal_id": p.id, "type": p.proposal_type,
+                        "confidence": p.confidence, "success": success, "message": msg,
+                    })
+                    if success:
+                        result["auto_applied"] += 1
+                else:
+                    result["skipped_low_confidence"] += 1
+            logger.info(f"[Evolution] 完成: 模式{result['patterns_found']}, 方案{result['proposals_generated']}, 应用{result['auto_applied']}")
+        except Exception as e:
+            logger.error(f"[Evolution] 自动进化异常: {e}")
+            import traceback; traceback.print_exc()
+        return result
+
+    def verify_evolution_result(self, db: Session, proposal_id: int) -> dict:
+        proposal = db.query(EvolutionProposal).filter(EvolutionProposal.id == proposal_id).first()
+        if not proposal or proposal.status != "applied":
+            return {"valid": False, "message": "方案未应用"}
+        applied_at = proposal.applied_at
+        if not applied_at:
+            return {"valid": False, "message": "无应用时间"}
+        before = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.created_at < applied_at,
+        ).all()
+        before_wins = sum(1 for s in before if s.outcome == "hit_tp")
+        before_wr = round(before_wins / len(before) * 100, 1) if before else 0
+        after = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.created_at >= applied_at,
+        ).all()
+        if len(after) < 5:
+            return {"valid": True, "before_win_rate": before_wr, "after_win_rate": None,
+                    "after_signals_count": len(after),
+                    "message": f"应用后信号不足5个({len(after)})，暂无法评估"}
+        after_wins = sum(1 for s in after if s.outcome == "hit_tp")
+        after_wr = round(after_wins / len(after) * 100, 1) if after else 0
+        return {"valid": True, "before_win_rate": before_wr, "after_win_rate": after_wr,
+                "improvement": round(after_wr - before_wr, 1), "improved": after_wr > before_wr,
+                "before_signals": len(before), "after_signals": len(after)}
+
 # 单例
 _evolution_service: Optional[StrategyEvolutionService] = None
 

@@ -353,6 +353,23 @@ async def lifespan(app: FastAPI):
             replace_existing=True,
         )
 
+        # 策略自我进化（每天凌晨 3:30 盘后执行）
+        def _scheduled_evolution():
+            try:
+                from backend.tasks.scheduled import daily_strategy_evolution
+                daily_strategy_evolution()
+            except Exception as e:
+                logger.error(f"❌ 策略进化失败: {e}")
+
+        scheduler.add_job(
+            _scheduled_evolution,
+            trigger=CronTrigger(hour=3, minute=30),
+            id="strategy_evolution",
+            replace_existing=True,
+            max_instances=1,
+            coalesce=True,
+        )
+
         scheduler.start()
         app.state.scheduler = scheduler
         _mode = "Celery" if _celery_on else "APScheduler兜底"
