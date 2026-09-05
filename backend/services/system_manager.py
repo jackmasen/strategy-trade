@@ -753,7 +753,13 @@ def apply_github_update(db: Session, zip_url: str, tag_name: str,
 
 def _get_current_version() -> str:
     """获取当前版本号"""
-    return "v1.2.5"
+    try:
+        import main as _main
+        if hasattr(_main, "_INSTALL_APP_VERSION"):
+            return f"v{_main._INSTALL_APP_VERSION}"
+    except Exception:
+        pass
+    return "v1.2.6"
 
 
 def _compare_versions(v1: str, v2: str) -> int:
