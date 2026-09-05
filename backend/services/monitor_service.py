@@ -578,21 +578,36 @@ def _cleanup_token_later(token: str, delay: float):
 
 def create_share_token(db: Session, user_id: int, ttl_hours: float = 0.5) -> Dict:
     """创建一个分享令牌，用于公开访问监控页面
-    
+
     分享链接格式: /monitor/share/{token}
     """
     token = hashlib.sha256(f"{uuid.uuid4()}{time.time()}{user_id}".encode()).hexdigest()[:32]
     expires_at = datetime.now() + timedelta(hours=ttl_hours)
 
+    token_data = {
+        "token": token,
+        "user_id": user_id,
+        "created_at": datetime.now().isoformat(),
+        "expires_at": expires_at.isoformat(),
+        "ttl_hours": ttl_hours,
+        "access_count": 0,
+    }
+
+    # 写入Redis（持久化，支持多worker共享）
+    try:
+        r = _get_redis()
+        import json
+        r.setex(
+            f"{SHARE_TOKEN_PREFIX}{token}",
+            int(ttl_hours * 3600),
+            json.dumps(token_data),
+        )
+    except Exception as e:
+        logger.warning(f"[Monitor] Redis写入分享令牌失败，降级到内存: {e}")
+
+    # 同时写入内存（降级方案）
     with _share_tokens_lock:
-        _share_tokens[token] = {
-            "token": token,
-            "user_id": user_id,
-            "created_at": datetime.now().isoformat(),
-            "expires_at": expires_at.isoformat(),
-            "ttl_hours": ttl_hours,
-            "access_count": 0,
-        }
+        _share_tokens[token] = token_data
 
     # 清理过期的
     _cleanup_expired_tokens()
@@ -610,6 +625,36 @@ def create_share_token(db: Session, user_id: int, ttl_hours: float = 0.5) -> Dic
 
 def validate_share_token(token: str) -> Optional[Dict]:
     """验证分享令牌是否有效"""
+    # 优先从Redis读取
+    try:
+        r = _get_redis()
+        import json
+        raw = r.get(f"{SHARE_TOKEN_PREFIX}{token}")
+        if raw:
+            info = json.loads(raw)
+            # 检查是否过期
+            try:
+                exp = datetime.fromisoformat(info["expires_at"])
+                if datetime.now() > exp:
+                    r.delete(f"{SHARE_TOKEN_PREFIX}{token}")
+                    return None
+            except Exception:
+                return None
+            # 原子性增加访问计数
+            info["access_count"] = info.get("access_count", 0) + 1
+            r.setex(
+                f"{SHARE_TOKEN_PREFIX}{token}",
+                int((datetime.fromisoformat(info["expires_at"]) - datetime.now()).total_seconds()),
+                json.dumps(info),
+            )
+            # 同步更新内存
+            with _share_tokens_lock:
+                _share_tokens[token] = info
+            return dict(info)
+    except Exception:
+        pass
+
+    # 降级到内存
     with _share_tokens_lock:
         info = _share_tokens.get(token)
         if not info:
@@ -631,22 +676,52 @@ def validate_share_token(token: str) -> Optional[Dict]:
 def list_share_tokens(user_id: int = 0) -> List[Dict]:
     """列出有效的分享令牌"""
     _cleanup_expired_tokens()
+    tokens_dict = {}
+
+    # 从Redis读取
+    try:
+        r = _get_redis()
+        import json
+        keys = r.keys(f"{SHARE_TOKEN_PREFIX}*")
+        for key in keys:
+            raw = r.get(key)
+            if raw:
+                info = json.loads(raw)
+                if user_id and info.get("user_id") != user_id:
+                    continue
+                tokens_dict[info.get("token", "")] = info
+    except Exception:
+        pass
+
+    # 从内存读取（补充Redis中可能缺失的）
     with _share_tokens_lock:
-        tokens = []
         for t, info in _share_tokens.items():
             if user_id and info["user_id"] != user_id:
                 continue
-            tokens.append(dict(info))
-    return sorted(tokens, key=lambda x: x["created_at"], reverse=True)
+            if t not in tokens_dict:
+                tokens_dict[t] = dict(info)
+
+    return sorted(tokens_dict.values(), key=lambda x: x.get("created_at", ""), reverse=True)
 
 
 def revoke_share_token(token: str) -> bool:
     """撤销分享令牌"""
+    deleted = False
+    # 从Redis删除
+    try:
+        r = _get_redis()
+        r.delete(f"{SHARE_TOKEN_PREFIX}{token}")
+        deleted = True
+    except Exception:
+        pass
+
+    # 从内存删除
     with _share_tokens_lock:
         if token in _share_tokens:
             _share_tokens.pop(token, None)
-            return True
-    return False
+            deleted = True
+
+    return deleted
 
 
 def _cleanup_expired_tokens():
@@ -662,6 +737,8 @@ def _cleanup_expired_tokens():
                 expired.append(t)
         for t in expired:
             _share_tokens.pop(t, None)
+
+    # Redis中的过期令牌由setex自动清理，无需手动处理
 
 
 # ============================================================

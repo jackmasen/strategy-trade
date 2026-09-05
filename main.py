@@ -474,6 +474,26 @@ app.add_middleware(
 )
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
+# ============== CSRF 保护中间件 ==============
+# Bearer Token (Authorization header) 认证天然免疫 CSRF
+# 此中间件仅对使用 Cookie 认证的状态变更请求(POST/PUT/DELETE/PATCH)强制校验 X-CSRF-Token
+_CSUF_METHODS = {"POST", "PUT", "DELETE", "PATCH"}
+
+@app.middleware("http")
+async def csrf_protection_middleware(request: Request, call_next):
+    method = request.method.upper()
+    if method not in _CSUF_METHODS:
+        return await call_next(request)
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        return await call_next(request)
+    has_cookie = request.cookies.get("access_token")
+    if has_cookie:
+        csrf_token = request.headers.get("X-CSRF-Token", "")
+        if not csrf_token:
+            return JSONResponse(status_code=403, content={"code": 403, "message": "缺少CSRF Token"})
+    return await call_next(request)
+
 # ============== 速率限制中间件 ==============
 # 基于内存的滑动窗口速率限制，防止暴力破解和API滥用
 # 登录接口: 5次/分钟 | 其他API: 100次/分钟

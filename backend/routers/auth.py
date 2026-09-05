@@ -11,7 +11,7 @@ POST   /users               创建用户(管理员)
 PUT    /users/{uid}         修改用户(管理员, Body JSON)
 DELETE /users/{uid}         删除用户(管理员)
 """
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Request, Response
 from sqlalchemy.orm import Session
 from pydantic import BaseModel, Field
 import pyotp
@@ -19,6 +19,7 @@ import pyotp
 from backend.db.session import get_db
 from backend.core.auth import get_current_user, require_admin
 from backend.core.exceptions import UnauthorizedException, ParameterException, success
+from backend.config import get_settings
 from backend.core.utils import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
@@ -85,6 +86,63 @@ def login(req: LoginReq, db: Session = Depends(get_db), request: Request = None)
         "role": user.role,
         "two_factor_enabled": user.two_factor_enabled,
         "must_change_password": user.must_change_password,
+        "last_login_at": user.last_login_at,
+        "created_at": user.created_at,
+    }
+    return success(LoginResp(
+        access_token=access,
+        refresh_token=refresh,
+        user=user_payload,
+    ))
+
+
+@router.post("/login/cookie", response_model=ApiResponse[LoginResp])
+def login_cookie(req: LoginReq, db: Session = Depends(get_db), request: Request = None, response: Response = None):
+    """登录并设置HttpOnly Cookie（更安全的Token存储方式，防XSS窃取）"""
+    user: User | None = db.query(User).filter(User.username == req.username).first()
+    if not user or not verify_password(req.password, user.password_hash):
+        raise UnauthorizedException("用户名或密码错误")
+    if user.status != 1:
+        raise UnauthorizedException("账号已被禁用，请联系管理员")
+
+    if user.two_factor_enabled and user.two_factor_secret:
+        if not req.totp_code:
+            raise UnauthorizedException("需要两步验证(2FA)验证码")
+        totp = pyotp.TOTP(user.two_factor_secret)
+        if not totp.verify(req.totp_code, valid_window=1):
+            raise UnauthorizedException("两步验证码错误")
+
+    extra = {"role": user.role, "username": user.username}
+    access = create_access_token(user.id, extra)
+    refresh = create_refresh_token(user.id)
+
+    from datetime import datetime
+    user.last_login_at = datetime.now()
+    user.last_login_ip = request.client.host if request and request.client else ""
+    db.commit()
+
+    # 设置HttpOnly Cookie（SameSite=Strict，防CSRF和XSS窃取）
+    _settings = get_settings()
+    token_lifetime = getattr(_settings, "JWT_ACCESS_TOKEN_EXPIRE_MINUTES", 1440) * 60
+    response.set_cookie(
+        key="access_token",
+        value=access,
+        httponly=True,
+        samesite="strict",
+        secure=(_settings.APP_ENV == "production"),
+        max_age=token_lifetime,
+        path="/",
+    )
+
+    user_payload = {
+        "id": user.id,
+        "username": user.username,
+        "nickname": user.nickname,
+        "email": user.email,
+        "phone": user.phone,
+        "avatar": user.avatar,
+        "role": user.role,
+        "two_factor_enabled": user.two_factor_enabled,
         "last_login_at": user.last_login_at,
         "created_at": user.created_at,
     }

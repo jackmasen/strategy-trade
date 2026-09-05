@@ -225,14 +225,13 @@ def manual_order(
         )
 
     # 3) 设置杠杆和保证金模式（交易所侧）
-    try:
-        client.set_leverage(symbol, leverage)
-    except Exception:
-        pass
+    lev_ok = client.set_leverage(symbol, leverage)
+    if not lev_ok:
+        logger.warning(f"[Trade] 杠杆设置失败(symbol={symbol} lev={leverage}), 继续下单但可能使用默认杠杆")
     try:
         client._set_margin_mode(symbol, "cross" if req.margin_mode == 1 else "isolated")
-    except Exception:
-        pass
+    except Exception as e:
+        logger.warning(f"[Trade] 保证金模式设置失败(symbol={symbol} mode={'cross' if req.margin_mode == 1 else 'isolated'}): {e}")
 
     # 4) 下单 + TP/SL
     order = TradeOrder(
@@ -509,8 +508,8 @@ def close_position(
         # 先撤销 TP/SL 挂单防止冲突
         try:
             client.cancel_all_open_orders(pos.symbol)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[Trade] 平仓前撤销挂单失败(position_id={pos.id} symbol={pos.symbol}): {e}")
 
         # 市价平仓（反方向）
         closed = client.place_order(

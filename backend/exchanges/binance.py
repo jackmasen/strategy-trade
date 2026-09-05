@@ -327,8 +327,8 @@ class BinanceFuturesClient(ExchangeClientBase):
         if order.avg_fill_price <= 0 and order.filled_quantity > 0:
             try:
                 order.avg_fill_price = self.fetch_ticker(symbol).last_price
-            except Exception:
-                pass
+            except Exception as e:
+                logger.warning(f"[{self.EXCHANGE_NAME}] 市价单成交价估算失败(symbol={symbol}): {e}")
 
         # 2. 设置 TP/SL (条件单) —— 优先绝对价模式，否则百分比模式
         tpsl_ok = True
@@ -428,8 +428,8 @@ class BinanceFuturesClient(ExchangeClientBase):
         # 先取消该方向已挂的 TP/SL（避免双重平仓）
         try:
             self.cancel_all_open_orders(symbol)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"[{self.EXCHANGE_NAME}] 平仓前撤销挂单失败(symbol={symbol}): {e}")
         return self.place_order(
             symbol=symbol, side=close_side, quantity=qty,
             order_type=order_type, price=price, leverage=1,
