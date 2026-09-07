@@ -1194,10 +1194,10 @@ const logFilter = reactive({ type: 'app', level: '', keyword: '', page: 1, page_
 async function loadLogs() {
   logLoading.value = true
   try {
-    const res = await http.get(API_PREFIX + '/monitor/logs', { params: {
+    const res = await http.get(API_PREFIX + '/monitor/logs', {
       log_type: logFilter.type, level: logFilter.level, keyword: logFilter.keyword,
       page: logFilter.page, page_size: logFilter.page_size,
-    }})
+    })
     logEntries.value = res.entries || []
     logTotal.value = res.total || 0
   } catch (e) { console.error('加载日志失败:', e) }

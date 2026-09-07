@@ -92,6 +92,18 @@
                   </el-form-item>
                 </el-form>
               </el-tab-pane>
+              <el-tab-pane label="Bybit 拜伦" name="bybit">
+                <el-form label-width="160px">
+                  <el-form-item label="API Key"><el-input v-model="e.bybit.key" type="password" show-password /></el-form-item>
+                  <el-form-item label="API Secret"><el-input v-model="e.bybit.secret" type="password" show-password /></el-form-item>
+                  <el-form-item label="环境"><el-radio-group v-model="e.bybit.testnet"><el-radio-button :value="true">测试网</el-radio-button><el-radio-button :value="false">主网</el-radio-button></el-radio-group></el-form-item>
+                  <el-form-item label="API Base URL"><el-input v-model="e.bybit.url" placeholder="留空使用默认 api.bybit.com" /></el-form-item>
+                  <el-form-item>
+                    <el-button type="primary" @click="testConn('bybit')" :loading="testingExchange">测试连接</el-button>
+                    <el-button type="success" style="margin-left:10px;" @click="saveExchange" :loading="savingExchange">保存</el-button>
+                  </el-form-item>
+                </el-form>
+              </el-tab-pane>
             </el-tabs>
           </div>
         </div>
@@ -112,6 +124,7 @@
                 <el-radio-group v-model="demo.exchange">
                   <el-radio-button value="binance">币安 Binance</el-radio-button>
                   <el-radio-button value="okx">OKX</el-radio-button>
+                  <el-radio-button value="bybit">Bybit</el-radio-button>
                 </el-radio-group>
               </el-form-item>
               <el-form-item label="API Key">
@@ -137,6 +150,33 @@
               <el-form-item>
                 <el-button type="success" @click="saveDemo" :loading="savingDemo">保存配置</el-button>
                 <el-button style="margin-left:10px;" @click="testDemo" :loading="testingDemo">测试连接</el-button>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+        <!-- Bybit 公开行情数据源 -->
+        <div v-show="active==='exchange'" class="panel-card" style="margin-top:16px;">
+          <div class="panel-card__header"><span class="panel-card__title">Bybit 公开行情数据源（无需API Key）</span></div>
+          <div class="panel-card__body">
+            <el-alert type="success" :closable="false" style="margin-bottom:16px;">
+              启用后，系统自动使用 Bybit 公开行情接口为<strong>股票/商品等非加密品种</strong>提供实时价格，
+              并作为 Binance 加密货币行情的兜底数据源。无需配置 API Key，仅读取公开行情数据。
+            </el-alert>
+            <el-form label-width="200px">
+              <el-form-item label="启用 Bybit 公开行情">
+                <el-switch v-model="bybitPublic.enabled" active-text="启用" inactive-text="停用" />
+              </el-form-item>
+              <el-form-item label="当前状态">
+                <el-tag :type="bybitPublic.status === 'online' ? 'success' : 'danger'">
+                  {{ bybitPublic.status === 'online' ? '已连接' : '未连接' }}
+                </el-tag>
+                <span v-if="bybitPublic.lastUpdate" style="margin-left:12px;color:#909399;font-size:13px;">
+                  最后更新：{{ bybitPublic.lastUpdate }}
+                </span>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="testBybitPublic" :loading="testingBybit">测试 Bybit 行情</el-button>
+                <el-button type="success" style="margin-left:10px;" @click="saveBybitPublic" :loading="savingBybit">保存配置</el-button>
               </el-form-item>
             </el-form>
           </div>
@@ -261,6 +301,10 @@
               <el-form-item label="钉钉机器人Webhook"><el-input v-model="p.dingtalk" placeholder="https://oapi.dingtalk.com/robot/send?access_token=..." /></el-form-item>
               <el-form-item label="飞书机器人Webhook"><el-input v-model="p.feishu" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." /></el-form-item>
               <el-divider content-position="left">邮件 SMTP</el-divider>
+              <el-form-item label="邮件推送">
+                <el-switch v-model="p.smtp_enabled" active-text="开启推送" inactive-text="关闭推送" />
+                <span style="margin-left:12px;font-size:12px;color:#909399;">关闭后所有邮件通知将不再发送</span>
+              </el-form-item>
               <el-form-item label="SMTP服务器"><el-input v-model="p.smtp_host" placeholder="smtp.qq.com / smtp.gmail.com" /></el-form-item>
               <el-form-item label="SMTP端口">
                 <el-input-number v-model="p.smtp_port" :min="1" :max="65535" />
@@ -728,15 +772,23 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Setting, Tools, Coin, Reading, Bell, Cpu, InfoFilled, DataLine, Connection, Monitor } from '@element-plus/icons-vue'
 import { http, API_PREFIX } from '@/utils/request'
 
 const active = ref('general')
 
+let aiHealthTimer = null
 const handleMenuSelect = (index) => {
   active.value = index
+  if (index === 'ai') {
+    // 进入AI页面，30秒自动检测一次
+    if (aiHealthTimer) clearInterval(aiHealthTimer)
+    aiHealthTimer = setInterval(() => { loadAiKeys() }, 30000)
+  } else {
+    if (aiHealthTimer) { clearInterval(aiHealthTimer); aiHealthTimer = null }
+  }
 }
 
 // 通用参数
@@ -753,6 +805,7 @@ const g = reactive({
 const e = reactive({
   bn:  { key: '', secret: '', testnet: true, url: 'https://testnet.binancefuture.com' },
   okx: { key: '', secret: '', pass: '', testnet: true, url: 'https://www.okx.com' },
+  bybit: { key: '', secret: '', testnet: true, url: 'https://api.bybit.com' },
 })
 const testingExchange = ref(false)
 const savingExchange = ref(false)
@@ -778,11 +831,20 @@ const demo = reactive({
 const savingDemo = ref(false)
 const testingDemo = ref(false)
 
+// Bybit 公开行情数据源
+const bybitPublic = reactive({
+  enabled: true,
+  status: 'online',
+  lastUpdate: '',
+})
+const savingBybit = ref(false)
+const testingBybit = ref(false)
+
 // 告警推送
 const p = reactive({
   dingtalk: '', feishu: '',
   smtp_host: '', smtp_port: 465, smtp_user: '', smtp_pwd: '', smtp_to: '',
-  smtp_ssl: true,
+  smtp_ssl: true, smtp_enabled: true,
   smtp_pwd_has_value: false,
   events: ['tp', 'sl', 'risk', 'daily'],
 })
@@ -893,6 +955,7 @@ const loadNotify = async () => {
     p.smtp_pwd = ''  // 密码永远不返回明文
     p.smtp_pwd_has_value = !!(data.smtp_pwd?.has_value)
     p.smtp_to = data.smtp_to || ''
+    p.smtp_enabled = data.smtp_enabled !== false
     p.smtp_ssl = data.smtp_ssl !== false
     p.events = Array.isArray(data.events) ? data.events : ['tp', 'sl', 'risk', 'daily']
   } catch (e) {
@@ -1558,6 +1621,9 @@ onMounted(() => {
   loadProxyConfig()
   loadProxyHealth(true)
   loadXrayStatus(true)
+})
+onUnmounted(() => {
+  if (aiHealthTimer) { clearInterval(aiHealthTimer); aiHealthTimer = null }
 })
 </script>
 

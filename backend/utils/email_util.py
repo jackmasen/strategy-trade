@@ -12,6 +12,12 @@ from typing import Optional
 from backend.config import get_settings
 from backend.core.logging_config import logger
 from backend.core.security import decrypt_api_key
+import time as _time
+
+# 邮件错误日志限流：同一错误5分钟内只打一次 error，其余降为 debug
+_last_email_error_time: float = 0.0
+_last_email_error_msg: str = ""
+EMAIL_ERROR_THROTTLE_SEC = 300
 
 
 def _get_smtp_config() -> dict:
@@ -51,6 +57,9 @@ def _get_smtp_config() -> dict:
             row = db.query(SystemConfig).filter(SystemConfig.config_key == "notify_smtp_ssl").first()
             if row and row.config_value:
                 smtp["ssl"] = row.config_value.lower() in ("true", "1", "yes")
+            row = db.query(SystemConfig).filter(SystemConfig.config_key == "notify_smtp_enabled").first()
+            if row and row.config_value:
+                smtp["enabled"] = row.config_value.lower() in ("true", "1", "yes")
         finally:
             db.close()
     except Exception as e:
@@ -133,7 +142,16 @@ def send_email(
         return True
 
     except Exception as e:
-        logger.error(f"[Email] 邮件发送失败: {e}")
+        global _last_email_error_time, _last_email_error_msg
+        now = _time.time()
+        err_msg = str(e)
+        if (now - _last_email_error_time > EMAIL_ERROR_THROTTLE_SEC
+                or err_msg != _last_email_error_msg):
+            logger.error(f"[Email] 邮件发送失败: {e}")
+            _last_email_error_time = now
+            _last_email_error_msg = err_msg
+        else:
+            logger.debug(f"[Email] 邮件发送失败(限流): {e}")
         return False
 
 

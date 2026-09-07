@@ -1,4 +1,4 @@
-﻿"""
+"""
 FastAPI 应用入口
 - 装配中间件（CORS/GZip）
 - 注册全局异常处理器
@@ -17,7 +17,7 @@ from contextlib import asynccontextmanager
 
 # 确保项目根目录在 sys.path 中（宝塔 uvicorn 启动时路径问题）
 BASE_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(BASE_DIR.parent))
+sys.path.insert(0, str(BASE_DIR))
 
 from fastapi import FastAPI, Depends, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -100,6 +100,18 @@ async def lifespan(app: FastAPI):
                 logger.info("[Security] 已为使用默认密码的账号标记 must_change_password=True")
     except Exception as e:
         logger.error(f"❌ 种子数据初始化失败: {e}")
+
+    # 2.5 初始化行情管理器 + Bybit 公开行情数据源
+    try:
+        from backend.exchanges.market import MarketManager
+        mm = MarketManager.get_instance()
+        # 注册 Bybit 公开行情客户端（无需API Key，为非加密品种提供实时价格）
+        mm.ensure_bybit_public_client()
+        # 启动默认品种的行情订阅（加密+非加密全覆盖）
+        mm.start(["BTC", "ETH", "SOL", "XAU", "WTI", "TSLA", "NVDA", "SKHYNIX", "SNDK"])
+        logger.info("✅ 行情管理器已启动（Bybit 公开数据源已就绪）")
+    except Exception as e:
+        logger.warning(f"⚠️ 行情管理器启动失败: {e}")
 
     # 3. APScheduler 定时任务（新闻采集 / 策略执行引擎 / 日报生成）
     try:

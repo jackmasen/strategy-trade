@@ -23,7 +23,7 @@ from .scoring import StrategyScoringEngine, ScoreResult
 from backend.models.strategy import StrategyConfig, ScoreRecord
 from backend.models.trade import TradeOrder, TradePosition
 from backend.models.exchange import ExchangeAccount
-from backend.models.analytics import RiskEventLog
+from backend.models.analytics import RiskEventLog, QuantSignalRecord
 from backend.models.user import User
 from backend.db.session import get_db
 from backend.core.logging_config import logger
@@ -173,6 +173,36 @@ class StrategyEngine:
                         errors.append(f"{sym} {tf}: {e}")
                         continue
                     score_results.append(r)
+                    # 保存信号到 quant_signal_records（用于策略进化验证）
+                    if r.direction in (1, 2):  # 1=bullish, 2=bearish
+                        try:
+                            _dir_str = "bullish" if r.direction == 1 else "bearish"
+                            entry = r.candle_close_price or 0.0
+                            sl_price = entry * (1 - r.suggested_sl_pct / 100) if r.direction == 1 else entry * (1 + r.suggested_sl_pct / 100)
+                            tp_price = entry * (1 + r.suggested_tp_pct / 100) if r.direction == 1 else entry * (1 - r.suggested_tp_pct / 100)
+                            sig_record = QuantSignalRecord(
+                                symbol=r.symbol,
+                                timeframe=tf,
+                                timestamp=int(r.candle_close_time.timestamp()) if r.candle_close_time else int(datetime.now().timestamp()),
+                                composite_score=r.directional_score,
+                                direction=_dir_str,
+                                confidence=r.confidence,
+                                market_regime=getattr(r, 'market_regime', 'unknown') or "unknown",
+                                entry_price=entry,
+                                stop_loss=round(sl_price, 6),
+                                take_profit=round(tp_price, 6),
+                                suggested_leverage=r.suggested_leverage,
+                                factor_scores={
+                                    "technical": r.technical_score,
+                                    "news": r.news_score,
+                                    "ai": r.ai_score,
+                                },
+                            )
+                            db.add(sig_record)
+                            db.commit()
+                        except Exception as e:
+                            db.rollback()
+                            logger.debug(f"[Engine] 保存信号记录失败 {r.symbol} {tf}: {e}")
                     if r.trigger_trade and execute_trade:
                         # 风控
                         risk_ok, risk_msg = self._check_risk(db, strategy, owner, r.symbol, r.direction)

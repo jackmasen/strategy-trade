@@ -1636,18 +1636,46 @@ def _compute_predictions(syms, db, poly_odds):
             all_ai[rec.symbol] = rec
 
     strat = db.query(StrategyConfig).filter(StrategyConfig.is_active == True).first()
-    eng = StrategyEngine()
+
+    # 预加载所有品种的最新评分记录（避免循环中重复查询）
+    from backend.models.strategy import ScoreRecord
+    from sqlalchemy import func
+    latest_scores = {}
+    try:
+        subq = db.query(
+            ScoreRecord.symbol,
+            func.max(ScoreRecord.id).label("max_id")
+        ).filter(ScoreRecord.symbol.in_(syms)).group_by(ScoreRecord.symbol).subquery()
+        rows = db.query(ScoreRecord).join(
+            subq, ScoreRecord.id == subq.c.max_id
+        ).all()
+        for r in rows:
+            latest_scores[r.symbol] = r
+    except Exception as e:
+        logger.warning(f"[Prediction] 预加载评分记录失败: {e}")
 
     for sym in syms:
         tech_score = None
         tech_dir = 0
-        try:
-            if strat:
-                r, _ = eng.score_symbol(db, strat, sym, "1h", account_id=strat.exchange_id)
-                tech_score = round(r.score_total, 2)
-                tech_dir = 1 if r.direction == 1 else (-1 if r.direction == 2 else 0)
-        except Exception as e:
-            logger.warning(f"[Prediction] 技术评分失败 {sym}: {e}")
+        # 优先从 DB 读取最新评分（毫秒级），避免实时调用 score_symbol 导致超时
+        cached = latest_scores.get(sym)
+        if cached:
+            tech_score = round(float(cached.score_total or 0), 2)
+            if cached.suggested_direction == "long":
+                tech_dir = 1
+            elif cached.suggested_direction == "short":
+                tech_dir = -1
+        else:
+            # 兜底：实时评分（仅 DB 无记录时）
+            try:
+                if strat:
+                    from backend.strategy.engine import StrategyEngine
+                    eng = StrategyEngine()
+                    r, _ = eng.score_symbol(db, strat, sym, "1h", account_id=strat.exchange_id)
+                    tech_score = round(r.score_total, 2)
+                    tech_dir = 1 if r.direction == 1 else (-1 if r.direction == 2 else 0)
+            except Exception as e:
+                logger.warning(f"[Prediction] 技术评分失败 {sym}: {e}")
 
         news_score = None
         news_dir = 0
@@ -1738,7 +1766,17 @@ def _compute_predictions(syms, db, poly_odds):
             pass
 
         if not current_price:
-            current_price = _fetch_commodity_price(sym)
+            # 非加密品种走 quant_signal 的多源价格（OKX+Bybit），加密品种走 Binance API
+            from backend.routers.quant_signal import _NON_CRYPTO_SYMBOLS, _fetch_commodity_price as _qs_fetch_price
+            if sym in _NON_CRYPTO_SYMBOLS:
+                current_price = _qs_fetch_price(sym)
+            else:
+                import requests as _req
+                try:
+                    r = _req.get(f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={sym}USDT", timeout=5)
+                    current_price = float(r.json().get("price", 0)) or None
+                except Exception:
+                    current_price = None
 
         target_price = None
         if current_price and predicted_pct:
@@ -1788,7 +1826,7 @@ def get_prediction(
         logger.warning(f"[Prediction] Polymarket获取失败: {e}")
 
     try:
-        results = _run_with_timeout(_compute_predictions, timeout_sec=15.0, syms=syms, db=db, poly_odds=poly_odds)
+        results = _run_with_timeout(_compute_predictions, timeout_sec=60.0, syms=syms, db=db, poly_odds=poly_odds)
     except TimeoutError:
         logger.warning("[Prediction] 预测计算超时，返回基础数据")
         results = []

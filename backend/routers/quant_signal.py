@@ -1,4 +1,4 @@
-﻿"""
+"""
 AI量化信号引擎 API — 真实数据版
 =================================
 - OI/资金费率：从MarketManager实时获取（加密货币来自交易所API）
@@ -35,7 +35,7 @@ _OKX_INST_MAP = {
 _BYBIT_SYMBOL_MAP = {
     "XAU": "XAUUSDT", "XAG": "XAGUSDT", "WTI": "CLUSDT",
     "TSLA": "TSLAUSDT", "NVDA": "NVDAUSDT", "AAPL": "AAPLUSDT",
-    "MSFT": "MSFTUSDT", "TCEHY": "TCEHYUSDT",
+    "MSFT": "MSFTUSDT", "TCEHY": "TENCENTUSDT",
     "SKHYNIX": "SKHYNIXUSDT", "SNDK": "SNDKUSDT",
 }
 _NON_CRYPTO_SYMBOLS = {"XAU", "XAG", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "TCEHY", "SKHYNIX", "SNDK"}
@@ -515,6 +515,64 @@ def signal_overview(
         "neutral": sum(1 for r in results if r.get("direction") == "neutral"),
         "signals": results,
     })
+
+
+@router.get("/prices")
+def get_realtime_prices(
+    symbols: str = Query(default="BTC,ETH,SOL", description="币种列表，逗号分隔"),
+    user: User = Depends(get_current_user),
+):
+    """批量获取币种实时价格
+    优先使用 MarketManager 实时行情（Binance加密 + Bybit非加密/兜底），
+    缓存未命中时回退到 REST API 直接获取"""
+    mm = MarketManager.get_instance()
+    # 确保 Bybit 公开客户端可用（非加密品种数据源）
+    mm.ensure_bybit_public_client()
+
+    result = {}
+    for sym in symbols.split(","):
+        sym = sym.strip().upper()
+        if not sym:
+            continue
+        try:
+            # 1) 优先从 MarketManager 实时缓存获取（含 Bybit fallback）
+            price = mm.get_price(sym)
+
+            # 2) 缓存未命中时，REST 直接获取
+            if not price or price <= 0:
+                if sym in _NON_CRYPTO_SYMBOLS:
+                    price = _fetch_commodity_price(sym)
+                else:
+                    # 加密货币：Binance 优先，Bybit 兜底
+                    import requests as _requests
+                    try:
+                        r = _requests.get(
+                            f"https://fapi.binance.com/fapi/v1/ticker/price?symbol={sym}USDT",
+                            timeout=5,
+                        )
+                        price = float(r.json().get("price", 0))
+                        if price <= 0:
+                            r2 = _requests.get(
+                                f"https://api.binance.com/api/v3/ticker/price?symbol={sym}USDT",
+                                timeout=5,
+                            )
+                            price = float(r2.json().get("price", 0))
+                    except Exception:
+                        price = None
+                    # Binance 失败时用 Bybit 兜底
+                    if not price or price <= 0:
+                        try:
+                            if mm._bybit_client:
+                                t = mm._bybit_client.fetch_ticker(sym)
+                                price = t.last_price if t else None
+                        except Exception:
+                            pass
+
+            if price and price > 0:
+                result[sym] = round(price, 6)
+        except Exception:
+            pass
+    return success(result)
 
 
 @router.get("/factor-dashboard")

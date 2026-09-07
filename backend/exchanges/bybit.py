@@ -23,7 +23,7 @@ from typing import Any, Callable, Dict, List, Optional
 import requests
 
 from backend.core.logging_config import logger
-from backend.core.config import get_settings
+from backend.config import get_settings
 from backend.core.exceptions import (
     ExchangeError, InsufficientBalanceError, OrderNotFoundError,
 )
@@ -68,7 +68,7 @@ class BybitFuturesClient(ExchangeClientBase):
         "AAPL": "AAPLUSDT",
         "MSFT": "MSFTUSDT",
         # 美股-中概
-        "TCEHY": "TCEHYUSDT",
+        "TCEHY": "TENCENTUSDT",
         # 美股-半导体
         "SKHYNIX": "SKHYNIXUSDT",
         "SNDK": "SNDKUSDT",

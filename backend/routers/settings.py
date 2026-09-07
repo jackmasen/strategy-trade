@@ -186,6 +186,7 @@ def get_notify_config(
         "smtp_pwd": cfgs.get("notify_smtp_pwd", {"has_value": False, "masked": ""}) or {"has_value": False, "masked": ""},
         "smtp_to": cfgs.get("notify_smtp_to", "") or "",
         "smtp_ssl": cfgs.get("notify_smtp_ssl", True) if isinstance(cfgs.get("notify_smtp_ssl"), bool) else True,
+        "smtp_enabled": cfgs.get("notify_smtp_enabled", True) if isinstance(cfgs.get("notify_smtp_enabled"), bool) else True,
         "events": cfgs.get("notify_events", ["tp", "sl", "risk", "daily"]) or ["tp", "sl", "risk", "daily"],
     }
     return success(result)
@@ -335,6 +336,8 @@ def update_notify_config(
                 "string", "notify", "默认收件人(逗号分隔)", user.id)
     _set_config(db, "notify_smtp_ssl", req.smtp_ssl,
                 "bool", "notify", "是否使用SSL/TLS", user.id)
+    _set_config(db, "notify_smtp_enabled", req.smtp_enabled,
+                "bool", "notify", "是否启用邮件推送", user.id)
     _set_config(db, "notify_events", req.model_dump().get("events", ["tp", "sl", "risk", "daily"]) or ["tp", "sl", "risk", "daily"],
                 "json", "notify", "推送事件类型", user.id)
 

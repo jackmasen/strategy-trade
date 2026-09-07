@@ -120,6 +120,21 @@
             </el-form-item>
           </el-col>
         </el-row>
+        <el-row :gutter="16">
+          <el-col :span="12">
+            <el-form-item label="交易子账号" prop="exchange_id">
+              <el-select v-model="form.exchange_id" placeholder="选择用于交易的子账号（留空则自动选择第一个启用账号）" style="width:100%;" clearable>
+                <el-option v-for="acc in exchangeAccounts" :key="acc.id" :value="acc.id"
+                  :label="`${acc.sub_account_name} [${acc.exchange_name}]`" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label="初始杠杆">
+              <el-input-number v-model="form.leverage_fixed" :min="1" :max="125" style="width:100%;" />
+            </el-form-item>
+          </el-col>
+        </el-row>
         <el-form-item label="策略描述">
           <el-input v-model="form.description" type="textarea" :rows="2" maxlength="200" />
         </el-form-item>
@@ -468,6 +483,7 @@ const load = async () => {
 // ------------ 表单 ------------
 const formVisible = ref(false)
 const formRef = ref(null)
+const exchangeAccounts = ref([])  // 用户的交易所子账号列表
 const submitting = ref(false)
 const tplLoading = ref(false)
 const emptyForm = () => ({
@@ -492,6 +508,7 @@ const rules = {
 }
 
 const openForm = (row) => {
+  loadExchangeAccounts()
   Object.assign(form, emptyForm())
   if (row) {
     Object.assign(form, JSON.parse(JSON.stringify(row)))

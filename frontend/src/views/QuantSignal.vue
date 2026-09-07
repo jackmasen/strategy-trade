@@ -77,8 +77,9 @@
                 <span class="meta-value regime-tag">{{ sig.market_regime_cn }}</span>
               </div>
             </div>
-            <div class="signal-card__price" v-if="sig.entry_price">
-              ${{ formatPrice(sig.entry_price, sig.symbol) }}
+            <div class="signal-card__price" v-if="getPrice(sig)">
+              ${{ formatPrice(getPrice(sig), sig.symbol) }}
+              <span v-if="realTimePrices[sig.symbol]" style="font-size:10px;color:#25D07D;margin-left:4px;">实时</span>
             </div>
           </div>
         </div>
@@ -154,7 +155,8 @@
             <div class="suggestion-grid">
               <div class="suggestion-item">
                 <span class="sug-label">入场价</span>
-                <span class="sug-value">${{ formatPrice(selectedSignal.entry_price, selectedSymbol) }}</span>
+                <span class="sug-value">${{ formatPrice(getPrice(selectedSignal), selectedSymbol) }}</span>
+                <span v-if="realTimePrices[selectedSymbol]" style="font-size:10px;color:#25D07D;">实时价</span>
               </div>
               <div class="suggestion-item">
                 <span class="sug-label">止损价</span>
@@ -328,7 +330,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { TrendCharts, Refresh, Lightning, Promotion } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { http, API_PREFIX } from '@/utils/request'
@@ -337,6 +339,8 @@ const loading = ref(false)
 const detailLoading = ref(false)
 const timeframe = ref('4h')
 const signals = ref([])
+const realTimePrices = ref({})
+let priceTimer = null
 const selectedSymbol = ref('BTC')
 const selectedSignal = ref(null)
 
@@ -469,7 +473,7 @@ async function loadOverview() {
   loading.value = true
   try {
     const res = await http.get(`${API_PREFIX}/quant-signal/overview`, {
-      params: { symbols: 'BTC,ETH,SOL,XAU,WTI,TSLA,NVDA,AAPL,MSFT,TCEHY,SKHYNIX,SNDK', timeframe: timeframe.value }
+      symbols: 'BTC,ETH,SOL,XAU,WTI,TSLA,NVDA,AAPL,MSFT,TCEHY,SKHYNIX,SNDK', timeframe: timeframe.value
     })
     signals.value = res.signals || []
     if (!selectedSignal.value && signals.value.length > 0) {
@@ -478,11 +482,31 @@ async function loadOverview() {
       const found = signals.value.find(s => s.symbol === selectedSymbol.value)
       if (found) selectedSignal.value = found
     }
+    // 获取实时价格
+    fetchRealtimePrices()
   } catch (e) {
     ElMessage.error('加载信号失败')
   } finally {
     loading.value = false
   }
+}
+
+// 获取实时价格
+async function fetchRealtimePrices() {
+  try {
+    const syms = signals.value.map(s => s.symbol).join(',')
+    if (!syms) return
+    const res = await http.get(`${API_PREFIX}/quant-signal/prices`, { symbols: syms })
+    realTimePrices.value = res || {}
+  } catch (e) {
+    // 静默失败，继续显示入场价
+  }
+}
+
+// 获取显示价格（优先实时价，其次入场价）
+function getPrice(sig) {
+  if (realTimePrices.value[sig.symbol]) return realTimePrices.value[sig.symbol]
+  return sig.entry_price
 }
 
 function selectSymbol(sym) {
@@ -495,6 +519,11 @@ function selectSymbol(sym) {
 
 onMounted(() => {
   loadOverview()
+  priceTimer = setInterval(fetchRealtimePrices, 10000)
+})
+
+onUnmounted(() => {
+  if (priceTimer) { clearInterval(priceTimer); priceTimer = null }
 })
 </script>
 

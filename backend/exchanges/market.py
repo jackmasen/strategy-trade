@@ -94,6 +94,11 @@ class MarketManager:
         self._threads: List[threading.Thread] = []
         self._stop_event = threading.Event()
 
+        # Bybit 公开行情客户端（无需API Key，用于补充非加密品种实时价格）
+        self._bybit_client: Optional[ExchangeClientBase] = None
+        self._crypto_syms = {"BTC", "ETH", "SOL"}  # 加密货币走主用交易所
+        self._non_crypto_syms = {"XAU", "XAG", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "TCEHY", "SKHYNIX", "SNDK"}
+
     # ==========================================================
     #  注册交易所 client
     # ==========================================================
@@ -106,6 +111,52 @@ class MarketManager:
 
     def has_client(self) -> bool:
         return self._primary_client is not None
+
+    def ensure_bybit_public_client(self) -> Optional[ExchangeClientBase]:
+        """确保 Bybit 公开行情客户端已注册（无需 API Key，仅用于公开行情数据）
+        当主用交易所不支持非加密品种时，Bybit 作为数据源补充
+        受系统配置 bybit_public_enabled 控制（默认启用）"""
+        if self._bybit_client is not None:
+            return self._bybit_client
+        # 检查配置开关
+        try:
+            from backend.db.session import SessionLocal
+            from backend.routers.settings import _get_config_value
+            db = SessionLocal()
+            try:
+                enabled = _get_config_value(db, "bybit_public_enabled", True)
+            finally:
+                db.close()
+            if not enabled:
+                logger.info("[Market] Bybit 公开行情已在系统配置中禁用")
+                return None
+        except Exception:
+            pass  # 配置读取失败时默认启用
+        try:
+            from backend.exchanges.bybit import BybitFuturesClient
+            client = BybitFuturesClient(
+                api_key="", api_secret="", testnet=False,
+                exchange_account_id=-1,  # 标记为公开行情客户端
+            )
+            client.connect()
+            self._bybit_client = client
+            key = "Bybit_public"
+            self._clients[key] = client
+            logger.info("[Market] Bybit 公开行情客户端已注册（用于非加密品种实时价格）")
+            return client
+        except Exception as e:
+            logger.warning(f"[Market] Bybit 公开客户端注册失败: {e}")
+            return None
+
+    def get_data_client(self, symbol: str) -> Optional[ExchangeClientBase]:
+        """根据品种选择合适的数据源客户端
+        - 加密货币(BTC/ETH/SOL)：优先主用客户端
+        - 非加密品种(股票/商品)：优先 Bybit，主用客户端兜底"""
+        if symbol in self._crypto_syms:
+            return self._primary_client or self._bybit_client
+        else:
+            # 非加密品种：Bybit 优先（支持 TradFi 永续），主用兜底
+            return self._bybit_client or self._primary_client
 
     def reload_demo_client(self) -> None:
         """重新加载演示API客户端（管理员更新配置后调用）"""
@@ -146,18 +197,40 @@ class MarketManager:
                     except Exception as e:
                         logger.warning(f"[Market] 预加载K线失败 {sym}{tf}: {e}")
 
-        # 2) 启动主用 client 的 WS 行情（失败不影响，后台继续用 REST fallback）
-        if self._primary_client:
-            all_syms = list(symbols or self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
+        # 2) 启动各交易所的 WS 行情（按品种分配数据源）
+        #    加密货币 -> 主用客户端；非加密品种(股票/商品) -> Bybit
+        all_syms = list(symbols or self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
+
+        # 确保 Bybit 公开客户端可用（用于非加密品种）
+        self.ensure_bybit_public_client()
+
+        crypto_syms = [s for s in all_syms if s in self._crypto_syms]
+        non_crypto_syms = [s for s in all_syms if s not in self._crypto_syms]
+
+        # 主用客户端 WS（加密货币）
+        if self._primary_client and crypto_syms:
             try:
                 self._primary_client.start_ws(
-                    symbols=all_syms,
+                    symbols=crypto_syms,
                     on_ticker=self._on_ws_ticker,
                     on_kline=self._on_ws_kline,
                 )
-                logger.info(f"[Market] WS 行情已启动 ({self._primary_client.EXCHANGE_NAME}), symbols={all_syms}")
+                logger.info(f"[Market] 主用WS已启动 ({self._primary_client.EXCHANGE_NAME}), symbols={crypto_syms}")
             except Exception as e:
-                logger.warning(f"[Market] WS 启动失败，将使用 REST fallback: {e}")
+                logger.warning(f"[Market] 主用WS启动失败: {e}")
+
+        # Bybit WS（非加密品种 + 加密货币兜底）
+        if self._bybit_client:
+            bybit_syms = non_crypto_syms + crypto_syms  # Bybit 同时订阅全部，作为加密货币的兜底
+            try:
+                self._bybit_client.start_ws(
+                    symbols=bybit_syms,
+                    on_ticker=self._on_ws_ticker,
+                    on_kline=self._on_ws_kline,
+                )
+                logger.info(f"[Market] Bybit WS已启动, symbols={bybit_syms}")
+            except Exception as e:
+                logger.warning(f"[Market] Bybit WS启动失败: {e}")
 
         # 3) 后台 flush ticker 线程 (每 1s)
         self._threads.append(self._spawn_daemon(self._ticker_flush_loop, name="mm_ticker_flush"))
@@ -216,7 +289,19 @@ class MarketManager:
     def get_price(self, symbol: str) -> Optional[float]:
         with self._price_lock:
             t = self._tickers.get(symbol)
-            return t.last_price if t else None
+            if t:
+                return t.last_price
+        # 缓存未命中：从对应数据源 REST 拉取
+        client = self.get_data_client(symbol)
+        if client:
+            try:
+                ticker = client.fetch_ticker(symbol)
+                if ticker and ticker.last_price:
+                    self._on_ws_ticker(ticker)
+                    return ticker.last_price
+            except Exception as e:
+                logger.debug(f"[Market] get_price REST fallback {symbol} 失败: {e}")
+        return None
 
     def get_ticker(self, symbol: str) -> Optional[Ticker]:
         with self._price_lock:
@@ -498,16 +583,30 @@ class MarketManager:
                     if self._stop_event.is_set():
                         return
                     time.sleep(1.0)
-                if not self._primary_client:
+                # 确保 Bybit 公开客户端可用
+                if not self._bybit_client:
+                    self.ensure_bybit_public_client()
+                if not self._primary_client and not self._bybit_client:
                     continue
                 # 只处理已订阅 + 主用5品种
                 syms = list(self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
                 for sym in syms:
+                    client = self.get_data_client(sym)
+                    if not client:
+                        continue
                     try:
-                        ticker = self._primary_client.fetch_ticker(sym)
+                        ticker = client.fetch_ticker(sym)
                         self._on_ws_ticker(ticker)
                     except Exception as e:
-                        logger.debug(f"[Market] REST fallback ticker {sym} 失败: {e}")
+                        # 主用失败时尝试 Bybit 兜底
+                        if client != self._bybit_client and self._bybit_client:
+                            try:
+                                ticker = self._bybit_client.fetch_ticker(sym)
+                                self._on_ws_ticker(ticker)
+                            except Exception as e2:
+                                logger.debug(f"[Market] REST fallback ticker {sym} 失败(主用+Bybit): {e2}")
+                        else:
+                            logger.debug(f"[Market] REST fallback ticker {sym} 失败: {e}")
             except Exception as e:
                 logger.debug(f"[Market] rest_fallback 异常: {e}")
 

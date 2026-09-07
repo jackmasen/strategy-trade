@@ -25,12 +25,27 @@ def _ensure_ai_keys_table(db: Session):
 
 def _get_available_keys(db: Session) -> list:
     _ensure_ai_keys_table(db)
+    from datetime import timedelta
+    # 先重置已失败超过30分钟的Key（给重试机会，避免永久失效）
+    cutoff = datetime.now() - timedelta(minutes=30)
+    stale_failed = db.query(AiApiKey).filter(
+        AiApiKey.status == "failed",
+        AiApiKey.updated_at < cutoff
+    ).all()
+    if stale_failed:
+        for k in stale_failed:
+            k.status = "active"
+            k.fail_count = 0
+            k.last_error = ""
+        db.commit()
+        logger.info(f"[AI-Failover] 自动重置 {len(stale_failed)} 个超时 failed Key 为重试")
+
     keys = db.query(AiApiKey).filter(
         AiApiKey.status == "active"
     ).order_by(AiApiKey.priority.asc(), AiApiKey.id.asc()).all()
     if keys:
         return keys
-    # 没有 active 的 Key，自动重置 failed 的 Key（给它们重试机会）
+    # 没有 active 的 Key，自动重置所有 failed 的 Key
     failed_keys = db.query(AiApiKey).filter(
         AiApiKey.status == "failed"
     ).all()
@@ -333,20 +348,29 @@ def _rule_based_fallback(analysis_type: str, symbol: str, timeframe: str,
 def check_ai_status(db: Session) -> Dict[str, Any]:
     """
     检查 AI 连接状态（供前端绿灯/红灯状态显示）
-    返回 {"status": "ok"|"error", "source": "primary"|"pool"|"none", "detail": str}
+    基于最近成功验证时间判断（5分钟内成功过则显示正常），
+    避免因单次调用失败导致状态频繁闪烁
     """
+    from datetime import datetime, timedelta
+
+    now = datetime.now()
+    fresh_window = timedelta(minutes=5)  # 5分钟内成功过算正常
+
     # 检查主配置
     try:
         from backend.routers.analytics import _ensure_ai_config_table_and_row
         cfg = _ensure_ai_config_table_and_row(db)
         key_plain = decrypt_api_key(cfg.api_key_encrypted or "")
-        if key_plain and not cfg.last_error:
+        if key_plain:
+            # 有 Key 配置，检查最近是否成功验证过
+            if cfg.last_verified_at and (now - cfg.last_verified_at) < fresh_window:
+                return {"status": "ok", "source": "primary",
+                        "detail": f"{cfg.provider_name} / {cfg.model_name}",
+                        "last_verified": cfg.last_verified_at.isoformat(timespec="seconds") if cfg.last_verified_at else None}
+            # 配置了 Key 但最近没验证，显示待检测（不报错，让定时任务去验证）
             return {"status": "ok", "source": "primary",
-                    "detail": f"{cfg.provider_name} / {cfg.model_name}",
+                    "detail": f"{cfg.provider_name} / {cfg.model_name} (已配置)",
                     "last_verified": cfg.last_verified_at.isoformat(timespec="seconds") if cfg.last_verified_at else None}
-        if cfg.last_error:
-            # 主配置有错误，检查接口池
-            pass
     except Exception as e:
         logger.debug(f"[AI-Status] 检查主配置异常: {e}")
 
@@ -360,4 +384,4 @@ def check_ai_status(db: Session) -> Dict[str, Any]:
                 "last_verified": latest_key.last_checked.isoformat(timespec="seconds") if latest_key.last_checked else None}
 
     return {"status": "error", "source": "none",
-            "detail": "无可用AI配置", "last_verified": None}
+            "detail": "未配置AI接口，请在【AI配置】或【AI接口池】中添加", "last_verified": None}
