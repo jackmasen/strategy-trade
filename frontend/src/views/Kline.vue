@@ -728,8 +728,8 @@
                       <el-option v-for="k in symbolKeys" :key="k" :label="`${SYMBOL_META[k].icon} ${k} ${SYMBOL_META[k].name}`" :value="k" />
                     </el-select>
                     <el-select v-model="selectedAccount" size="small" class="ct-account" @change="loadAll">
-                      <el-option label="公共行情" :value="0" />
-                      <el-option v-for="a in accounts" :key="a.id" :label="a.name" :value="a.id" />
+                      <el-option label="🌐 公开行情" :value="0" />
+                      <el-option v-for="a in accounts" :key="a.id" :label="accountLabel(a)" :value="a.id" />
                     </el-select>
                   </div>
                   <div class="ct-center">
@@ -1080,6 +1080,7 @@
               <span class="pos-symbol" style="display:flex;align-items:center;gap:4px;">
                 <span class="status-light" :class="pos.side === 1 ? 'ok' : 'error'" style="margin:0;"></span>
                 {{ pos.symbol }}
+              <span class="pos-exchange-tag" style="font-size:10px;color:#8a9099;margin-left:4px;">{{ exchangeName(pos.exchange) }}</span>
               </span>
               <div style="display:flex;gap:4px;align-items:center;">
                 <el-tag size="small" effect="dark" :type="pos.status === 1 ? 'success' : 'info'">
@@ -1797,9 +1798,9 @@ function getObPct(total, side) {
 async function loadAccounts() {
   try {
     const r = await http.get(`${API_PREFIX}/exchange/accounts`, { status: 1, page_size: 100 })
-    const items = r.items || r.data?.items || []
+    // http 拦截器已解包: r 就是 body.data
+    const items = r.items || r.data?.items || (Array.isArray(r) ? r : []) || []
     accounts.value = items
-    console.log('[Kline] accounts loaded:', items.length, items.map(a => ({id: a.id, ex: a.exchange, name: a.sub_account_name})))
   } catch (e) {
     console.error('[Kline] loadAccounts error:', e)
   }

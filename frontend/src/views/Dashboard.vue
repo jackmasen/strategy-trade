@@ -814,6 +814,7 @@ const loadAll = async () => {
         const h = Math.floor(mins / 60), m = mins % 60
         return {
           symbol: p.symbol, side: p.side, leverage: p.leverage || 3,
+          exchange: p.exchange,
           entry: ent, mark, upnl, upnlPct: upPct,
           quantity: Number(p.quantity_usdt || p.nominal || 0),
           margin: Number(p.margin || p.margin_used || 0),
