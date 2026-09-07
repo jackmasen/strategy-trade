@@ -193,14 +193,14 @@ def _aggregate_yearly_klines(daily_candles, symbol):
 # ==========================================================
 #  辅助：构建交易所 client + 权限校验
 # ==========================================================
-def _get_account(db: Session, user: User, aid: int) -> ExchangeAccount:
+def _get_account(db: Session, user: User, aid: int, allow_disabled: bool = False) -> ExchangeAccount:
     account = db.query(ExchangeAccount).filter(
         ExchangeAccount.id == aid,
         (ExchangeAccount.user_id == user.id) | (user.role == 1),
     ).first()
     if not account:
         raise NotFoundException("子账号不存在")
-    if account.status == 0:
+    if account.status == 0 and not allow_disabled:
         raise BizException("该子账号已被禁用")
     # 审计日志：管理员操作他人账号时记录
     if user.role == 1 and account.user_id != user.id:
@@ -320,7 +320,7 @@ def toggle_account_status(
     user: User = Depends(get_current_user),
 ):
     """启用/禁用子账号（专用接口）"""
-    account = _get_account(db, user, aid)
+    account = _get_account(db, user, aid, allow_disabled=True)
     account.status = 1 if req.status else 0
     db.commit()
     return success(message="状态已更新")
@@ -334,7 +334,7 @@ def update_account(
     user: User = Depends(get_current_user),
 ):
     """更新子账号配置"""
-    account = _get_account(db, user, aid)
+    account = _get_account(db, user, aid, allow_disabled=True)
     if req.sub_account_name:
         account.sub_account_name = req.sub_account_name
     if req.api_key:
