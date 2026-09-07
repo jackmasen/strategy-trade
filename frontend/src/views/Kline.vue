@@ -1797,9 +1797,12 @@ function getObPct(total, side) {
 async function loadAccounts() {
   try {
     const r = await http.get(`${API_PREFIX}/exchange/accounts`, { status: 1, page_size: 100 })
-    accounts.value = r.items || []
-    // 默认使用公开行情，不自动选中子账号，由用户自行选择
-  } catch (e) {}
+    const items = r.items || r.data?.items || []
+    accounts.value = items
+    console.log('[Kline] accounts loaded:', items.length, items.map(a => ({id: a.id, ex: a.exchange, name: a.sub_account_name})))
+  } catch (e) {
+    console.error('[Kline] loadAccounts error:', e)
+  }
 }
 
 // 加载K线综合分析

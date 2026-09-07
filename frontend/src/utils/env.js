@@ -48,6 +48,7 @@ export const NEWS_SOURCE_META = {
 export const EXCHANGE_META = {
   1: { name: '币安 Binance', color: '#F3BA2F' },
   2: { name: '欧易 OKX',     color: '#FFFFFF' },
+  3: { name: 'Bybit',        color: '#F7A600' },
 }
 
 // 订单方向
