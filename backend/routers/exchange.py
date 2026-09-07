@@ -248,6 +248,7 @@ class UpdateAccountReq(BaseModel):
     ip_whitelist: str = ""
     leverage_max: int | None = None
     status: int | None = None
+    testnet: bool | None = None
     remark: str = ""
 
 
@@ -351,6 +352,8 @@ def update_account(
         account.leverage_max = req.leverage_max
     if req.status is not None:
         account.status = req.status
+    if req.testnet is not None:
+        account.testnet = req.testnet
     if req.remark is not None:
         account.remark = req.remark
     db.commit()
