@@ -25,7 +25,7 @@
           </el-select>
           <el-select v-model="selectedAccount" placeholder="选择子账号" size="small" style="width:180px;" @change="loadAll">
             <el-option :value="0" label="🌐 公开行情" />
-            <el-option v-for="a in accounts" :key="a.id" :label="`${EXCHANGE_META[a.exchange]?.name || ''} · ${a.sub_account_name || a.name}`" :value="a.id" />
+            <el-option v-for="a in accounts" :key="a.id" :label="accountLabel(a)" :value="a.id" />
           </el-select>
         </div>
         <div class="toolbar-center">
@@ -2096,6 +2096,11 @@ async function loadMyPositions() {
 
 const EXCHANGE_NAMES = { 1: '币安', 2: 'OKX', 3: 'Bybit' }
 function exchangeName(ex) { return EXCHANGE_NAMES[ex] || '' }
+function accountLabel(a) {
+  const exName = EXCHANGE_META[a.exchange]?.name || ''
+  const accName = a.sub_account_name || a.name || ''
+  return exName ? `${exName} · ${accName}` : accName
+}
 
 function focusPosition(pos) {
   // 点击持仓卡片切换到对应品种

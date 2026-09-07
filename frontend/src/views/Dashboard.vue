@@ -350,7 +350,7 @@
                       <span class="status-light" :class="p.side === 1 ? 'ok' : 'error'"></span>
                       <span class="pos-symbol">{{ SYMBOL_META[p.symbol]?.icon }}</span>
                       <div>
-                        <div class="monospace text-strong" style="font-size: 16px;">{{ p.symbol }}</div>
+                        <div class="monospace text-strong" style="font-size: 16px;">{{ p.symbol }} <span style="font-size:10px;color:#8a9099;font-weight:400;">{{ exchangeName(p.exchange) }}</span></div>
                         <div class="text-dim" style="font-size:11px;">{{ SYMBOL_META[p.symbol]?.name }}</div>
                       </div>
                     </div>

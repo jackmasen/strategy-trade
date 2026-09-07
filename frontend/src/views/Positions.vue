@@ -94,6 +94,11 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="交易所" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag size="small" effect="plain" :type="row.exchange === 1 ? 'warning' : row.exchange === 2 ? '' : 'info'">{{ exchangeName(row.exchange) }}</el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="持仓时长" width="120" align="center">
           <template #default="{ row }"><span class="monospace">{{ row.holding_minutes }}m</span></template>
         </el-table-column>
@@ -144,6 +149,8 @@ import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { PieChart, Top, Bottom, SwitchButton } from '@element-plus/icons-vue'
 import { SYMBOL_META, fmtMoney, fmtPnlClass } from '@/utils/env'
+const EXCHANGE_NAMES = { 1: '币安', 2: 'OKX', 3: 'Bybit' }
+const exchangeName = (ex) => EXCHANGE_NAMES[ex] || ''
 import { http, API_PREFIX } from '@/utils/request'
 
 const f = reactive({ symbol: undefined, side: undefined })
