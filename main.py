@@ -6,7 +6,8 @@ FastAPI 应用入口
 - 挂载前端 dist 静态资源
 - 启动/关闭事件（建表、初始化超级管理员、APScheduler）
 """
-from __future__ import annotations
+# 强制所有 HTTP 请求走 IPv4（交易所 IP 白名单兼容）
+from backend.core.force_ipv4 import *  # noqa: F401, E402
 import warnings
 warnings.filterwarnings("ignore", message="Field \"model_name\" has conflict", category=UserWarning)
 
