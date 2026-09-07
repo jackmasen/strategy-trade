@@ -587,23 +587,35 @@ def get_ticker(symbol: str, account_id: int = 0, db: Session = Depends(get_db), 
     """获取最新 ticker（优先缓存；缓存过期则后台刷新，先返回旧数据）"""
     symbol = symbol.upper()
     mm = MarketManager.get_instance()
+    # 确保该品种被订阅，以便 WS 实时推送（非阻塞）
+    if symbol not in mm._symbols_subscribed:
+        mm.subscribe_ticker(symbol, lambda *a, **k: None)
     t = mm.get_ticker(symbol)
     now_ms = int(time.time() * 1000)
     if t:
         if not t.timestamp_ms or (now_ms - t.timestamp_ms) > 5000:
             threading.Thread(target=_refresh_ticker_cache, args=(mm, symbol), daemon=True).start()
         return success(t.to_dict())
-    client = _get_client_by_account(db, user, account_id, allow_public=True)
+    # 缓存未命中：用 MarketManager 的数据源路由（加密走Binance，非加密走Bybit）
+    client = mm.get_data_client(symbol) or _get_client_by_account(db, user, account_id, allow_public=True)
     if client:
         try:
             t = client.fetch_ticker(symbol)
-            mm.on_ws_ticker(t)
+            mm._on_ws_ticker(t)
             return success(t.to_dict())
         except Exception as e:
-            logger.warning(f"[Exchange] Ticker拉取失败(symbol={symbol}): {e} — 返回模拟数据")
-            t = _gen_mock_ticker(symbol)
-            mm.on_ws_ticker(t)
+            logger.warning(f"[Exchange] Ticker拉取失败(symbol={symbol}): {e}")
+    # 最后兜底：用 Bybit 公开客户端
+    if mm._bybit_client:
+        try:
+            t = mm._bybit_client.fetch_ticker(symbol)
+            mm._on_ws_ticker(t)
             return success(t.to_dict())
+        except Exception:
+            pass
+    # 实在没有数据才返回模拟
+    t = _gen_mock_ticker(symbol)
+    return success(t.to_dict())
     raise BizException("尚未绑定任何交易所子账号，请先到[交易所子账号]页面绑定并测试连通性")
 
 
