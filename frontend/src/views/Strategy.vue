@@ -507,8 +507,8 @@ const rules = {
   timeframe: [{ required: true, message: '请选择K线周期', trigger: 'change' }],
 }
 
-const openForm = (row) => {
-  loadExchangeAccounts()
+const openForm = async (row) => {
+  await loadExchangeAccounts()
   Object.assign(form, emptyForm())
   if (row) {
     Object.assign(form, JSON.parse(JSON.stringify(row)))
@@ -520,6 +520,7 @@ const openForm = (row) => {
 const applyTemplate = async () => {
   tplLoading.value = true
   try {
+    await loadExchangeAccounts()
     const tpl = await http.get(`${API_PREFIX}/strategies/default-template`)
     Object.assign(form, emptyForm(), tpl || {})
     form.id = null
@@ -685,7 +686,7 @@ const runDiag = async () => {
   }
 }
 
-onMounted(load)
+onMounted(() => { load(); loadExchangeAccounts() })
 </script>
 
 <style scoped>
