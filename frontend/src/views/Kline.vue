@@ -637,6 +637,7 @@
             <span class="pos-symbol" style="display:flex;align-items:center;gap:4px;">
               <span class="status-light" :class="pos.side === 1 ? 'ok' : 'error'" style="margin:0;"></span>
               {{ pos.symbol }}
+              <span class="pos-exchange-tag" style="font-size:10px;color:#8a9099;margin-left:4px;">{{ exchangeName(pos.exchange) }}</span>
             </span>
             <el-tag size="small" effect="dark" :type="pos.side === 1 ? 'success' : 'danger'">
               {{ pos.side === 1 ? '多' : '空' }} {{ pos.leverage }}x
@@ -2089,6 +2090,9 @@ async function loadMyPositions() {
     positionsLoading.value = false
   }
 }
+
+const EXCHANGE_NAMES = { 1: '币安', 2: 'OKX', 3: 'Bybit' }
+function exchangeName(ex) { return EXCHANGE_NAMES[ex] || '' }
 
 function focusPosition(pos) {
   // 点击持仓卡片切换到对应品种
