@@ -535,12 +535,11 @@ const applyTemplate = async () => {
 async function loadExchangeAccounts() {
   try {
     const r = await http.get(`${API_PREFIX}/exchange/accounts`)
-    if (r.code === 0 && r.data && r.data.items) {
-      const nameMap = {1:'币安', 2:'OKX', 3:'Bybit'}
-      exchangeAccounts.value = r.data.items
-        .filter(a => a.status === 1)
-        .map(a => ({...a, exchange_name: nameMap[a.exchange] || '未知'}))
-    }
+    const items = (r && r.items) || []
+    const nameMap = {1:'币安', 2:'OKX', 3:'Bybit'}
+    exchangeAccounts.value = items
+      .filter(a => a.status === 1)
+      .map(a => ({...a, exchange_name: nameMap[a.exchange] || '未知'}))
   } catch (e) {
     console.error('加载子账号列表失败', e)
   }

@@ -251,6 +251,10 @@ class UpdateAccountReq(BaseModel):
     remark: str = ""
 
 
+class ToggleStatusReq(BaseModel):
+    status: int = 1
+
+
 @router.get("/supported-symbols")
 def supported_symbols():
     """系统支持的5个交易品种"""
@@ -306,6 +310,20 @@ def create_account(
     db.commit()
     db.refresh(account)
     return success({"id": account.id}, message="子账号绑定成功")
+
+
+@router.post("/accounts/{aid}/toggle-status")
+def toggle_account_status(
+    aid: int,
+    req: ToggleStatusReq,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """启用/禁用子账号（专用接口）"""
+    account = _get_account(db, user, aid)
+    account.status = 1 if req.status else 0
+    db.commit()
+    return success(message="状态已更新")
 
 
 @router.put("/accounts/{aid}")
@@ -596,24 +614,28 @@ def get_ticker(symbol: str, account_id: int = 0, db: Session = Depends(get_db), 
         if not t.timestamp_ms or (now_ms - t.timestamp_ms) > 5000:
             threading.Thread(target=_refresh_ticker_cache, args=(mm, symbol), daemon=True).start()
         return success(t.to_dict())
-    # 缓存未命中：用 MarketManager 的数据源路由（加密走Binance，非加密走Bybit）
-    client = mm.get_data_client(symbol) or _get_client_by_account(db, user, account_id, allow_public=True)
+    # 缓存未命中：直接用 REST 获取（同步，不依赖后台线程）
+    client = mm.get_data_client(symbol)
+    if not client:
+        client = mm._bybit_client or _get_client_by_account(db, user, account_id, allow_public=True)
     if client:
         try:
             t = client.fetch_ticker(symbol)
-            mm._on_ws_ticker(t)
-            return success(t.to_dict())
+            if t and t.last_price and t.last_price > 0:
+                mm._on_ws_ticker(t)
+                return success(t.to_dict())
         except Exception as e:
-            logger.warning(f"[Exchange] Ticker拉取失败(symbol={symbol}): {e}")
-    # 最后兜底：用 Bybit 公开客户端
-    if mm._bybit_client:
+            logger.warning(f"[Exchange] Ticker REST失败(symbol={symbol}): {e}")
+    # Bybit 兜底
+    if mm._bybit_client and (not client or client != mm._bybit_client):
         try:
             t = mm._bybit_client.fetch_ticker(symbol)
-            mm._on_ws_ticker(t)
-            return success(t.to_dict())
+            if t and t.last_price and t.last_price > 0:
+                mm._on_ws_ticker(t)
+                return success(t.to_dict())
         except Exception:
             pass
-    # 实在没有数据才返回模拟
+    # 最后返回模拟数据
     t = _gen_mock_ticker(symbol)
     return success(t.to_dict())
     raise BizException("尚未绑定任何交易所子账号，请先到[交易所子账号]页面绑定并测试连通性")
