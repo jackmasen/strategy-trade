@@ -613,11 +613,12 @@ def get_ticker(symbol: str, account_id: int = 0, db: Session = Depends(get_db), 
         mm.subscribe_ticker(symbol, lambda *a, **k: None)
     t = mm.get_ticker(symbol)
     now_ms = int(time.time() * 1000)
-    if t:
+    # 缓存有效且 last_price > 0 才直接返回
+    if t and t.last_price and t.last_price > 0:
         if not t.timestamp_ms or (now_ms - t.timestamp_ms) > 5000:
             threading.Thread(target=_refresh_ticker_cache, args=(mm, symbol), daemon=True).start()
         return success(t.to_dict())
-    # 缓存未命中：直接用 REST 获取（同步，不依赖后台线程）
+    # 缓存未命中或 last_price=0：同步用 REST 获取
     client = mm.get_data_client(symbol)
     if not client:
         client = mm._bybit_client or _get_client_by_account(db, user, account_id, allow_public=True)
