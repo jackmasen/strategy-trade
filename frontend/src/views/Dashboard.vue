@@ -478,6 +478,8 @@ import {
 import { ElMessage } from 'element-plus'
 
 import { SYMBOL_META, fmtMoney, scoreLevel } from '@/utils/env'
+const EXCHANGE_NAMES = { 1: '币安', 2: 'OKX', 3: 'Bybit' }
+const exchangeName = (ex) => EXCHANGE_NAMES[ex] || ''
 import { http, API_PREFIX } from '@/utils/request'
 
 const loading = ref(true)
