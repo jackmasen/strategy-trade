@@ -89,6 +89,9 @@ class MarketManager:
         self._kline_subs: Dict[Tuple[str, str], Dict[str, KlineCallback]] = {}
         self._symbols_subscribed: Set[str] = set()
 
+        # 需要维护 open bucket 的周期（默认 1h/4h；可通过 add_maintained_tf 扩展）
+        self._maintained_tfs: Set[str] = {"1h", "4h"}
+
         # ---------- 生命周期 ----------
         self._running = False
         self._threads: List[threading.Thread] = []
@@ -191,7 +194,7 @@ class MarketManager:
             default_symbols = ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
             symbols_to_load = symbols or list(self._symbols_subscribed) or default_symbols
             for sym in symbols_to_load:
-                for tf in ("1h", "4h"):
+                for tf in self._maintained_tfs:
                     try:
                         self._prefetch_klines(sym, tf)
                     except Exception as e:
@@ -214,6 +217,7 @@ class MarketManager:
                     symbols=crypto_syms,
                     on_ticker=self._on_ws_ticker,
                     on_kline=self._on_ws_kline,
+                    timeframes=list(self._maintained_tfs),
                 )
                 logger.info(f"[Market] 主用WS已启动 ({self._primary_client.EXCHANGE_NAME}), symbols={crypto_syms}")
             except Exception as e:
@@ -227,6 +231,7 @@ class MarketManager:
                     symbols=bybit_syms,
                     on_ticker=self._on_ws_ticker,
                     on_kline=self._on_ws_kline,
+                    timeframes=list(self._maintained_tfs),
                 )
                 logger.info(f"[Market] Bybit WS已启动, symbols={bybit_syms}")
             except Exception as e:
@@ -281,7 +286,13 @@ class MarketManager:
         with self._sub_lock:
             self._kline_subs.setdefault((symbol, timeframe), {})[sub_id] = callback
             self._symbols_subscribed.add(symbol)
+        # 自动添加到维护周期列表
+        self._maintained_tfs.add(timeframe)
         return sub_id
+
+    def add_maintained_tf(self, timeframe: str) -> None:
+        """添加需要维护 open bucket 的周期"""
+        self._maintained_tfs.add(timeframe)
 
     # ==========================================================
     #  数据访问（读取内存 O(1)）
@@ -384,8 +395,8 @@ class MarketManager:
     #  内部：K线桶更新
     # ==========================================================
     def _update_open_kline_buckets(self, symbol: str, price: float, volume: float) -> None:
-        # 我们只维护 1h 和 4h (策略使用)；其他周期按需扩展
-        tfs = ("1h", "4h")
+        # 根据已订阅的周期动态维护 open bucket
+        tfs = tuple(self._maintained_tfs)
         now_ms = int(time.time() * 1000)
         with self._kline_lock:
             for tf in tfs:
@@ -416,7 +427,7 @@ class MarketManager:
     #  WS 回调（只做 O(1) 内存写入！）
     # ==========================================================
     def _on_ws_ticker(self, ticker: Ticker) -> None:
-        """WS ticker: 写入价格缓存，并更新 1h/4h K线桶 OHLC"""
+        """WS ticker: 写入价格缓存，并更新所有维护周期的 K线桶 OHLC"""
         with self._price_lock:
             self._tickers[ticker.symbol] = ticker
         # 同步更新 K 线桶的最新价
@@ -425,7 +436,7 @@ class MarketManager:
             return
         now_ms = int(time.time() * 1000)
         with self._kline_lock:
-            for tf in ("1h", "4h"):
+            for tf in self._maintained_tfs:
                 key = (ticker.symbol, tf)
                 bucket = self._kline_open_bucket.get(key)
                 if bucket is None:
@@ -737,6 +748,18 @@ class MarketManager:
 
 def _tf_bucket_ms(tf: str) -> int:
     m = {"1m": 60, "3m": 180, "5m": 300, "15m": 900, "30m": 1800,
-         "1h": 3600, "2h": 7200, "4h": 14400, "6h": 21600, "8h": 28800,
+         "1h": 3600, "2h": 7200, "3h": 10800, "4h": 14400, "6h": 21600, "8h": 28800,
          "12h": 43200, "1d": 86400}
     return m.get(tf, 3600) * 1000
+
+
+# 支持的全部周期列表
+ALL_SUPPORTED_TIMEFRAMES = [
+    "15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1d",
+]
+
+# 聚合周期映射：目标周期 -> (源周期, 倍数)
+# 只有不在交易所原生支持的周期才需要聚合
+_AGGREGATE_MAP = {
+    "3h": ("1h", 3),
+}

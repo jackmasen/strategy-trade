@@ -683,12 +683,15 @@ class BinanceFuturesClient(ExchangeClientBase):
         symbols: List[str],
         on_ticker=None,
         on_kline=None,
+        timeframes: Optional[List[str]] = None,
     ) -> None:
         """
         启动后台线程，订阅 Binance 公共 WS：
         - 24hr ticker: <sym>@ticker
         - K线 1h/4h: <sym>@kline_1h / @kline_4h
         on_ticker / on_kline 回调需在 O(1) 内完成，避免阻塞 WS 接收线程
+
+        注：timeframes 参数预留，当前默认订阅 1h/4h。
         """
         if self._ws_thread and self._ws_thread.is_alive():
             logger.debug("[Binance] WS 已在运行，先停止再重启")

@@ -93,7 +93,7 @@ class ExchangeClientBase(ABC):
     ) -> "ExchangeClientBase":
         """
         工厂：按 exchange 编号（来自 exchange_account.exchange 字段）返回对应实现
-        exchange: 1=币安 Binance, 2=OKX
+        exchange: 1=币安 Binance, 2=OKX, 3=Bybit, 4=Gate.io
         """
         if exchange == 1:
             from .binance import BinanceFuturesClient
@@ -110,6 +110,12 @@ class ExchangeClientBase(ABC):
         elif exchange == 3:
             from .bybit import BybitFuturesClient
             return BybitFuturesClient(
+                api_key=api_key, api_secret=api_secret, passphrase=passphrase,
+                testnet=testnet, exchange_account_id=exchange_account_id,
+            )
+        elif exchange == 4:
+            from .gateio import GateioFuturesClient
+            return GateioFuturesClient(
                 api_key=api_key, api_secret=api_secret, passphrase=passphrase,
                 testnet=testnet, exchange_account_id=exchange_account_id,
             )
@@ -310,6 +316,7 @@ class ExchangeClientBase(ABC):
         symbols: List[str],
         on_ticker=None,          # callback(ticker: Ticker) - O(1) 内完成！
         on_kline=None,           # callback(candle: Candle, closed: bool)
+        timeframes: Optional[List[str]] = None,  # 订阅的 K线周期列表（None 则用默认）
     ) -> None:
         raise ExchangeNotImplementedError(f"{self.EXCHANGE_NAME} 未实现 WS 行情")
 

@@ -19,7 +19,11 @@ class StrategyConfig(Base):
 
     TF_1H = "1h"
     TF_4H = "4h"
-    TF_BOTH = "1h,4h"
+    TF_1D = "1d"
+    TF_DEFAULT = "1h,4h"
+
+    # 支持的全部周期
+    ALL_TIMEFRAMES = ["15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1d"]
 
     DIR_LONG_SHORT = 0
     DIR_LONG_ONLY = 1
@@ -42,8 +46,8 @@ class StrategyConfig(Base):
     exchange_id = Column(Integer, ForeignKey("exchange_accounts.id", ondelete="SET NULL"),
                          nullable=True, index=True, comment="关联交易所子账号ID")
 
-    # 周期与模式
-    timeframe = Column(String(32), default="1h,4h", comment="交易周期: 1h / 4h / 1h,4h")
+    # 周期与方向
+    timeframe = Column(String(64), default="1h,4h", comment="交易周期: 逗号分隔，支持 15m/30m/1h/2h/3h/4h/6h/12h/1d")
     direction_mode = Column(SmallInteger, default=0, comment="交易方向: 0-多空都做 1-只做多 2-只做空")
     run_mode = Column(SmallInteger, default=3, comment="运行模式: 1-全自动 2-半自动 3-模拟盘")
 
@@ -98,7 +102,7 @@ class ScoreRecord(Base):
     strategy_id = Column(Integer, ForeignKey("strategy_configs.id", ondelete="CASCADE"),
                          index=True, comment="策略ID")
     symbol = Column(String(32), index=True, comment="交易品种: BTC/ETH/SOL/XAU/WTI")
-    timeframe = Column(String(16), index=True, comment="周期: 1h/4h")
+    timeframe = Column(String(16), index=True, comment="周期: 15m/30m/1h/2h/3h/4h/6h/12h/1d")
     candle_close_time = Column(DateTime, index=True, comment="K线收盘时间")
     candle_close_price = Column(DECIMAL(18, 8), default=0, comment="收盘价")
 

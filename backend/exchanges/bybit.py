@@ -41,10 +41,34 @@ from ._types import (
 def _tf_ms(timeframe: str) -> int:
     m = {
         "1m": 60_000, "3m": 180_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000,
-        "1h": 3_600_000, "2h": 7_200_000, "4h": 14_400_000, "6h": 21_600_000,
+        "1h": 3_600_000, "2h": 7_200_000, "3h": 10_800_000, "4h": 14_400_000, "6h": 21_600_000,
         "12h": 43_200_000, "1d": 86_400_000,
     }
     return m.get(timeframe, 3_600_000)
+
+
+# Bybit 原生支持的 K线周期（与 v5 API interval 对应）
+# 不原生支持的周期需要从更小周期聚合
+NATIVE_TF_MAP = {
+    "1m": "1", "3m": "3", "5m": "5", "15m": "15", "30m": "30",
+    "1h": "60", "2h": "120", "4h": "240", "6h": "360", "12h": "720",
+    "1d": "D", "1w": "W", "1M": "M",
+}
+
+# 需要聚合的周期 -> 源周期（Bybit 不原生支持，从更小周期聚合）
+AGGREGATED_TF_MAP = {
+    "3h": "1h",  # 3h 从 1h K线聚合
+}
+
+
+def _is_native_tf(timeframe: str) -> bool:
+    """判断周期是否为 Bybit 原生支持"""
+    return timeframe in NATIVE_TF_MAP
+
+
+def _get_aggregate_source(timeframe: str) -> Optional[str]:
+    """获取聚合源周期（不支持的周期返回 None）"""
+    return AGGREGATED_TF_MAP.get(timeframe)
 
 
 class BybitFuturesClient(ExchangeClientBase):
@@ -72,6 +96,24 @@ class BybitFuturesClient(ExchangeClientBase):
         # 美股-半导体
         "SKHYNIX": "SKHYNIXUSDT",
         "SNDK": "SNDKUSDT",
+        "INTC": "INTCUSDT",
+        "AMD": "AMDUSDT",
+        # 美股-消费
+        "KO": "KOUSDT",
+        "PG": "PGUSDT",
+        "PEP": "PEPUSDT",
+        "MCD": "MCDUSDT",
+        # 美股-零售
+        "WMT": "WMTUSDT",
+        # 美股-医药
+        "JNJ": "JNJUSDT",
+        # 美股-金融
+        "JPM": "JPMUSDT",
+        # 美股-AI/加密概念
+        "MSTR": "MSTRUSDT",
+        "COIN": "COINUSDT",
+        "PLTR": "PLTRUSDT",
+        "SMCI": "SMCIUSDT",
     }
 
     def __init__(
@@ -97,6 +139,7 @@ class BybitFuturesClient(ExchangeClientBase):
         self._ws_stop = threading.Event()
         self._ws_conn = None
         self._ws_symbols: List[str] = []
+        self._ws_timeframes: List[str] = []
         self._ws_on_ticker: Optional[Callable[[Ticker], Any]] = None
         self._ws_on_kline: Optional[Callable[[Candle, bool], Any]] = None
 
@@ -222,13 +265,14 @@ class BybitFuturesClient(ExchangeClientBase):
         self, symbol: str, timeframe: str, limit: int = 200, end_time: int = None,
     ) -> List[Candle]:
         ex_sym = self._to_ex_symbol(symbol)
-        tf_map = {
-            "1m": "1", "5m": "5", "15m": "15", "30m": "30",
-            "1h": "60", "4h": "240", "1d": "D",
-            "1w": "W", "1M": "M",
-            "1y": "M",
-        }
-        tf = tf_map.get(timeframe, timeframe)
+
+        # 判断是否需要聚合
+        agg_source = _get_aggregate_source(timeframe)
+        if agg_source:
+            return self._fetch_aggregated_klines(symbol, timeframe, agg_source, limit, end_time)
+
+        # 原生支持的周期：直接拉取
+        tf = NATIVE_TF_MAP.get(timeframe, timeframe)
         try:
             params: Dict[str, Any] = {"symbol": ex_sym, "interval": tf, "limit": str(min(limit, 200))}
             if end_time:
@@ -238,7 +282,7 @@ class BybitFuturesClient(ExchangeClientBase):
             raise ExchangeError(f"Bybit 拉取K线失败: {e}")
 
         candles: List[Candle] = []
-        # Bybit 返回：startTime, open, high, low, close, volume, turnover（按时间倒序）
+        # Bybit 返回：startTime, open, high, low, close, volume（按时间倒序）
         for k in reversed(result.get("list", [])):
             open_time_ms = int(k[0])
             candles.append(Candle(
@@ -252,6 +296,68 @@ class BybitFuturesClient(ExchangeClientBase):
                 close_time_ms=open_time_ms + _tf_ms(timeframe) - 1,
             ))
         return candles
+
+    def _fetch_aggregated_klines(
+        self, symbol: str, target_tf: str, source_tf: str, limit: int = 200, end_time: int = None,
+    ) -> List[Candle]:
+        """从更小周期 K 线聚合生成目标周期 K 线（如 3h 从 1h 聚合）"""
+        target_ms = _tf_ms(target_tf)
+        source_ms = _tf_ms(source_tf)
+        ratio = target_ms // source_ms
+        if ratio <= 1:
+            raise ExchangeError(f"聚合周期错误: {target_tf} 不能从 {source_tf} 聚合")
+
+        # 多拉 ratio 倍的源 K 线，确保能凑够 limit 根目标 K 线
+        source_limit = min(limit * ratio + ratio, 200)
+        source_candles = self.fetch_klines(symbol, source_tf, limit=source_limit, end_time=end_time)
+        if not source_candles:
+            return []
+
+        # 聚合：按目标周期边界分组
+        aggregated: List[Candle] = []
+        group: List[Candle] = []
+
+        for c in source_candles:
+            # 计算该根源 K 线所属的目标周期开盘时间
+            target_open_ms = (c.open_time_ms // target_ms) * target_ms
+            if not group:
+                group = [c]
+            else:
+                prev_target_open = (group[0].open_time_ms // target_ms) * target_ms
+                if prev_target_open == target_open_ms:
+                    group.append(c)
+                else:
+                    # 上一组聚合完成
+                    if len(group) == ratio:
+                        aggregated.append(self._merge_candles(symbol, target_tf, group))
+                    group = [c]
+
+        # 处理最后一组
+        if group and len(group) == ratio:
+            aggregated.append(self._merge_candles(symbol, target_tf, group))
+
+        return aggregated[-limit:]
+
+    @staticmethod
+    def _merge_candles(symbol: str, timeframe: str, group: List[Candle]) -> Candle:
+        """将多根小周期 K 线合并为一根大周期 K 线"""
+        first = group[0]
+        last = group[-1]
+        high = max(c.high for c in group)
+        low = min(c.low for c in group)
+        volume = sum(c.volume for c in group)
+        target_ms = _tf_ms(timeframe)
+        open_ms = (first.open_time_ms // target_ms) * target_ms
+        return Candle(
+            symbol=symbol, timeframe=timeframe,
+            open_time_ms=open_ms,
+            open=first.open,
+            high=high,
+            low=low,
+            close=last.close,
+            volume=volume,
+            close_time_ms=open_ms + target_ms - 1,
+        )
 
     # ==========================================================
     # 行情：盘口
@@ -593,10 +699,17 @@ class BybitFuturesClient(ExchangeClientBase):
     # ==========================================================
     # WebSocket 行情
     # ==========================================================
-    def start_ws(self, symbols: List[str], on_ticker=None, on_kline=None) -> None:
+    def start_ws(self, symbols: List[str], on_ticker=None, on_kline=None, timeframes: Optional[List[str]] = None) -> None:
         if not symbols:
             return
         self._ws_symbols = symbols
+        # 默认订阅 1h/4h；可传入更多周期（只订阅原生支持的）
+        if timeframes is None:
+            timeframes = ["1h", "4h"]
+        # 过滤只保留原生支持的周期（聚合周期无法直接订阅）
+        self._ws_timeframes = [tf for tf in timeframes if _is_native_tf(tf)]
+        if not self._ws_timeframes:
+            self._ws_timeframes = ["1h", "4h"]
         self._ws_on_ticker = on_ticker
         self._ws_on_kline = on_kline
         self._ws_stop.clear()
@@ -609,7 +722,7 @@ class BybitFuturesClient(ExchangeClientBase):
 
         self._ws_thread = threading.Thread(target=_run, daemon=True)
         self._ws_thread.start()
-        logger.info(f"[{self.EXCHANGE_NAME}] WS 启动，订阅 {len(symbols)} 个品种")
+        logger.info(f"[{self.EXCHANGE_NAME}] WS 启动，订阅 {len(symbols)} 个品种, 周期={self._ws_timeframes}")
 
     def stop_ws(self) -> None:
         self._ws_stop.set()
@@ -638,11 +751,13 @@ class BybitFuturesClient(ExchangeClientBase):
 
         # 订阅 topics
         topics = []
+        # 构建 interval -> timeframe 反向映射
+        interval_to_tf = {NATIVE_TF_MAP[tf]: tf for tf in self._ws_timeframes if tf in NATIVE_TF_MAP}
         for sym in self._ws_symbols:
             ex_sym = self._to_ex_symbol(sym)
             topics.append(f"tickers.{ex_sym}")
-            topics.append(f"kline.60.{ex_sym}")
-            topics.append(f"kline.240.{ex_sym}")
+            for interval in interval_to_tf.keys():
+                topics.append(f"kline.{interval}.{ex_sym}")
 
         while not self._ws_stop.is_set():
             try:
@@ -694,7 +809,14 @@ class BybitFuturesClient(ExchangeClientBase):
                                 interval_str = parts[1]
                                 ex_sym = ".".join(parts[2:])
                                 sym = self._from_ex_symbol(ex_sym)
-                                tf = {"60": "1h", "240": "4h"}.get(interval_str, "1h")
+                                # 动态映射 interval -> timeframe
+                                tf = None
+                                for t, iv in NATIVE_TF_MAP.items():
+                                    if iv == interval_str:
+                                        tf = t
+                                        break
+                                if tf is None:
+                                    tf = "1h"  # 兜底
                                 for k_data in data if isinstance(data, list) else [data]:
                                     if not isinstance(k_data, dict):
                                         continue

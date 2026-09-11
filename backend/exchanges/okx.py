@@ -692,8 +692,12 @@ class OKXFuturesClient(ExchangeClientBase):
         symbols: List[str],
         on_ticker=None,
         on_kline=None,
+        timeframes: Optional[List[str]] = None,
     ) -> None:
-        """订阅 OKX 公共频道：tickers / candle1H / candle4H"""
+        """订阅 OKX 公共频道：tickers / candle1H / candle4H
+
+        注：timeframes 参数预留，当前默认订阅 1h/4h。
+        """
         if self._ws_thread and self._ws_thread.is_alive():
             logger.debug("[OKX] WS 已在运行，先停止再重启")
             self.stop_ws()
