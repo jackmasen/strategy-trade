@@ -27,6 +27,49 @@ from backend.exchanges.market import MarketManager
 from backend.core.distributed_lock import acquire_lock, release_lock
 
 
+# 各周期的毫秒数（用于调度判断）
+_TF_MS = {
+    "1m": 60_000, "5m": 300_000, "15m": 900_000, "30m": 1_800_000,
+    "1h": 3_600_000, "2h": 7_200_000, "3h": 10_800_000, "4h": 14_400_000,
+    "6h": 21_600_000, "12h": 43_200_000, "1d": 86_400_000,
+}
+
+
+def _parse_timeframes(tf_str: str) -> List[str]:
+    """解析逗号分隔的周期字符串"""
+    return [t.strip() for t in (tf_str or "1h,4h").split(",") if t.strip()]
+
+
+def _is_tf_due(timeframe: str, now_hour: int, now_minute: int = 0) -> bool:
+    """
+    判断某个周期在当前小时/分钟是否刚收盘（到了评分时机）。
+    用于智能调度：减少对长周期策略的不必要重复评分。
+    短周期（1h 及以下）每小时都跑，长周期只在对齐的小时跑。
+    """
+    if timeframe in ("1m", "5m", "15m", "30m", "1h"):
+        return True  # 1h 及以下周期：每小时调度时都跑
+    # 长周期：只在对齐的小时点执行
+    hour_mod_map = {
+        "2h": 2, "3h": 3, "4h": 4, "6h": 6, "8h": 8, "12h": 12,
+    }
+    if timeframe in hour_mod_map:
+        return now_hour % hour_mod_map[timeframe] == 0
+    if timeframe == "1d":
+        return now_hour == 0  # 日线：每天 0 点
+    return True  # 未知周期：保守地每次都跑
+
+
+def _strategy_has_due_tf(strategy: StrategyConfig) -> bool:
+    """判断策略当前是否有周期到期（至少一个周期到期就执行）"""
+    tfs = _parse_timeframes(strategy.timeframe)
+    now = datetime.now()
+    for tf in tfs:
+        if _is_tf_due(tf, now.hour, now.minute):
+            return True
+    # 至少有一个未知周期 → 保守执行
+    return bool(tfs)
+
+
 # ==========================================================================
 # Task 1: 综合评分更新（1h 一次，也可每小时K线收盘后触发）
 # ==========================================================================
@@ -54,6 +97,10 @@ def update_all_scores(self):
                 db.query(StrategyConfig).filter(StrategyConfig.is_active == 1).all()
             )
             for st in active_strategies:
+                # 智能调度：只有当策略有周期到期时才执行（减少长周期策略的重复计算）
+                if not _strategy_has_due_tf(st):
+                    logger.debug(f"[Scheduled] 策略 {st.id} 暂无到期周期，跳过本轮")
+                    continue
                 try:
                     res = engine.run_strategy(db, st.id, execute_trade=True)
                     updated += res.get("scored", 0)
