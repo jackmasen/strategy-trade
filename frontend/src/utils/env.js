@@ -25,6 +25,24 @@ export const SYMBOL_META = {
   // ===== 美股-半导体 =====
   SKHYNIX: { name: 'SK海力士', color: '#FF6600', icon: 'H' },
   SNDK:    { name: '闪迪',     color: '#FF4444', icon: 'S' },
+  INTC:    { name: '英特尔',   color: '#0071C5', icon: 'i' },
+  AMD:     { name: 'AMD',      color: '#ED1C24', icon: 'A' },
+  // ===== 美股-消费 =====
+  KO:      { name: '可口可乐', color: '#F40009', icon: '🥤' },
+  PG:      { name: '宝洁',     color: '#003DA5', icon: 'PG' },
+  PEP:     { name: '百事',     color: '#004B93', icon: 'PEP' },
+  MCD:     { name: '麦当劳',   color: '#FFC72C', icon: 'M' },
+  // ===== 美股-零售 =====
+  WMT:     { name: '沃尔玛',   color: '#0071DC', icon: 'W' },
+  // ===== 美股-医药 =====
+  JNJ:     { name: '强生',     color: '#8C8C8C', icon: 'J' },
+  // ===== 美股-金融 =====
+  JPM:     { name: '摩根大通', color: '#0051A5', icon: 'JPM' },
+  // ===== 美股-AI/加密概念 =====
+  MSTR:    { name: 'MicroStrategy', color: '#F7931A', icon: 'M' },
+  COIN:    { name: 'Coinbase',      color: '#0052FF', icon: 'C' },
+  PLTR:    { name: 'Palantir',      color: '#0A0A0A', icon: 'P' },
+  SMCI:    { name: 'Super Micro',   color: '#00A651', icon: 'S' },
 }
 
 // 新闻来源（与 backend/models/analytics.py NewsArticle.SOURCE_* 严格一致）
@@ -49,6 +67,7 @@ export const EXCHANGE_META = {
   1: { name: '币安 Binance', color: '#F3BA2F' },
   2: { name: '欧易 OKX',     color: '#FFFFFF' },
   3: { name: 'Bybit',        color: '#F7A600' },
+  4: { name: 'Gate.io',      color: '#27B7B6' },
 }
 
 // 订单方向

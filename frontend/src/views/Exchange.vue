@@ -16,6 +16,7 @@
         <el-option :value="1" label="币安 Binance" />
         <el-option :value="2" label="欧易 OKX" />
         <el-option :value="3" label="Bybit" />
+        <el-option :value="4" label="Gate.io" />
       </el-select>
       <el-select v-model="filters.status" placeholder="状态" clearable style="width: 140px;">
         <el-option :value="1" label="启用" />
@@ -118,6 +119,7 @@
                 <el-option label="币安 Binance" :value="1" />
                 <el-option label="欧易 OKX" :value="2" />
                 <el-option label="Bybit" :value="3" />
+                <el-option label="Gate.io" :value="4" />
               </el-select>
             </el-form-item>
           </el-col>

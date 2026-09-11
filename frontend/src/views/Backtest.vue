@@ -130,10 +130,17 @@
           </el-select>
         </el-form-item>
         <el-form-item label="时间周期">
-          <el-radio-group v-model="form.timeframe">
-            <el-radio-button value="1h">1小时</el-radio-button>
-            <el-radio-button value="4h">4小时</el-radio-button>
-          </el-radio-group>
+          <el-select v-model="form.timeframe" style="width:100%;">
+            <el-option value="15m" label="15分钟" />
+            <el-option value="30m" label="30分钟" />
+            <el-option value="1h" label="1小时" />
+            <el-option value="2h" label="2小时" />
+            <el-option value="3h" label="3小时" />
+            <el-option value="4h" label="4小时" />
+            <el-option value="6h" label="6小时" />
+            <el-option value="12h" label="12小时" />
+            <el-option value="1d" label="1天" />
+          </el-select>
         </el-form-item>
         <el-form-item label="回测区间">
           <el-date-picker v-model="form.range" type="daterange" style="width:100%;" start-placeholder="开始日期" end-placeholder="结束日期" />

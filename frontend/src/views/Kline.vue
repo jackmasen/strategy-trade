@@ -108,7 +108,10 @@
         <!-- 主图 -->
         <div class="chart-card">
           <div class="chart-header">
-            <span class="chart-title">{{ selectedSymbol }} K线图</span>
+            <span class="chart-title">
+              {{ selectedSymbol }} K线图
+              <span v-if="isSwitching" class="loading-indicator">加载中...</span>
+            </span>
             <div class="chart-header-right">
               <div class="chart-tools">
                 <el-button-group size="small">
@@ -1041,6 +1044,13 @@
                 </div>
                 <div v-else class="mf-empty-sm">暂无持仓</div>
               </template>
+              <!-- 自选列表 -->
+              <template v-else-if="item.i === 'watchlist'">
+                <WatchlistPanel
+                  :current-symbol="selectedSymbol"
+                  @select-symbol="handleWatchlistSelect"
+                />
+              </template>
             </div>
             <!-- 右下角缩放手柄 -->
             <div v-if="layoutEditMode" class="resize-handle" @mousedown="startResize($event, item.i)" title="拖拽缩放"></div>
@@ -1215,6 +1225,7 @@ import { SYMBOL_META, EXCHANGE_META, fmtMoney, fmtPct } from '@/utils/env'
 import { http, API_PREFIX } from '@/utils/request'
 import { Refresh } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import WatchlistPanel from '@/components/WatchlistPanel.vue'
 
 const userStore = useUserStore()
 const route = useRoute()
@@ -1295,6 +1306,7 @@ const allPanelsConfig = {
   'openinterest': { w: 4, h: 5, minW: 2, minH: 3, title: '持仓量 & 资金' },
   'alerts':       { w: 4, h: 4, minW: 2, minH: 2, title: '预警记录' },
   'mypositions':  { w: 12, h: 5, minW: 6, minH: 3, title: '当前持仓' },
+  'watchlist':    { w: 4, h: 10, minW: 2, minH: 5, title: '自选列表' },
 }
 
 // 自定义布局先使用默认布局，等用户信息就绪后再加载用户保存的布局
@@ -1640,6 +1652,7 @@ const panelTitles = {
   'openinterest': '持仓量 & 资金',
   'alerts': '预警记录',
   'mypositions': '当前持仓',
+  'watchlist': '自选列表',
 }
 
 // 数据
@@ -1648,6 +1661,11 @@ const klineError = ref('')
 const connStatus = ref('ok')  // ok / error / loading
 const connLastUpdate = ref(0)  // timestamp of last successful update
 let connErrorCount = 0
+
+// 请求序列号：切换品种时递增，使所有飞行中的旧请求响应失效，避免竞态条件
+const requestSeq = ref(0)
+// 切换加载状态：切换品种时显示加载中
+const isSwitching = ref(false)
 const indicators = ref({})
 const supportResistance = ref({ supports: [], resistances: [], pivot_points: [] })
 const trend = ref({ short_term: 'neutral', mid_term: 'neutral', rsi: 50, last_price: 0 })
@@ -1808,12 +1826,15 @@ async function loadAccounts() {
 
 // 加载K线综合分析
 async function loadKlineAnalysis() {
+  const mySeq = requestSeq.value
   try {
     const r = await http.get(`${API_PREFIX}/exchange/kline-analysis/${selectedSymbol.value}`, {
       timeframe: timeframe.value,
       limit: 200,
       account_id: selectedAccount.value,
     }, { _silent: true })
+    // 过期响应丢弃：切换品种后旧请求的响应不再更新数据
+    if (mySeq !== requestSeq.value) return
     klineError.value = ''
     klines.value = r.klines || []
     indicators.value = r.indicators || {}
@@ -1834,6 +1855,8 @@ async function loadKlineAnalysis() {
     connStatus.value = 'ok'
     connLastUpdate.value = Date.now()
     connErrorCount = 0
+    // 数据加载完成，关闭切换加载状态
+    if (isSwitching.value) isSwitching.value = false
   } catch (e) {
     connErrorCount++
     if (connErrorCount >= 3) {
@@ -1843,16 +1866,21 @@ async function loadKlineAnalysis() {
     if (klines.value.length === 0) {
       klineError.value = e?.message || 'K线数据加载失败，请检查交易所配置'
     }
+    // 加载失败也关闭切换加载状态
+    if (isSwitching.value) isSwitching.value = false
   }
 }
 
 // 加载深度
 async function loadOrderbook() {
+  const mySeq = requestSeq.value
   try {
     const r = await http.get(`${API_PREFIX}/exchange/orderbook/${selectedSymbol.value}`, {
       limit: 20,
       account_id: selectedAccount.value,
     }, { _silent: true })
+    // 过期响应丢弃：切换品种后旧请求的响应不再更新数据
+    if (mySeq !== requestSeq.value) return
     orderbook.value = { bids: r.bids || [], asks: r.asks || [] }
     // 计算主力位置
     calcMainForce()
@@ -1912,11 +1940,14 @@ function calcMainForce() {
 
 // 加载成交记录
 async function loadTrades() {
+  const mySeq = requestSeq.value
   try {
     const r = await http.get(`${API_PREFIX}/exchange/trades/${selectedSymbol.value}`, {
       limit: 50,
       account_id: selectedAccount.value,
     }, { _silent: true })
+    // 过期响应丢弃：切换品种后旧请求的响应不再更新数据
+    if (mySeq !== requestSeq.value) return
     const newTrades = r.items || []
 
     // 检测大资金异动
@@ -2035,20 +2066,26 @@ async function sendAISignalEmail(signal) {
 
 // 加载持仓量
 async function loadOpenInterest() {
+  const mySeq = requestSeq.value
   try {
     const r = await http.get(`${API_PREFIX}/exchange/open-interest/${selectedSymbol.value}`, {
       account_id: selectedAccount.value,
     }, { _silent: true })
+    // 过期响应丢弃：切换品种后旧请求的响应不再更新数据
+    if (mySeq !== requestSeq.value) return
     openInterest.value = r
   } catch (e) {}
 }
 
 // 加载ticker
 async function loadTicker() {
+  const mySeq = requestSeq.value
   try {
     const r = await http.get(`${API_PREFIX}/exchange/ticker/${selectedSymbol.value}`, {
       account_id: selectedAccount.value,
     }, { _silent: true })
+    // 过期响应丢弃：切换品种后旧请求的响应不再更新数据
+    if (mySeq !== requestSeq.value) return
     ticker.value = r
     if (r.last_price) {
       lastPrice = r.last_price
@@ -2058,6 +2095,9 @@ async function loadTicker() {
 }
 
 function loadAll() {
+  // 递增请求序列号：使之前所有飞行中的请求失效，避免竞态条件
+  // （覆盖品种切换、周期切换、账户切换等所有全量刷新场景）
+  requestSeq.value++
   loadKlineAnalysis()
   loadOrderbook()
   loadTrades()
@@ -2078,11 +2118,14 @@ const totalMarginUsed = computed(() => {
 })
 
 async function loadMyPositions() {
+  const mySeq = requestSeq.value
   positionsLoading.value = true
   try {
     const params = { status: 1, page_size: 200 }
     if (selectedAccount.value > 0) params.account_id = selectedAccount.value
     const r = await http.get(`${API_PREFIX}/trades/positions`, params)
+    // 过期响应丢弃：切换账户/品种后旧请求的响应不再更新数据
+    if (mySeq !== requestSeq.value) return
     const items = r.items || r.data?.items || []
     myPositions.value = items.map(p => ({
       ...p,
@@ -2160,9 +2203,74 @@ function formatHolding(mins) {
 }
 
 function onSymbolChange() {
-  lastPrice = 0
-  whaleAlerts.value = []
+  // 1. 递增请求序列号：使所有飞行中的旧请求响应失效，避免竞态条件
+  requestSeq.value++
+
+  // 2. 立即清空所有旧品种数据，防止旧数据残留在图表和界面上
+  clearSymbolData()
+
+  // 3. 清除所有旧轮询定时器，避免切换瞬间旧周期数据到达
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null }
+  if (tickerTimer)  { clearInterval(tickerTimer);  tickerTimer  = null }
+  if (klineTimer)   { clearInterval(klineTimer);   klineTimer   = null }
+
+  // 4. 设置加载状态
+  isSwitching.value = true
+
+  // 5. 加载新品种数据
   loadAll()
+
+  // 6. 重新启动轮询定时器
+  startTimers()
+}
+
+// 自选列表点击切换品种
+function handleWatchlistSelect(symbol) {
+  if (symbol && symbol !== selectedSymbol.value) {
+    selectedSymbol.value = symbol
+    onSymbolChange()
+  }
+}
+
+// 清空所有品种相关数据（切换品种时调用，避免旧数据残留）
+function clearSymbolData() {
+  lastPrice = 0
+  klines.value = []
+  klineError.value = ''
+  indicators.value = {}
+  supportResistance.value = { supports: [], resistances: [], pivot_points: [] }
+  trend.value = { short_term: 'neutral', mid_term: 'neutral', rsi: 50, last_price: 0 }
+  multiPeriod.value = {}
+  riseFallParams.value = {}
+  liqHeatmap.value = { long_liq: [], short_liq: [], danger_levels: [], heatmap: [] }
+  mainForce.value = { walls: [], pressure: 'neutral', pressure_cn: '多空均衡', pressure_score: 50, big_order_ratio: 0 }
+  orderbook.value = { bids: [], asks: [] }
+  recentTrades.value = []
+  openInterest.value = { open_interest: 0, open_interest_usdt: 0 }
+  ticker.value = { last_price: 0, high_24h: 0, low_24h: 0, volume_24h: 0, change_pct_24h: 0 }
+  whaleAlerts.value = []
+  // 重新渲染图表（清空后显示空状态）
+  renderCharts()
+}
+
+// 启动所有轮询定时器
+function startTimers() {
+  // 3秒刷新深度和成交
+  refreshTimer = setInterval(() => {
+    loadOrderbook()
+    loadTrades()
+  }, 3000)
+
+  // 1秒刷新ticker
+  tickerTimer = setInterval(() => {
+    loadTicker()
+  }, 1000)
+
+  // 15秒刷新K线和持仓量
+  klineTimer = setInterval(() => {
+    loadKlineAnalysis()
+    loadOpenInterest()
+  }, 15000)
 }
 
 function setIndicator(type) {
@@ -2421,20 +2529,8 @@ onMounted(async () => {
   window.addEventListener('resize', onResize)
   nextTick(() => calcGridColWidth())
 
-  // 定时刷新（3秒刷新深度和成交，15秒刷新K线和持仓）
-  refreshTimer = setInterval(() => {
-    loadOrderbook()
-    loadTrades()
-  }, 3000)
-
-  tickerTimer = setInterval(() => {
-    loadTicker()
-  }, 1000)
-
-  klineTimer = setInterval(() => {
-    loadKlineAnalysis()
-    loadOpenInterest()
-  }, 15000)
+  // 定时刷新（3秒刷新深度和成交，1秒刷新ticker，15秒刷新K线和持仓量）
+  startTimers()
 })
 
 onBeforeUnmount(() => {
@@ -3001,6 +3097,17 @@ onBeforeUnmount(() => {
       font-size: 14px;
       font-weight: 600;
       color: #E2E8F0;
+    }
+    .loading-indicator {
+      font-size: 12px;
+      font-weight: 400;
+      color: #60A5FA;
+      margin-left: 8px;
+      animation: loading-pulse 1s ease-in-out infinite;
+    }
+    @keyframes loading-pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.4; }
     }
     .chart-header-right {
       display: flex;

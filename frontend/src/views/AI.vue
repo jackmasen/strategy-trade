@@ -97,9 +97,15 @@
               </el-form-item>
               <el-form-item label="时间周期">
                 <el-select v-model="aForm.timeframe" style="width:100%;">
+                  <el-option label="15分钟" value="15m" />
+                  <el-option label="30分钟" value="30m" />
                   <el-option label="1小时" value="1h" />
+                  <el-option label="2小时" value="2h" />
+                  <el-option label="3小时" value="3h" />
                   <el-option label="4小时" value="4h" />
-                  <el-option label="1日" value="1d" />
+                  <el-option label="6小时" value="6h" />
+                  <el-option label="12小时" value="12h" />
+                  <el-option label="1天" value="1d" />
                 </el-select>
               </el-form-item>
               <el-form-item label="附加提示词 (可选)">
