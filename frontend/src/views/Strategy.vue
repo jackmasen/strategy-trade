@@ -150,11 +150,18 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="K线周期" prop="timeframe">
-              <el-select v-model="form.timeframe" style="width:100%;">
-                <el-option value="1h" label="仅 1 小时" />
-                <el-option value="4h" label="仅 4 小时" />
-                <el-option value="1h,4h" label="1H + 4H（推荐）" />
+              <el-select v-model="form.timeframe" multiple collapse-tags collapse-tags-tooltip style="width:100%;" placeholder="请选择K线周期">
+                <el-option value="15m" label="15分钟" />
+                <el-option value="30m" label="30分钟" />
+                <el-option value="1h" label="1小时" />
+                <el-option value="2h" label="2小时" />
+                <el-option value="3h" label="3小时" />
+                <el-option value="4h" label="4小时" />
+                <el-option value="6h" label="6小时" />
+                <el-option value="12h" label="12小时" />
+                <el-option value="1d" label="1天" />
               </el-select>
+              <div class="text-dim" style="font-size:12px;">可多选，策略将在所选周期上分别运行</div>
             </el-form-item>
           </el-col>
           <el-col :span="12">
@@ -488,7 +495,7 @@ const submitting = ref(false)
 const tplLoading = ref(false)
 const emptyForm = () => ({
   id: null, strategy_name: '', description: '', symbols: [],
-  exchange_id: null, timeframe: '1h,4h', direction_mode: 0, run_mode: 3,
+  exchange_id: null, timeframe: ['1h', '4h'], direction_mode: 0, run_mode: 3,
   score_threshold: 5.0, strong_score_threshold: 8.0,
   weight_technical: 0.4, weight_news: 0.3, weight_ai: 0.3,
   leverage_mode: 2, leverage_fixed: 3,
@@ -504,7 +511,7 @@ const rules = {
   strategy_name: [{ required: true, message: '请输入策略名称', trigger: 'blur' }],
   symbols: [{ required: true, type: 'array', min: 1, message: '至少选择一个交易品种', trigger: 'change' }],
   run_mode: [{ required: true, message: '请选择运行模式', trigger: 'change' }],
-  timeframe: [{ required: true, message: '请选择K线周期', trigger: 'change' }],
+  timeframe: [{ required: true, type: 'array', min: 1, message: '请至少选择一个K线周期', trigger: 'change' }],
 }
 
 const openForm = async (row) => {
@@ -513,6 +520,14 @@ const openForm = async (row) => {
   if (row) {
     Object.assign(form, JSON.parse(JSON.stringify(row)))
     form.symbols = Array.isArray(row.symbols) ? [...row.symbols] : []
+    // timeframe 字符串转数组
+    if (typeof row.timeframe === 'string' && row.timeframe) {
+      form.timeframe = row.timeframe.split(',').map(t => t.trim()).filter(Boolean)
+    } else if (Array.isArray(row.timeframe)) {
+      form.timeframe = [...row.timeframe]
+    } else {
+      form.timeframe = ['1h', '4h']
+    }
   }
   formVisible.value = true
 }
@@ -524,6 +539,10 @@ const applyTemplate = async () => {
     const tpl = await http.get(`${API_PREFIX}/strategies/default-template`)
     Object.assign(form, emptyForm(), tpl || {})
     form.id = null
+    // 模板中的 timeframe 是字符串，转数组
+    if (tpl && typeof tpl.timeframe === 'string' && tpl.timeframe) {
+      form.timeframe = tpl.timeframe.split(',').map(t => t.trim()).filter(Boolean)
+    }
     formVisible.value = true
     ElMessage.success('已填充推荐模板，请检查后保存')
   } catch (e) {
@@ -559,9 +578,17 @@ const submitForm = async () => {
       ElMessage.warning('请至少选择一个交易品种')
       return
     }
+    if (!form.timeframe || form.timeframe.length === 0) {
+      ElMessage.warning('请至少选择一个K线周期')
+      return
+    }
     submitting.value = true
     try {
+      // 构造 payload：timeframe 数组转逗号分隔字符串
       const payload = { ...form }
+      payload.timeframe = Array.isArray(form.timeframe)
+        ? form.timeframe.join(',')
+        : String(form.timeframe || '')
       delete payload.id
       if (form.id) {
         await http.put(`${API_PREFIX}/strategies/${form.id}`, payload)
