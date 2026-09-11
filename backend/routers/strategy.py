@@ -13,7 +13,7 @@ GET    /strategies/default-template  默认策略模板
 """
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from datetime import datetime
 
@@ -63,10 +63,30 @@ class StrategyCreateReq(BaseModel):
     cooldown_hours: int = 24
     priority: int = 0
 
+    @field_validator("timeframe")
+    @classmethod
+    def validate_timeframe(cls, v: str) -> str:
+        """校验 timeframe：逗号分隔的周期列表，每个周期必须是支持的"""
+        allowed = {"15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1d"}
+        items = [t.strip() for t in v.split(",") if t.strip()]
+        if not items:
+            return "1h,4h"
+        invalid = [t for t in items if t not in allowed]
+        if invalid:
+            raise ValueError(f"不支持的周期: {invalid}，支持的周期: {sorted(allowed)}")
+        # 去重并保持顺序
+        seen = set()
+        unique = []
+        for t in items:
+            if t not in seen:
+                seen.add(t)
+                unique.append(t)
+        return ",".join(unique)
+
 
 class ScoreSymbolReq(BaseModel):
     symbol: str = Field(..., min_length=2, max_length=16)
-    timeframe: str = Field(default="1h", pattern=r"^(1m|5m|15m|1h|4h|1d)$")
+    timeframe: str = Field(default="1h", pattern=r"^(1m|3m|5m|15m|30m|1h|2h|3h|4h|6h|12h|1d)$")
     execute_trade: bool = False
 
 

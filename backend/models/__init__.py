@@ -47,6 +47,9 @@ from backend.models.system_admin import SystemUpdateRecord, SystemBackupRecord, 
 # K线布局
 from backend.models.kline_layout import KlineLayout
 
+# 自选币
+from backend.models.watchlist import UserWatchlist
+
 __all__ = [
     "Base",
     "User",
@@ -70,4 +73,5 @@ __all__ = [
     "SystemBackupRecord",
     "SystemHealthReport",
     "KlineLayout",
+    "UserWatchlist",
 ]

@@ -91,18 +91,37 @@ def _gen_mock_klines(symbol, timeframe, limit):
     return candles
 
 SUPPORTED_SYMBOLS = [
-    {"symbol": "BTC", "name": "比特币", "binance": "BTCUSDT", "okx": "BTC-USDT-SWAP", "bybit": "BTCUSDT", "type": "crypto"},
-    {"symbol": "ETH", "name": "以太坊", "binance": "ETHUSDT", "okx": "ETH-USDT-SWAP", "bybit": "ETHUSDT", "type": "crypto"},
-    {"symbol": "SOL", "name": "索拉纳", "binance": "SOLUSDT", "okx": "SOL-USDT-SWAP", "bybit": "SOLUSDT", "type": "crypto"},
-    {"symbol": "XAU", "name": "黄金",   "binance": "",        "okx": "XAU-USDT-SWAP", "bybit": "XAUUSDT", "type": "commodity"},
-    {"symbol": "WTI", "name": "石油",   "binance": "",        "okx": "WTI-USDT-SWAP", "bybit": "CLUSDT",  "type": "commodity"},
-    {"symbol": "TSLA", "name": "特斯拉", "binance": "", "okx": "TSLA-USDT-SWAP", "bybit": "TSLAUSDT", "type": "stock"},
-    {"symbol": "NVDA", "name": "英伟达", "binance": "", "okx": "NVDA-USDT-SWAP", "bybit": "NVDAUSDT", "type": "stock"},
-    {"symbol": "AAPL", "name": "苹果",   "binance": "", "okx": "AAPL-USDT-SWAP", "bybit": "AAPLUSDT", "type": "stock"},
-    {"symbol": "MSFT", "name": "微软",   "binance": "", "okx": "MSFT-USDT-SWAP", "bybit": "MSFTUSDT", "type": "stock"},
-    {"symbol": "TCEHY", "name": "腾讯",  "binance": "", "okx": "TCEHY-USDT-SWAP", "bybit": "TCEHYUSDT", "type": "stock"},
-    {"symbol": "SKHYNIX", "name": "SK海力士", "binance": "", "okx": "SKHYNIX-USDT-SWAP", "bybit": "SKHYNIXUSDT", "type": "stock"},
-    {"symbol": "SNDK", "name": "闪迪",   "binance": "", "okx": "SNDK-USDT-SWAP", "bybit": "SNDKUSDT", "type": "stock"},
+    {"symbol": "BTC", "name": "比特币", "binance": "BTCUSDT", "okx": "BTC-USDT-SWAP", "bybit": "BTCUSDT", "gateio": "BTC_USDT", "type": "crypto"},
+    {"symbol": "ETH", "name": "以太坊", "binance": "ETHUSDT", "okx": "ETH-USDT-SWAP", "bybit": "ETHUSDT", "gateio": "ETH_USDT", "type": "crypto"},
+    {"symbol": "SOL", "name": "索拉纳", "binance": "SOLUSDT", "okx": "SOL-USDT-SWAP", "bybit": "SOLUSDT", "gateio": "SOL_USDT", "type": "crypto"},
+    {"symbol": "XAU", "name": "黄金",   "binance": "",        "okx": "XAU-USDT-SWAP", "bybit": "XAUUSDT", "gateio": "XAU_USDT", "type": "commodity"},
+    {"symbol": "WTI", "name": "石油",   "binance": "",        "okx": "WTI-USDT-SWAP", "bybit": "CLUSDT",  "gateio": "WTI_USDT", "type": "commodity"},
+    {"symbol": "TSLA", "name": "特斯拉", "binance": "", "okx": "TSLA-USDT-SWAP", "bybit": "TSLAUSDT", "gateio": "TSLA_USDT", "type": "stock"},
+    {"symbol": "NVDA", "name": "英伟达", "binance": "", "okx": "NVDA-USDT-SWAP", "bybit": "NVDAUSDT", "gateio": "NVDA_USDT", "type": "stock"},
+    {"symbol": "AAPL", "name": "苹果",   "binance": "", "okx": "AAPL-USDT-SWAP", "bybit": "AAPLUSDT", "gateio": "AAPL_USDT", "type": "stock"},
+    {"symbol": "MSFT", "name": "微软",   "binance": "", "okx": "MSFT-USDT-SWAP", "bybit": "MSFTUSDT", "gateio": "MSFT_USDT", "type": "stock"},
+    {"symbol": "TCEHY", "name": "腾讯",  "binance": "", "okx": "TCEHY-USDT-SWAP", "bybit": "TCEHYUSDT", "gateio": "", "type": "stock"},
+    {"symbol": "SKHYNIX", "name": "SK海力士", "binance": "", "okx": "SKHYNIX-USDT-SWAP", "bybit": "SKHYNIXUSDT", "gateio": "SKHYNIX_USDT", "type": "stock"},
+    {"symbol": "SNDK", "name": "闪迪",   "binance": "", "okx": "SNDK-USDT-SWAP", "bybit": "SNDKUSDT", "gateio": "SNDK_USDT", "type": "stock"},
+    # 美股-半导体
+    {"symbol": "INTC", "name": "英特尔", "binance": "", "okx": "", "bybit": "INTCUSDT", "gateio": "INTC_USDT", "type": "stock"},
+    {"symbol": "AMD", "name": "AMD",    "binance": "", "okx": "", "bybit": "AMDUSDT",  "gateio": "AMD_USDT",  "type": "stock"},
+    # 美股-消费
+    {"symbol": "KO",  "name": "可口可乐", "binance": "", "okx": "", "bybit": "KOUSDT",  "gateio": "KO_USDT",  "type": "stock"},
+    {"symbol": "PG",  "name": "宝洁",    "binance": "", "okx": "", "bybit": "PGUSDT",  "gateio": "PG_USDT",  "type": "stock"},
+    {"symbol": "PEP", "name": "百事",    "binance": "", "okx": "", "bybit": "PEPUSDT", "gateio": "PEP_USDT", "type": "stock"},
+    {"symbol": "MCD", "name": "麦当劳",  "binance": "", "okx": "", "bybit": "MCDUSDT", "gateio": "MCD_USDT", "type": "stock"},
+    # 美股-零售
+    {"symbol": "WMT", "name": "沃尔玛",  "binance": "", "okx": "", "bybit": "WMTUSDT", "gateio": "WMT_USDT", "type": "stock"},
+    # 美股-医药
+    {"symbol": "JNJ", "name": "强生",    "binance": "", "okx": "", "bybit": "JNJUSDT", "gateio": "JNJ_USDT", "type": "stock"},
+    # 美股-金融
+    {"symbol": "JPM", "name": "摩根大通", "binance": "", "okx": "", "bybit": "JPMUSDT", "gateio": "JPM_USDT", "type": "stock"},
+    # 美股-AI/加密概念
+    {"symbol": "MSTR", "name": "MicroStrategy", "binance": "", "okx": "", "bybit": "MSTRUSDT", "gateio": "MSTR_USDT", "type": "stock"},
+    {"symbol": "COIN", "name": "Coinbase",      "binance": "", "okx": "", "bybit": "COINUSDT", "gateio": "COIN_USDT", "type": "stock"},
+    {"symbol": "PLTR", "name": "Palantir",      "binance": "", "okx": "", "bybit": "PLTRUSDT", "gateio": "PLTR_USDT", "type": "stock"},
+    {"symbol": "SMCI", "name": "Super Micro",   "binance": "", "okx": "", "bybit": "SMCIUSDT", "gateio": "SMCI_USDT", "type": "stock"},
 ]
 
 
@@ -228,7 +247,7 @@ def _build_client(account: ExchangeAccount) -> ExchangeClientBase:
 #  基础 CRUD
 # ==========================================================
 class CreateAccountReq(BaseModel):
-    exchange: int = Field(..., ge=1, le=3, description="1-币安 2-OKX 3-Bybit")
+    exchange: int = Field(..., ge=1, le=4, description="1-币安 2-OKX 3-Bybit 4-Gate.io")
     sub_account_name: str = Field(..., min_length=1, max_length=64)
     sub_account_id: str = ""
     api_key: str = Field(..., min_length=8)
@@ -645,6 +664,60 @@ def get_ticker(symbol: str, account_id: int = 0, db: Session = Depends(get_db), 
     raise BizException("尚未绑定任何交易所子账号，请先到[交易所子账号]页面绑定并测试连通性")
 
 
+@router.get("/tickers")
+def get_tickers(
+    symbols: str = "",
+    account_id: int = 0,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """批量获取多个品种的 ticker 数据
+    symbols: 逗号分隔的品种代码，如 BTC,ETH,KO
+    优先从 MarketManager 缓存获取，缓存缺失的品种后台异步刷新
+    """
+    if not symbols:
+        return success({"count": 0, "items": []})
+
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    if not symbol_list:
+        return success({"count": 0, "items": []})
+
+    mm = MarketManager.get_instance()
+    result = []
+    need_refresh = []
+
+    for sym in symbol_list:
+        # 确保该品种被订阅
+        if sym not in mm._symbols_subscribed:
+            mm.subscribe_ticker(sym, lambda *a, **k: None)
+
+        t = mm.get_ticker(sym)
+        now_ms = int(time.time() * 1000)
+
+        if t and t.last_price and t.last_price > 0:
+            result.append(t.to_dict())
+            # 缓存超过5秒则后台刷新
+            if not t.timestamp_ms or (now_ms - t.timestamp_ms) > 5000:
+                need_refresh.append(sym)
+        else:
+            # 缓存未命中，加入刷新列表
+            need_refresh.append(sym)
+            # 先用模拟数据占位
+            result.append(_gen_mock_ticker(sym).to_dict())
+
+    # 后台异步刷新需要更新的 ticker
+    if need_refresh:
+        def _refresh_batch(syms):
+            for s in syms:
+                _refresh_ticker_cache(mm, s)
+        threading.Thread(target=_refresh_batch, args=(need_refresh,), daemon=True).start()
+
+    return success({
+        "count": len(result),
+        "items": result,
+    })
+
+
 @router.get("/klines/{symbol}")
 def get_klines(
     symbol: str,
@@ -728,7 +801,7 @@ def _try_get_demo_client(db) -> 'ExchangeClientBase | None':
         api_secret = decrypt_api_key(api_secret_enc) if api_secret_enc.startswith("gAAAA") else api_secret_enc
         if not api_key or not api_secret:
             return None
-        exchange_id = {"binance": 1, "okx": 2, "bybit": 3}.get(exchange_str, 2)
+        exchange_id = {"binance": 1, "okx": 2, "bybit": 3, "gateio": 4}.get(exchange_str, 2)
         client = ExchangeClientBase.create(
             exchange=exchange_id, api_key=api_key, api_secret=api_secret,
             passphrase="", testnet=bool(testnet), exchange_account_id=0,
