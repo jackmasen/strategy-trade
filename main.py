@@ -109,7 +109,7 @@ async def lifespan(app: FastAPI):
         # 注册 Bybit 公开行情客户端（无需API Key，为非加密品种提供实时价格）
         mm.ensure_bybit_public_client()
         # 启动默认品种的行情订阅（加密+非加密全覆盖）
-        mm.start(["BTC", "ETH", "SOL", "XAU", "WTI", "TSLA", "NVDA", "SKHYNIX", "SNDK"])
+        mm.start(["BTC", "ETH", "SOL", "XAU", "WTI", "TSLA", "NVDA", "SKHYNIX", "SNDK", "AMD", "MSTR", "COIN", "SMCI", "KO"])
         logger.info("✅ 行情管理器已启动（Bybit 公开数据源已就绪）")
     except Exception as e:
         logger.warning(f"⚠️ 行情管理器启动失败: {e}")
@@ -657,6 +657,7 @@ from backend.routers.quant_signal import router as quant_signal_router
 from backend.routers.system_admin import router as system_admin_router
 from backend.routers.monitor import router as monitor_router
 from backend.routers.kline_layout import router as kline_layout_router
+from backend.routers.watchlist import router as watchlist_router
 
 # 认证与用户
 app.include_router(auth_router, prefix=PREFIX)
@@ -691,6 +692,8 @@ app.include_router(system_admin_router, prefix=PREFIX)
 app.include_router(monitor_router, prefix=PREFIX)
 # K线自定义布局（个人+公共）
 app.include_router(kline_layout_router, prefix=PREFIX)
+# 自选币列表
+app.include_router(watchlist_router, prefix=PREFIX)
 
 
 # ============== 健康检查 ==============

@@ -2,55 +2,138 @@
 __pycache__/
 *.py[cod]
 *$py.class
-.venv/
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+
+# Virtual Environment
 venv/
 env/
-build/
-dist/
-*.egg-info/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
+.venv/
 
-# 本地环境 & 密钥 & 数据
-.env
-.env.local
-.env.*.local
-runtime/
-logs/
-*.db
-*.sqlite
-*.sqlite3
-.DS_Store
-Thumbs.db
-
-# Node 前端
-node_modules/
-frontend/dist/
-frontend/.vite/
-frontend/build/
-*.log
-npm-debug.log*
-yarn-debug.log*
-pnpm-debug.log*
-
-# IDE / 编辑器
+# IDE
 .vscode/
 .idea/
 *.swp
 *.swo
-*~
 
-# 打包产物 / 临时诊断文件
-策略交易系统_onepress_*.zip
-dist.zip
-frontend_dist.zip
-dist/
-_zip_build/
-_local_env_diagnosis.json
-_local_env_diagnosis.log
-_tmp_*.py
-_tmp_*.pyw
-verify_fixes.py
-*交接文档*.html
-*分析报告*.html
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+db_backup*.sql.gz
+
+# Backups
+backups/
+*.zip
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist.bak/
+frontend/dist.bak*/
+frontend/dist.bak2/
+frontend/dist.bak3/
+
+# Cache
+.pytest_cache/
+.cache/
+*.bak
+*.bak.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads
+uploads/
+
+# GitHub update temp
+.github_update/
+
+# Simulate test data
+simulate_*.json
+
+# Test files (e2e tests)
+test_*.py
+
+# Windows desktop.ini
+desktop.ini
+
+# Frontend dist build artifacts (build from source)
+frontend/dist/
+static/
+
+# Alembic migration versions (managed separately)
+alembic/versions/*.py
+
+# ============================================================
+# Garbled filename artifacts (encoding issues from zip extraction)
+# ============================================================
+
+# Root-level garbled HTML/HTM files
+*.htm
+*.html
+!frontend/index.html
+
+# Root-level garbled MD/TXT files are handled by inclusion below
+
+# Garbled deploy subdirectories (Chinese names that got mangled)
+deploy/00_*/
+deploy/01_*/
+deploy/02_*/
+deploy/03_*/
+deploy/*WordPress*
+deploy/*wordpress*
+deploy/_onepress_*
+deploy/make_onepress_zip.py
+deploy/onepress-*
+deploy/*.html
+deploy/*.htm
+
+# Root-level batch/install files (Windows launcher artifacts)
+*.bat
+.installed
+check_tokens.py
+create_token.py
+migrate_emv.py
+deploy_v1.2.5.sh
+start_celery.*
+test_monitor.sh
+requirements.py314.txt
+
+# StrategyTradeLauncher (Windows launcher with garbled Chinese filenames)
+StrategyTradeLauncher/
+
+# docs directory (garbled Chinese filenames from zip)
+docs/
+
+# Garbled root-level .md files (encoding issues from zip extraction)
+# Keep only the known-clean ones
+____________v1.0.0_20260829.md
+______________+_.txt
+______________+_____.txt
+╜╗╜╙╬─╡╡_v1.0.0_20260829.md
+┴ó╝┤▓┘╫≈╓╕╥².txt
+╚╒│ú╞⌠╢»├ⁿ┴ε╦┘╝╟.txt
+V1.2.7*HANDOFF.md
+
+# Garbled deploy md files
+deploy/____________.md
+deploy/*v1.2.6.md
+deploy/▓*.md
+
+# Production env file (may contain secrets)
+.env.production
