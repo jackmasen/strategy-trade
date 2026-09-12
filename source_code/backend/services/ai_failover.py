@@ -3,8 +3,14 @@
 - 先尝试 ai_configs 单例配置（AI分析页面的主配置）
 - 失败后自动轮询 ai_api_keys 接口池（系统设置页面的 Key 池）
 - 全系统所有 AI 功能共用此服务，实现自动切换轮询
+
+V2 优化（解决 429 超频问题）：
+- 接入 AIRequestCoordinator：限流 + 去重 + 内存缓存 + 并发控制
+- 429 触发智能冷却：自动降低 RPM + 冷却期跳过该 Key
+- 冷却期 Key 标记为 "cooling" 状态，到期自动恢复
+- 限流时快速跳过，不浪费时间等待
 """
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from sqlalchemy.orm import Session
 
@@ -12,8 +18,18 @@ from backend.core.logging_config import logger
 from backend.core.security import decrypt_api_key
 from backend.models.ai_config import AIConfig
 from backend.models.ai_api_key import AiApiKey
-from backend.services.ai_client import AIClient, AIResult
+from backend.services.ai_client import AIClient, AIResult, ERR_PROVIDER_429
+from backend.services.ai_rate_limiter import AIRequestCoordinator
 from sqlalchemy import inspect as sa_inspect
+
+
+# 冷却时间配置（秒）
+COOLDOWN_429_SECONDS = 120  # 触发 429 后冷却 2 分钟
+COOLDOWN_RECOVER_KEY_MINUTES = 5  # 冷却状态 Key 5 分钟后自动恢复可尝试
+
+
+def _get_coordinator() -> AIRequestCoordinator:
+    return AIRequestCoordinator.get_instance()
 
 
 def _ensure_ai_keys_table(db: Session):
@@ -25,12 +41,26 @@ def _ensure_ai_keys_table(db: Session):
 
 def _get_available_keys(db: Session) -> list:
     _ensure_ai_keys_table(db)
-    from datetime import timedelta
-    # 先重置已失败超过30分钟的Key（给重试机会，避免永久失效）
-    cutoff = datetime.now() - timedelta(minutes=30)
+    now = datetime.now()
+    # 1) 先重置已冷却到期的 Key（cooling → active）
+    cooling_cutoff = now - timedelta(minutes=COOLDOWN_RECOVER_KEY_MINUTES)
+    cooled_keys = db.query(AiApiKey).filter(
+        AiApiKey.status == "cooling",
+        AiApiKey.updated_at < cooling_cutoff
+    ).all()
+    if cooled_keys:
+        for k in cooled_keys:
+            k.status = "active"
+            k.fail_count = 0
+            k.last_error = ""
+        db.commit()
+        logger.info(f"[AI-Failover] {len(cooled_keys)} 个冷却Key已恢复为可用")
+
+    # 2) 重置已失败超过30分钟的Key（给重试机会，避免永久失效）
+    failed_cutoff = now - timedelta(minutes=30)
     stale_failed = db.query(AiApiKey).filter(
         AiApiKey.status == "failed",
-        AiApiKey.updated_at < cutoff
+        AiApiKey.updated_at < failed_cutoff
     ).all()
     if stale_failed:
         for k in stale_failed:
@@ -40,12 +70,22 @@ def _get_available_keys(db: Session) -> list:
         db.commit()
         logger.info(f"[AI-Failover] 自动重置 {len(stale_failed)} 个超时 failed Key 为重试")
 
+    # 3) 优先返回 active 状态的 Key
     keys = db.query(AiApiKey).filter(
         AiApiKey.status == "active"
     ).order_by(AiApiKey.priority.asc(), AiApiKey.id.asc()).all()
     if keys:
         return keys
-    # 没有 active 的 Key，自动重置所有 failed 的 Key
+
+    # 4) 没有 active 的，尝试 cooling 状态的（如果冷却期快到了，给个机会）
+    cooling_keys = db.query(AiApiKey).filter(
+        AiApiKey.status == "cooling"
+    ).order_by(AiApiKey.updated_at.asc()).all()
+    if cooling_keys:
+        logger.info(f"[AI-Failover] 无active Key，尝试使用 {len(cooling_keys)} 个冷却中的 Key")
+        return cooling_keys
+
+    # 5) 都没有，重置所有 failed 的 Key
     failed_keys = db.query(AiApiKey).filter(
         AiApiKey.status == "failed"
     ).all()
@@ -64,7 +104,7 @@ def _try_primary_config(db: Session, analysis_type: str, symbol: str,
                         timeframe: str, manual_prompt: str,
                         candles_snapshot: str = "", news_snapshot: str = "",
                         _mock: bool = False) -> Optional[AIResult]:
-    """尝试使用 ai_configs 主配置调用 AI"""
+    """尝试使用 ai_configs 主配置调用 AI（接入限流/去重/缓存协调器）"""
     try:
         from backend.routers.analytics import _ensure_ai_config_table_and_row
         cfg = _ensure_ai_config_table_and_row(db)
@@ -72,16 +112,37 @@ def _try_primary_config(db: Session, analysis_type: str, symbol: str,
         if not key_plain:
             return None
 
-        client = AIClient(cfg)
-        result = client.analyze(
-            analysis_type=analysis_type,
+        coordinator = _get_coordinator()
+        provider_name = cfg.provider_name
+        endpoint = cfg.api_endpoint or ""
+
+        # 使用协调器管控请求
+        def _do_call():
+            client = AIClient(cfg)
+            return client.analyze(
+                analysis_type=analysis_type,
+                symbol=symbol,
+                timeframe=timeframe,
+                manual_prompt=manual_prompt,
+                candles_snapshot=candles_snapshot,
+                news_snapshot=news_snapshot,
+                _mock=_mock,
+            )
+
+        result, source = coordinator.execute(
             symbol=symbol,
             timeframe=timeframe,
-            manual_prompt=manual_prompt,
-            candles_snapshot=candles_snapshot,
-            news_snapshot=news_snapshot,
-            _mock=_mock,
+            analysis_type=analysis_type,
+            provider=provider_name,
+            endpoint=endpoint,
+            request_fn=_do_call,
+            allow_wait=False,  # 主配置被限流时快速跳过，不等待
         )
+
+        if source == "rate_limited" or result is None:
+            logger.warning(f"[AI-Failover] 主配置被限流或无结果，跳过 (source={source})")
+            return None
+
         if result.success:
             cfg.last_verified_at = datetime.now()
             cfg.last_error = ""
@@ -90,6 +151,10 @@ def _try_primary_config(db: Session, analysis_type: str, symbol: str,
         else:
             cfg.last_error = (result.error_msg or "")[:500]
             db.commit()
+            # 如果是 429，触发冷却
+            if result.error_code == ERR_PROVIDER_429:
+                coordinator.notify_429(provider_name, endpoint, retry_after=COOLDOWN_429_SECONDS)
+                logger.warning(f"[AI-Failover] 主配置触发 429，已冷却 {COOLDOWN_429_SECONDS}s")
             logger.warning(f"[AI-Failover] 主配置调用失败: {result.error_msg}")
             return None
     except Exception as e:
@@ -102,14 +167,24 @@ def _try_key_pool(db: Session, analysis_type: str, symbol: str,
                   timeframe: str, manual_prompt: str,
                   candles_snapshot: str = "", news_snapshot: str = "",
                   _mock: bool = False) -> Dict[str, Any]:
-    """轮询尝试 ai_api_keys 接口池中的所有 Key"""
+    """轮询尝试 ai_api_keys 接口池中的所有 Key（接入限流/冷却优化）
+
+    优化点：
+    - 限流/冷却中的 Key 快速跳过，不浪费时间
+    - 触发 429 后标记为 cooling 状态，避免持续打爆
+    - 成功后恢复速率
+    """
     keys = _get_available_keys(db)
     if not keys:
         return {"success": False, "error": "接口池为空，请在系统设置中添加AI接口",
                 "used_key_id": None, "used_key_name": "", "result": None}
 
+    coordinator = _get_coordinator()
     last_error = ""
     for k in keys:
+        provider_name = AIConfig.name_to_provider(k.provider)
+        endpoint = k.api_endpoint or ""
+
         try:
             cfg = AIConfig()
             cfg.provider = AIConfig.name_to_provider(k.provider)
@@ -121,22 +196,51 @@ def _try_key_pool(db: Session, analysis_type: str, symbol: str,
             cfg.request_timeout_sec = k.request_timeout_sec
             cfg.max_retries = k.max_retries
 
-            client = AIClient(cfg)
-            result = client.analyze(
-                analysis_type=analysis_type,
+            # 使用协调器管控请求
+            def _do_call(k_cfg=cfg):
+                client = AIClient(k_cfg)
+                return client.analyze(
+                    analysis_type=analysis_type,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    manual_prompt=manual_prompt,
+                    candles_snapshot=candles_snapshot,
+                    news_snapshot=news_snapshot,
+                    _mock=_mock,
+                )
+
+            result, source = coordinator.execute(
                 symbol=symbol,
                 timeframe=timeframe,
-                manual_prompt=manual_prompt,
-                candles_snapshot=candles_snapshot,
-                news_snapshot=news_snapshot,
-                _mock=_mock,
+                analysis_type=analysis_type,
+                provider=provider_name,
+                endpoint=endpoint,
+                request_fn=_do_call,
+                allow_wait=False,  # 被限流快速跳过，试下一个 Key
             )
+
+            if source == "rate_limited" or result is None:
+                # 被协调器限流了，快速跳过这个 Key
+                last_error = f"Key '{k.name}' 被限流，已跳过"
+                k.fail_count = (k.fail_count or 0) + 1
+                k.last_error = last_error
+                k.last_checked = datetime.now()
+                # 标记为 cooling，冷却一段时间
+                if k.fail_count >= 2:
+                    k.status = "cooling"
+                db.commit()
+                logger.warning(f"[AI-Failover] Key '{k.name}' 被限流 (source={source})，跳过")
+                continue
+
             if result.success:
                 k.fail_count = 0
                 k.last_error = ""
                 k.last_checked = datetime.now()
+                # 如果之前是 cooling，恢复为 active
+                if k.status == "cooling":
+                    k.status = "active"
                 db.commit()
-                logger.info(f"[AI-Failover] 接口池 Key '{k.name}' (id={k.id}) 调用成功")
+                logger.info(f"[AI-Failover] 接口池 Key '{k.name}' (id={k.id}) 调用成功 (source={source})")
                 return {
                     "success": True,
                     "result": result,
@@ -145,6 +249,17 @@ def _try_key_pool(db: Session, analysis_type: str, symbol: str,
                     "error": "",
                 }
             last_error = result.error_msg or "未知错误"
+
+            # 如果是 429，标记为 cooling，冷却一段时间
+            if result.error_code == ERR_PROVIDER_429:
+                coordinator.notify_429(provider_name, endpoint, retry_after=COOLDOWN_429_SECONDS)
+                k.status = "cooling"
+                k.fail_count = (k.fail_count or 0) + 1
+                k.last_error = f"429限流，冷却 {COOLDOWN_429_SECONDS}s: {last_error[:100]}"
+                k.last_checked = datetime.now()
+                db.commit()
+                logger.warning(f"[AI-Failover] Key '{k.name}' 触发429，标记为 cooling 状态")
+                continue
         except Exception as e:
             last_error = str(e)[:200]
             db.rollback()

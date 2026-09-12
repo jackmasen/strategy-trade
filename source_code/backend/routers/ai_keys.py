@@ -310,6 +310,66 @@ def health_check_all(
     }, message=f"检测完成: {active_count}/{len(results)} 可用")
 
 
+# ============= 限流 / 防超频 配置与状态 =============
+
+class RateLimitConfig(BaseModel):
+    rpm: int = Field(20, ge=1, le=200, description="每分钟最大请求数（RPM）")
+    max_concurrent: int = Field(5, ge=1, le=20, description="最大并发请求数")
+    cache_ttl: int = Field(180, ge=30, le=3600, description="内存缓存有效期(秒)")
+
+
+@router.get("/rate-limiter/status")
+def rate_limiter_status(
+    user: User = Depends(require_admin),
+):
+    """获取 AI 限流/防超频 状态统计"""
+    from backend.services.ai_rate_limiter import AIRequestCoordinator
+    coord = AIRequestCoordinator.get_instance()
+    stats = coord.get_stats()
+    return success({
+        "stats": stats,
+        "config": {
+            "default_rpm": coord.default_rpm,
+            "max_concurrent": coord.max_concurrent,
+            "cache_ttl": coord.cache_ttl,
+            "cache_size": coord.cache.size(),
+            "active_requests": coord.concurrency.active_count,
+        },
+    })
+
+
+@router.post("/rate-limiter/config")
+def update_rate_limiter_config(
+    req: RateLimitConfig,
+    user: User = Depends(require_admin),
+):
+    """更新 AI 限流/防超频 配置"""
+    from backend.services.ai_rate_limiter import AIRequestCoordinator
+    coord = AIRequestCoordinator.get_instance()
+    coord.configure(
+        rpm=req.rpm,
+        max_concurrent=req.max_concurrent,
+        cache_ttl=req.cache_ttl,
+    )
+    return success({
+        "rpm": coord.default_rpm,
+        "max_concurrent": coord.max_concurrent,
+        "cache_ttl": coord.cache_ttl,
+    }, message="限流配置已更新")
+
+
+@router.post("/rate-limiter/reset")
+def reset_rate_limiter(
+    user: User = Depends(require_admin),
+):
+    """重置限流状态（清空缓存、恢复默认速率）"""
+    from backend.services.ai_rate_limiter import AIRequestCoordinator
+    coord = AIRequestCoordinator.get_instance()
+    coord.cache.clear()
+    coord.configure(rpm=20, max_concurrent=5, cache_ttl=180)
+    return success({}, message="限流状态已重置")
+
+
 # ============= 故障转移调用函数（供其他模块调用） =============
 
 def call_ai_with_failover(db: Session, analysis_type: str, symbol: str, timeframe: str,

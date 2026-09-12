@@ -25,6 +25,8 @@ from backend.services.system_manager import (
     rollback_update,
     check_github_latest,
     apply_github_update,
+    request_service_restart,
+    is_restart_in_progress,
 )
 
 router = APIRouter(prefix="/system", tags=["系统管理"])
@@ -278,6 +280,33 @@ def github_update(
     except ValueError as e:
         raise BizException(str(e), code=4004)
     except RuntimeError as e:
-        raise BizException(str(e), code=5002)
+        raise BizException(str(e), code=5003)
     except Exception as e:
         raise BizException(f"GitHub 更新失败: {e}", code=5002)
+
+
+# ==================== 服务重启 ====================
+
+class RestartReq(BaseModel):
+    reason: str = Field("手动重启", description="重启原因")
+
+
+@router.post("/restart")
+def restart_service(
+    req: RestartReq,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_admin),
+):
+    """请求重启后端服务（更新代码后需重启生效）"""
+    result = request_service_restart(db, reason=req.reason)
+    return success(result, message="已发起重启请求")
+
+
+@router.get("/restart/status")
+def restart_status(
+    user: User = Depends(require_admin),
+):
+    """检查是否正在重启中"""
+    return success({
+        "restarting": is_restart_in_progress(),
+    })

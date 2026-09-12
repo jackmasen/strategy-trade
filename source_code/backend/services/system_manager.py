@@ -1,5 +1,5 @@
 """
-系统管理服务：健康检测、自动修复、缓存清理、备份/恢复、版本更新
+系统管理服务：健康检测、自动修复、缓存清理、备份/恢复、版本更新、服务重启
 """
 import os
 import shutil
@@ -8,6 +8,9 @@ import zipfile
 import logging
 import platform
 import sys
+import time
+import subprocess
+import threading
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Optional
@@ -812,3 +815,109 @@ def _merge_dir(src: Path, dst: Path):
             _merge_dir(item, dst_item)
         else:
             shutil.copy2(item, dst_item)
+
+
+# ============================================================
+# 7. 服务重启
+# ============================================================
+
+_restart_in_progress = False
+
+
+def is_restart_in_progress() -> bool:
+    """检查是否正在重启中"""
+    return _restart_in_progress
+
+
+def request_service_restart(db: Session, reason: str = "手动重启") -> Dict:
+    """请求服务重启（异步执行，先返回结果，再在后台执行重启）
+
+    重启原理：
+    1. 先记录重启请求到健康报告
+    2. 启动后台线程，延迟 1.5 秒后执行重启
+    3. 重启方式：启动新的 uvicorn 进程，然后退出当前进程
+    4. 前端可通过 /system/info 轮询判断服务是否恢复
+    """
+    global _restart_in_progress
+    if _restart_in_progress:
+        return {
+            "success": False,
+            "message": "重启已在进行中，请稍候...",
+            "estimated_seconds": 10,
+        }
+
+    _restart_in_progress = True
+
+    # 记录重启请求
+    try:
+        report = SystemHealthReport(
+            overall_status="warning",
+            check_details=json.dumps([{
+                "name": "服务重启",
+                "status": "warning",
+                "detail": f"重启原因: {reason}",
+            }], ensure_ascii=False),
+            fixed_items=json.dumps([], ensure_ascii=False),
+        )
+        db.add(report)
+        db.commit()
+    except Exception:
+        db.rollback()
+
+    # 启动后台线程执行重启
+    def _do_restart():
+        try:
+            time.sleep(1.5)  # 等待响应返回给前端
+            logger.info("[System] 正在重启服务...")
+
+            # 使用独立的重启辅助脚本
+            python_exe = sys.executable
+            restarter_script = str(BASE_DIR / "backend" / "bin" / "service_restarter.py")
+            main_script = str(BASE_DIR / "main.py")
+            wait_seconds = "3"  # 等待3秒让当前进程退出释放端口
+
+            env = os.environ.copy()
+
+            if platform.system() == "Windows":
+                # Windows: 分离进程启动重启器
+                DETACHED_PROCESS = 0x00000008
+                CREATE_NEW_PROCESS_GROUP = 0x00000200
+                subprocess.Popen(
+                    [python_exe, restarter_script, main_script, wait_seconds],
+                    cwd=str(BASE_DIR),
+                    env=env,
+                    creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            else:
+                # Linux/macOS: 新会话启动重启器
+                subprocess.Popen(
+                    [python_exe, restarter_script, main_script, wait_seconds],
+                    cwd=str(BASE_DIR),
+                    env=env,
+                    start_new_session=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+
+            logger.info("[System] 重启器已启动，正在退出当前进程...")
+            time.sleep(0.3)
+
+            # 退出当前进程（让重启器在等待后启动新进程）
+            os._exit(0)
+
+        except Exception as e:
+            global _restart_in_progress
+            _restart_in_progress = False
+            logger.error(f"[System] 重启失败: {e}")
+
+    t = threading.Thread(target=_do_restart, daemon=True)
+    t.start()
+
+    return {
+        "success": True,
+        "message": "服务正在重启，预计 5-10 秒后恢复",
+        "estimated_seconds": 8,
+        "restart_at": datetime.now().isoformat(),
+    }

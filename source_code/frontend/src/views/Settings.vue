@@ -357,7 +357,7 @@
                 上次检测: {{ lastHealthCheck }}
               </span>
               <span v-if="aiKeys.length > 0" style="font-size:13px;color:#909399;margin-left:auto;">
-                在线 <b style="color:#25D07D;">{{ activeKeyCount }}</b> / 故障 <b style="color:#EF4444;">{{ failedKeyCount }}</b> / 共 {{ aiKeys.length }} 个
+                在线 <b style="color:#25D07D;">{{ activeKeyCount }}</b> / 冷却 <b style="color:#e6a23c;">{{ coolingKeyCount }}</b> / 故障 <b style="color:#EF4444;">{{ failedKeyCount }}</b> / 共 {{ aiKeys.length }} 个
               </span>
             </div>
 
@@ -457,6 +457,76 @@
             </el-dialog>
           </div>
         </div>
+
+        <!-- AI 限流防超频 -->
+        <div v-show="active==='crawler'" class="panel-card">
+          <div class="panel-card__header">
+            <span class="panel-card__title">
+              <el-icon style="color:#e6a23c"><Warning /></el-icon>
+              AI 限流 / 防超频
+            </span>
+            <el-button link type="primary" size="small" :loading="loadingRateStatus" @click="loadRateLimiterStatus">刷新</el-button>
+          </div>
+          <div class="panel-card__body">
+            <el-alert type="warning" :closable="false" style="margin-bottom:16px;">
+              当 AI 接口提示"超频/429/请求过于频繁"时，说明接口调用频率超过了供应商限制。
+              系统内置<strong>令牌桶限流 + 请求去重 + 内存缓存 + 并发控制 + 智能冷却</strong>五重防护，
+              可根据实际使用情况调整参数。
+            </el-alert>
+
+            <!-- 实时状态 -->
+            <el-row :gutter="16" style="margin-bottom:20px;">
+              <el-col :span="6">
+                <div class="rate-stat-card">
+                  <div class="rate-stat-card__value" style="color:#25D07D;">{{ rateStats.cache_hits || 0 }}</div>
+                  <div class="rate-stat-card__label">缓存命中</div>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="rate-stat-card">
+                  <div class="rate-stat-card__value" style="color:#3B82F6;">{{ rateStats.dedup_hits || 0 }}</div>
+                  <div class="rate-stat-card__label">去重共享</div>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="rate-stat-card">
+                  <div class="rate-stat-card__value" style="color:#ef4444;">{{ rateStats.rate_limited || 0 }}</div>
+                  <div class="rate-stat-card__label">被限流次数</div>
+                </div>
+              </el-col>
+              <el-col :span="6">
+                <div class="rate-stat-card">
+                  <div class="rate-stat-card__value" style="color:#94A3B8;">{{ rateStats.total_requests || 0 }}</div>
+                  <div class="rate-stat-card__label">总请求数</div>
+                </div>
+              </el-col>
+            </el-row>
+
+            <!-- 配置项 -->
+            <el-form :model="rateConfig" label-width="160px" style="max-width:600px;">
+              <el-form-item label="每分钟最大请求数">
+                <el-input-number v-model="rateConfig.rpm" :min="1" :max="200" :step="5" />
+                <span style="margin-left:12px;font-size:12px;color:#909399;">默认 20 RPM，根据接口套餐调整</span>
+              </el-form-item>
+              <el-form-item label="最大并发请求数">
+                <el-input-number v-model="rateConfig.max_concurrent" :min="1" :max="20" />
+                <span style="margin-left:12px;font-size:12px;color:#909399;">默认 5，限制同时进行的AI请求</span>
+              </el-form-item>
+              <el-form-item label="内存缓存有效期">
+                <el-input-number v-model="rateConfig.cache_ttl" :min="30" :max="3600" :step="30" />
+                <span style="margin-left:12px;font-size:12px;color:#909399;">秒，默认 180s（3分钟）</span>
+              </el-form-item>
+              <el-form-item>
+                <el-button type="primary" @click="saveRateConfig" :loading="savingRateConfig">保存配置</el-button>
+                <el-button type="danger" @click="resetRateLimiter" :loading="resettingRate">重置限流状态</el-button>
+                <span style="margin-left:12px;font-size:12px;color:#909399;">
+                  当前缓存: {{ rateConfig.cache_size || 0 }} 条 | 活跃请求: {{ rateConfig.active_requests || 0 }}
+                </span>
+              </el-form-item>
+            </el-form>
+          </div>
+        </div>
+
         <!-- 爬虫健康检测 -->
         <div v-show="active==='crawler'" class="panel-card">
           <div class="panel-card__header">
@@ -773,8 +843,8 @@
 
 <script setup>
 import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Setting, Tools, Coin, Reading, Bell, Cpu, InfoFilled, DataLine, Connection, Monitor } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Setting, Tools, Coin, Reading, Bell, Cpu, InfoFilled, DataLine, Connection, Monitor, Warning } from '@element-plus/icons-vue'
 import { http, API_PREFIX } from '@/utils/request'
 
 const active = ref('general')
@@ -891,34 +961,41 @@ const lastHealthCheck = ref('')
 // 接口池状态 computed
 const activeKeyCount = computed(() => aiKeys.value.filter(k => k.status === 'active').length)
 const failedKeyCount = computed(() => aiKeys.value.filter(k => k.status === 'failed').length)
+const coolingKeyCount = computed(() => aiKeys.value.filter(k => k.status === 'cooling').length)
 const poolStatusClass = computed(() => {
   if (aiKeys.value.length === 0) return 'idle'
   if (activeKeyCount.value > 0) return 'ok'
+  if (coolingKeyCount.value > 0) return 'idle'
   return 'error'
 })
 const poolStatusText = computed(() => {
   if (aiKeys.value.length === 0) return '未配置接口'
   if (activeKeyCount.value > 0) return `接口池正常 (${activeKeyCount.value}个可用)`
+  if (coolingKeyCount.value > 0) return `限流冷却中 (${coolingKeyCount.value}个)`
   return '接口池异常 (无可用)'
 })
 const poolStatusColor = computed(() => {
   if (aiKeys.value.length === 0) return '#909399'
   if (activeKeyCount.value > 0) return '#25D07D'
+  if (coolingKeyCount.value > 0) return '#e6a23c'
   return '#EF4444'
 })
 const keyStatusClass = (status) => {
   if (status === 'active') return 'connected'
   if (status === 'failed') return 'error'
+  if (status === 'cooling') return 'error'
   return 'disconnected'
 }
 const keyStatusText = (status) => {
   if (status === 'active') return '在线'
   if (status === 'failed') return '故障'
+  if (status === 'cooling') return '限流冷却中'
   return '已禁用'
 }
 const keyStatusColor = (status) => {
   if (status === 'active') return '#25D07D'
   if (status === 'failed') return '#EF4444'
+  if (status === 'cooling') return '#e6a23c'
   return '#909399'
 }
 
@@ -1160,6 +1237,74 @@ const healthCheckAll = async () => {
 const loadAIConfig = async () => { await loadAiKeys() }
 const saveAiConfig = async () => { await loadAiKeys() }
 const testAiConn = async () => { await healthCheckAll() }
+
+// ============= AI 限流防超频 =============
+const loadingRateStatus = ref(false)
+const savingRateConfig = ref(false)
+const resettingRate = ref(false)
+const rateStats = ref({})
+const rateConfig = reactive({
+  rpm: 20,
+  max_concurrent: 5,
+  cache_ttl: 180,
+  cache_size: 0,
+  active_requests: 0,
+})
+
+const loadRateLimiterStatus = async () => {
+  loadingRateStatus.value = true
+  try {
+    const r = await http.get(`${API_PREFIX}/settings/ai-keys/rate-limiter/status`)
+    rateStats.value = r.stats || {}
+    rateConfig.rpm = r.config?.default_rpm || 20
+    rateConfig.max_concurrent = r.config?.max_concurrent || 5
+    rateConfig.cache_ttl = r.config?.cache_ttl || 180
+    rateConfig.cache_size = r.config?.cache_size || 0
+    rateConfig.active_requests = r.config?.active_requests || 0
+  } catch (e) {
+    // 静默失败
+  } finally {
+    loadingRateStatus.value = false
+  }
+}
+
+const saveRateConfig = async () => {
+  savingRateConfig.value = true
+  try {
+    await http.post(`${API_PREFIX}/settings/ai-keys/rate-limiter/config`, {
+      rpm: rateConfig.rpm,
+      max_concurrent: rateConfig.max_concurrent,
+      cache_ttl: rateConfig.cache_ttl,
+    })
+    ElMessage.success('限流配置已保存')
+    await loadRateLimiterStatus()
+  } catch (e) {
+    ElMessage.error(e?.message || '保存失败')
+  } finally {
+    savingRateConfig.value = false
+  }
+}
+
+const resetRateLimiter = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定重置限流状态吗？将清空所有缓存并恢复默认速率配置。',
+      '确认重置',
+      { type: 'warning' }
+    )
+  } catch { return }
+
+  resettingRate.value = true
+  try {
+    await http.post(`${API_PREFIX}/settings/ai-keys/rate-limiter/reset`)
+    ElMessage.success('限流状态已重置')
+    await loadRateLimiterStatus()
+  } catch (e) {
+    ElMessage.error(e?.message || '重置失败')
+  } finally {
+    resettingRate.value = false
+  }
+}
 
 // CryptoPanic WebSocket 配置
 const cp = reactive({
@@ -1706,6 +1851,23 @@ onUnmounted(() => {
   text-align: center;
   padding: 16px;
   background: var(--el-fill-color-light);
+  border-radius: 10px;
+  &__value {
+    font-size: 28px;
+    font-weight: 700;
+    line-height: 1.2;
+  }
+  &__label {
+    font-size: 12px;
+    color: #909399;
+    margin-top: 4px;
+  }
+}
+.rate-stat-card {
+  text-align: center;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(37,208,125,0.08) 0%, var(--el-fill-color-light) 100%);
+  border: 1px solid rgba(37,208,125,0.15);
   border-radius: 10px;
   &__value {
     font-size: 28px;

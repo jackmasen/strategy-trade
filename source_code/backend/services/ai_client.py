@@ -188,9 +188,10 @@ class AIClient:
                     max_tokens=int(self.cfg.max_tokens or 800),
                     temperature=temperature, timeout=timeout,
                 )
+                retry_after = None
             else:
                 # openai / custom / local → 全走 OpenAI Chat Completions
-                status, raw_text, usage, model = self._call_openai_compatible(
+                status, raw_text, usage, model, retry_after = self._call_openai_compatible(
                     api_key=api_key, system_prompt=system_prompt, user_prompt=user_prompt,
                     max_tokens=int(self.cfg.max_tokens or 800),
                     temperature=temperature, timeout=timeout,
@@ -216,7 +217,14 @@ class AIClient:
             if status == 410:
                 return self._fail(ERR_PROVIDER_410, f"模型已退役（HTTP 410），请切换其他模型：{third_msg}", third_party_status=status)
             if status == 429:
-                return self._fail(ERR_PROVIDER_429, f"触发 AI 供应商限流（HTTP 429），请稍后重试：{third_msg}", third_party_status=status)
+                msg = f"触发 AI 供应商限流（HTTP 429）"
+                if retry_after:
+                    msg += f"，建议 {retry_after} 秒后重试"
+                msg += f"：{third_msg}"
+                result = self._fail(ERR_PROVIDER_429, msg, third_party_status=status)
+                # 将 retry_after 附加到结果，供上层做冷却
+                result.retry_after_seconds = retry_after or 60
+                return result
             if status >= 500:
                 return self._fail(ERR_PROVIDER_5XX, f"AI 供应商服务异常（HTTP {status}）：{third_msg}", third_party_status=status)
             return self._fail(ERR_UNKNOWN, f"AI 供应商返回非 2xx（HTTP {status}）：{third_msg}", third_party_status=status)
@@ -278,7 +286,18 @@ class AIClient:
                         text = msg.get("content") or text
             except Exception:
                 pass
-            return status, text, usage, model_out
+
+            # 429 时提取 Retry-After 头，给调用方做冷却参考
+            retry_after = None
+            if status == 429:
+                retry_after = resp.headers.get("Retry-After") or resp.headers.get("retry-after")
+                if retry_after:
+                    try:
+                        retry_after = int(retry_after)
+                    except (ValueError, TypeError):
+                        retry_after = None
+
+            return status, text, usage, model_out, retry_after
 
     def _call_anthropic(
         self, *, api_key, system_prompt, user_prompt,
@@ -318,7 +337,18 @@ class AIClient:
                             text = first_block.get("text") or text
             except Exception:
                 pass
-            return status, text, usage, model_out
+
+            # 429 时提取 Retry-After 头
+            retry_after = None
+            if status == 429:
+                retry_after = resp.headers.get("Retry-After") or resp.headers.get("retry-after")
+                if retry_after:
+                    try:
+                        retry_after = int(retry_after)
+                    except (ValueError, TypeError):
+                        retry_after = None
+
+            return status, text, usage, model_out, retry_after
 
     # ======= 输出校验 =======
     def _parse_structured_output(self, raw_text: str, usage: dict, model: str) -> AIResult:

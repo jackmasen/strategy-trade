@@ -143,6 +143,45 @@
             点击"立即检测"开始系统健康检测
           </div>
         </div>
+
+        <!-- 服务重启 -->
+        <div class="panel-card restart-card">
+          <div class="panel-card__header">
+            <span class="panel-card__title">服务重启</span>
+          </div>
+          <div class="panel-card__body">
+            <div class="restart-tip">
+              <el-icon color="#e6a23c"><Warning /></el-icon>
+              <div class="restart-tip-text">
+                <div class="restart-tip-title">什么时候需要重启服务？</div>
+                <div class="restart-tip-desc">
+                  更新代码后（上传更新包/GitHub更新）、修改核心配置后，都需要重启后端服务才能生效。
+                  重启过程约 5-10 秒，期间系统会短暂不可用。
+                </div>
+              </div>
+            </div>
+            <div class="restart-actions">
+              <el-button
+                type="danger"
+                :loading="restarting"
+                :disabled="restarting"
+                @click="doRestart"
+              >
+                <el-icon><Refresh /></el-icon>
+                {{ restarting ? '正在重启...' : '立即重启后端服务' }}
+              </el-button>
+              <span class="restart-hint" v-if="!restarting">
+                当前版本：<b>{{ sysInfo.version }}</b>
+              </span>
+            </div>
+            <div v-if="restarting" class="restart-progress">
+              <el-progress :percentage="restartProgress" :status="restartFailed ? 'exception' : 'success'" />
+              <div class="restart-status-text">
+                {{ restartStatusText }}
+              </div>
+            </div>
+          </div>
+        </div>
       </el-tab-pane>
 
       <!-- 缓存清理 -->
@@ -892,6 +931,79 @@ const openUrl = (url) => {
   window.open(url, '_blank')
 }
 
+// ========== 服务重启 ==========
+const restarting = ref(false)
+const restartProgress = ref(0)
+const restartFailed = ref(false)
+const restartStatusText = ref('')
+let _restartPollTimer = null
+
+const doRestart = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '确定重启后端服务吗？\n\n重启过程约 5-10 秒，期间系统将短暂不可用。\n重启后当前页面会自动刷新。',
+      '确认重启服务',
+      {
+        type: 'warning',
+        confirmButtonText: '确认重启',
+        cancelButtonText: '取消',
+        confirmButtonClass: 'el-button--danger',
+      }
+    )
+  } catch { return }
+
+  restarting.value = true
+  restartProgress.value = 5
+  restartFailed.value = false
+  restartStatusText.value = '正在发送重启指令...'
+
+  try {
+    const res = await http.post(`${API_PREFIX}/system/restart`, { reason: '管理员手动重启' })
+    restartProgress.value = 20
+    restartStatusText.value = '服务正在重启，请稍候...'
+
+    // 轮询等待服务恢复
+    let pollCount = 0
+    const maxPolls = 30 // 最多等30次（每次2秒，约60秒）
+
+    const pollService = async () => {
+      pollCount++
+      restartProgress.value = Math.min(90, 20 + pollCount * 2.5)
+
+      try {
+        await http.get(`${API_PREFIX}/system/info`, { timeout: 3000 })
+        // 服务已恢复
+        restartProgress.value = 100
+        restartStatusText.value = '服务已恢复，页面即将刷新...'
+
+        setTimeout(() => {
+          location.reload()
+        }, 1000)
+        return
+      } catch (e) {
+        // 服务还没起来，继续等
+        if (pollCount < maxPolls) {
+          restartStatusText.value = `服务正在启动中... (${pollCount}/${maxPolls})`
+          _restartPollTimer = setTimeout(pollService, 2000)
+        } else {
+          // 超时了
+          restartFailed.value = true
+          restartStatusText.value = '重启超时，请手动刷新页面检查服务状态'
+          restarting.value = false
+        }
+      }
+    }
+
+    // 3秒后开始轮询（给服务退出的时间）
+    _restartPollTimer = setTimeout(pollService, 3000)
+
+  } catch (e) {
+    restartFailed.value = true
+    restartStatusText.value = e?.message || '重启请求失败'
+    restarting.value = false
+  }
+}
+
 onMounted(() => {
   loadSysInfo()
   loadCacheInfo()
@@ -907,6 +1019,10 @@ onBeforeUnmount(() => {
   if (_monitorTimer) {
     clearInterval(_monitorTimer)
     _monitorTimer = null
+  }
+  if (_restartPollTimer) {
+    clearTimeout(_restartPollTimer)
+    _restartPollTimer = null
   }
 })
 
@@ -1358,6 +1474,64 @@ async function revokeShare(row) {
         color: #64748B;
         text-decoration: line-through;
       }
+    }
+  }
+}
+
+/* -------- 服务重启 -------- */
+.restart-card {
+  margin-top: 16px;
+  border: 1px solid #2A1A1A;
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.04) 0%, rgba(15, 26, 36, 0.6) 100%);
+
+  .restart-tip {
+    display: flex;
+    gap: 12px;
+    padding: 14px 16px;
+    background: rgba(230, 162, 60, 0.08);
+    border: 1px solid rgba(230, 162, 60, 0.2);
+    border-radius: 8px;
+    margin-bottom: 16px;
+
+    .restart-tip-text {
+      flex: 1;
+    }
+    .restart-tip-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: #e6a23c;
+      margin-bottom: 4px;
+    }
+    .restart-tip-desc {
+      font-size: 13px;
+      color: #94A3B8;
+      line-height: 1.6;
+    }
+  }
+
+  .restart-actions {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    flex-wrap: wrap;
+
+    .restart-hint {
+      font-size: 13px;
+      color: #94A3B8;
+      b { color: #E2E8F0; font-weight: 600; }
+    }
+  }
+
+  .restart-progress {
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #1A2A3A;
+
+    .restart-status-text {
+      font-size: 13px;
+      color: #94A3B8;
+      margin-top: 8px;
+      text-align: center;
     }
   }
 }
