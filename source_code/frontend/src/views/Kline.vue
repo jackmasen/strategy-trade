@@ -1084,6 +1084,36 @@
                 </div>
                 <div v-else class="mf-empty-sm">暂无持仓</div>
               </template>
+
+              <!-- 实时价格列表面板 -->
+              <template v-else-if="item.i === 'pricelist'">
+                <div class="pl-sm-header">
+                  <span class="pl-sm-title">实时价格</span>
+                  <el-tag size="small" type="info" effect="dark" round>{{ Object.keys(SYMBOL_META).length }}个</el-tag>
+                </div>
+                <div class="pl-sm-list">
+                  <div v-for="(meta, sym) in SYMBOL_META" :key="sym"
+                       class="pl-sm-item"
+                       :class="{ active: selectedSymbol === sym }"
+                       @click="selectSymbolFromList(sym)">
+                    <div class="pl-sm-icon" :style="{ background: meta.color + '20', color: meta.color }">
+                      {{ meta.icon || sym[0] }}
+                    </div>
+                    <div class="pl-sm-info">
+                      <div class="pl-sm-sym">{{ sym }}</div>
+                      <div class="pl-sm-name">{{ meta.name }}</div>
+                    </div>
+                    <div class="pl-sm-price-block">
+                      <div class="pl-sm-price" :class="priceListData[sym]?.dir || ''">
+                        {{ priceListData[sym] ? '$' + fmtMoney(priceListData[sym].price) : '--' }}
+                      </div>
+                      <div class="pl-sm-change" :class="priceListData[sym]?.chg >= 0 ? 'profit' : 'loss'">
+                        {{ priceListData[sym] ? fmtPct(priceListData[sym].chg) : '' }}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
             </div>
             <!-- 右下角缩放手柄 -->
             <div v-if="layoutEditMode" class="resize-handle" @mousedown="startResize($event, item.i)" title="拖拽缩放"></div>
@@ -1285,6 +1315,37 @@ const watchlistAddSymbol = ref('')
 const watchlistTimer = ref(null)
 const watchlistDragSymbol = ref(null)
 
+// ===== 全品种实时价格列表（自定义面板用） =====
+const priceListData = ref({})
+let priceListTimer = null
+
+async function loadPriceListData() {
+  const allSymbols = Object.keys(SYMBOL_META)
+  const batch = 8
+  for (let i = 0; i < allSymbols.length; i += batch) {
+    const chunk = allSymbols.slice(i, i + batch)
+    const promises = chunk.map(async (sym) => {
+      try {
+        const r = await http.get(`${API_PREFIX}/exchange/ticker/${sym}`, {}, { _silent: true })
+        const old = priceListData.value[sym]
+        const dir = old ? (r.last_price > old.price ? 'up' : r.last_price < old.price ? 'down' : old.dir || '') : ''
+        priceListData.value[sym] = {
+          price: r.last_price || 0,
+          chg: r.change_pct_24h || 0,
+          dir,
+        }
+      } catch {}
+    })
+    await Promise.all(promises)
+  }
+}
+
+function selectSymbolFromList(sym) {
+  if (sym === selectedSymbol.value) return
+  selectedSymbol.value = sym
+  onSymbolChange()
+}
+
 function initWatchlist() {
   const saved = localStorage.getItem(userStorageKey('watchlist'))
   if (saved) {
@@ -1442,6 +1503,7 @@ const allPanelsConfig = {
   'openinterest': { w: 4, h: 5, minW: 2, minH: 3, title: '持仓量 & 资金' },
   'alerts':       { w: 4, h: 4, minW: 2, minH: 2, title: '预警记录' },
   'mypositions':  { w: 12, h: 5, minW: 6, minH: 3, title: '当前持仓' },
+  'pricelist':    { w: 3, h: 10, minW: 2, minH: 4, title: '实时价格列表' },
 }
 
 // 自定义布局先使用默认布局，等用户信息就绪后再加载用户保存的布局
@@ -2312,22 +2374,39 @@ function onSymbolChange() {
   // 清空所有旧币种数据，避免残留
   klines.value = []
   orderbook.value = { bids: [], asks: [] }
-  ticker.value = {}
+  ticker.value = { last_price: 0, high_24h: 0, low_24h: 0, volume_24h: 0, change_pct_24h: 0 }
   indicators.value = {}
-  supportResistance.value = {}
+  supportResistance.value = { supports: [], resistances: [], pivot_points: [] }
   multiPeriod.value = {}
   riseFallParams.value = {}
   liqHeatmap.value = { long_liq: [], short_liq: [], danger_levels: [], heatmap: [] }
-  trend.value = { short_term: 'neutral', mid_term: 'neutral', long_term: 'neutral' }
+  trend.value = { short_term: 'neutral', mid_term: 'neutral', long_term: 'neutral', rsi: 50, last_price: 0 }
   mainForce.value = { walls: [], pressure: 'neutral', pressure_cn: '多空均衡', pressure_score: 50, big_order_ratio: 0 }
   recentTrades.value = []
-  openInterest.value = {}
+  openInterest.value = { open_interest: 0, open_interest_usdt: 0 }
+  latestAISignal.value = null
   // 重置图表
   if (mainChart) {
     mainChart.clear()
+    mainChart.setOption({}, true) // 强制清空配置
   }
-  // 立即加载新币种数据
-  loadAll()
+  if (macdChart) {
+    macdChart.clear()
+    macdChart.setOption({}, true)
+  }
+  if (rsiChart) {
+    rsiChart.clear()
+    rsiChart.setOption({}, true)
+  }
+  // 设置加载状态
+  connStatus.value = 'loading'
+  klineError.value = ''
+  // 立即加载新币种数据（确保按顺序：先K线，再其他）
+  loadKlineAnalysis()
+  loadOrderbook()
+  loadTrades()
+  loadOpenInterest()
+  loadTicker()
 }
 
 function setIndicator(type) {
@@ -2588,10 +2667,11 @@ onMounted(async () => {
   loadAll()
   loadCloudLayouts()
   loadWatchlistPrices()
+  loadPriceListData()
   window.addEventListener('resize', onResize)
   nextTick(() => calcGridColWidth())
 
-  // 定时刷新（3秒刷新深度和成交，15秒刷新K线和持仓）
+  // 定时刷新（3秒刷新深度和成交，15秒刷新K线和持仓，5秒刷新价格列表）
   refreshTimer = setInterval(() => {
     loadOrderbook()
     loadTrades()
@@ -2610,6 +2690,11 @@ onMounted(async () => {
   watchlistTimer.value = setInterval(() => {
     loadWatchlistPrices()
   }, 5000)
+
+  // 全品种价格列表5秒刷新
+  priceListTimer = setInterval(() => {
+    loadPriceListData()
+  }, 5000)
 })
 
 onBeforeUnmount(() => {
@@ -2618,6 +2703,7 @@ onBeforeUnmount(() => {
   if (tickerTimer) clearInterval(tickerTimer)
   if (klineTimer) clearInterval(klineTimer)
   if (watchlistTimer.value) clearInterval(watchlistTimer.value)
+  if (priceListTimer) clearInterval(priceListTimer)
   mainChart?.dispose()
   macdChart?.dispose()
   rsiChart?.dispose()
@@ -5099,6 +5185,91 @@ onBeforeUnmount(() => {
       margin-top: 4px;
       padding-top: 4px;
       border-top: 1px solid #1A2A3A;
+    }
+  }
+}
+
+// ===== 实时价格列表面板样式 =====
+.pl-sm-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-bottom: 1px solid #1A2A3A;
+  .pl-sm-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #CBD5E1;
+  }
+}
+.pl-sm-list {
+  overflow-y: auto;
+  max-height: 100%;
+  padding: 2px 4px;
+  &::-webkit-scrollbar { width: 4px; }
+  &::-webkit-scrollbar-thumb { background: #2A3F55; border-radius: 2px; }
+}
+.pl-sm-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 6px;
+  border-radius: 6px;
+  cursor: pointer;
+  margin-bottom: 2px;
+  transition: background 0.15s;
+  border-left: 3px solid transparent;
+
+  &:hover { background: rgba(59, 130, 246, 0.1); }
+  &.active {
+    background: rgba(59, 130, 246, 0.15);
+    border-left-color: #3B82F6;
+  }
+  .pl-sm-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .pl-sm-info {
+    flex: 1;
+    min-width: 0;
+    .pl-sm-sym {
+      font-size: 12px;
+      font-weight: 600;
+      color: #CBD5E1;
+      line-height: 1.2;
+    }
+    .pl-sm-name {
+      font-size: 10px;
+      color: #64748B;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+  }
+  .pl-sm-price-block {
+    text-align: right;
+    flex-shrink: 0;
+    .pl-sm-price {
+      font-size: 12px;
+      font-family: Consolas, monospace;
+      color: #94A3B8;
+      font-weight: 600;
+      line-height: 1.2;
+      &.up { color: #25D07D; }
+      &.down { color: #F87171; }
+    }
+    .pl-sm-change {
+      font-size: 10px;
+      font-family: Consolas, monospace;
+      &.profit { color: #25D07D; }
+      &.loss { color: #F87171; }
     }
   }
 }

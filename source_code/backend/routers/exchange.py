@@ -53,6 +53,15 @@ _MOCK_PRICES = {
     "COIN": 180, "PLTR": 32, "SMCI": 450,
 }
 
+# 非加密品种集合（用于 K线/Ticker 的 Bybit 公开行情兜底）
+_NON_CRYPTO_SYMBOLS_SET = {
+    "XAU", "XAG", "WTI",
+    "TSLA", "NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NFLX",
+    "TCEHY", "SKHYNIX", "SNDK", "INTC", "AMD", "SMCI", "PLTR",
+    "KO", "PG", "WMT", "JNJ", "PEP", "MCD", "JPM",
+    "MSTR", "COIN",
+}
+
 def _gen_mock_ticker(symbol):
     import random
     base = _MOCK_PRICES.get(symbol, 100)
@@ -161,9 +170,23 @@ def _cached_fetch_klines(client, symbol, timeframe, limit, ttl=None):
         daily_limit = max(limit * 365, 365)
         try:
             daily_data = client.fetch_klines(symbol, "1d", limit=daily_limit)
-            data = _aggregate_yearly_klines(daily_data, symbol)
         except Exception as e:
-            logger.warning(f"[Exchange] 年线聚合失败(symbol={symbol}): {e} — 返回模拟数据")
+            logger.warning(f"[Exchange] 年线日线拉取失败(symbol={symbol}): {e}")
+            daily_data = []
+        # 非加密品种：Bybit 兜底
+        if (not daily_data or len(daily_data) < 10) and symbol in _NON_CRYPTO_SYMBOLS_SET:
+            try:
+                from backend.exchanges.market import MarketManager
+                mm = MarketManager.get_instance()
+                bybit_client = mm.ensure_bybit_public_client()
+                if bybit_client and bybit_client is not client:
+                    daily_data = bybit_client.fetch_klines(symbol, "1d", limit=daily_limit)
+                    logger.info(f"[Exchange] Bybit兜底年线日线 {symbol}: {len(daily_data)}根")
+            except Exception as e2:
+                logger.warning(f"[Exchange] Bybit兜底年线失败(symbol={symbol}): {e2}")
+        if daily_data:
+            data = _aggregate_yearly_klines(daily_data, symbol)
+        else:
             data = _gen_mock_klines(symbol, timeframe, limit)
         with _kline_cache_lock:
             _kline_cache[key] = (now, data)
@@ -173,7 +196,20 @@ def _cached_fetch_klines(client, symbol, timeframe, limit, ttl=None):
     try:
         data = client.fetch_klines(symbol, timeframe, limit=limit)
     except Exception as e:
-        logger.warning(f"[Exchange] K线拉取失败(symbol={symbol} tf={timeframe}): {e} — 返回模拟数据")
+        logger.warning(f"[Exchange] K线拉取失败(symbol={symbol} tf={timeframe}): {e}")
+        data = []
+    # 非加密品种：主用客户端拉不到时，用 Bybit 公开行情兜底
+    if (not data or len(data) < 10) and symbol in _NON_CRYPTO_SYMBOLS_SET:
+        try:
+            from backend.exchanges.market import MarketManager
+            mm = MarketManager.get_instance()
+            bybit_client = mm.ensure_bybit_public_client()
+            if bybit_client and bybit_client is not client:
+                data = bybit_client.fetch_klines(symbol, timeframe, limit=limit)
+                logger.info(f"[Exchange] Bybit兜底K线 {symbol} {timeframe}: {len(data)}根")
+        except Exception as e2:
+            logger.warning(f"[Exchange] Bybit兜底K线失败(symbol={symbol}): {e2}")
+    if not data or len(data) < 10:
         data = _gen_mock_klines(symbol, timeframe, limit)
     with _kline_cache_lock:
         _kline_cache[key] = (now, data)
@@ -690,8 +726,8 @@ def get_klines(
     timeframe = timeframe.lower()
     if timeframe == "1m" and tf_raw.endswith("M"):
         timeframe = "1M"
-    if timeframe not in ("1m","5m","15m","1h","4h","1d","1w","1M","1y"):
-        raise ParameterException("timeframe 必须为 1m/5m/15m/1h/4h/1d/1w/1M/1y")
+    if timeframe not in ("1m","5m","15m","30m","1h","2h","3h","4h","6h","12h","1d","1w","1M","1y"):
+        raise ParameterException("timeframe 必须为 1m/5m/15m/30m/1h/2h/3h/4h/6h/12h/1d/1w/1M/1y")
     limit = max(10, min(500, limit))
     mm = MarketManager.get_instance()
     klines = mm.get_klines(symbol, timeframe, limit=limit)
@@ -834,8 +870,25 @@ def get_orderbook(
     """获取深度盘口"""
     symbol = symbol.upper()
     client = _get_client_by_account(db, user, account_id)
-    ob = client.fetch_orderbook(symbol, limit=max(5, min(100, limit)))
-    return success(ob.to_dict())
+    try:
+        ob = client.fetch_orderbook(symbol, limit=max(5, min(100, limit)))
+        if ob and (ob.bids or ob.asks):
+            return success(ob.to_dict())
+    except Exception as e:
+        logger.debug(f"[Exchange] 盘口拉取失败(symbol={symbol}): {e}")
+    # 非加密品种：Bybit 公开行情兜底
+    if symbol in _NON_CRYPTO_SYMBOLS_SET:
+        try:
+            mm = MarketManager.get_instance()
+            bybit_client = mm.ensure_bybit_public_client()
+            if bybit_client and bybit_client is not client:
+                ob = bybit_client.fetch_orderbook(symbol, limit=max(5, min(100, limit)))
+                if ob and (ob.bids or ob.asks):
+                    return success(ob.to_dict())
+        except Exception as e2:
+            logger.debug(f"[Exchange] Bybit兜底盘口失败(symbol={symbol}): {e2}")
+    # 最终返回空盘口（前端显示空数据）
+    return success({"bids": [], "asks": []})
 
 
 @router.get("/trades/{symbol}")
@@ -849,7 +902,20 @@ def get_recent_trades(
     """获取近期成交记录"""
     symbol = symbol.upper()
     client = _get_client_by_account(db, user, account_id)
-    trades = client.fetch_recent_trades(symbol, limit=max(10, min(500, limit)))
+    trades = []
+    try:
+        trades = client.fetch_recent_trades(symbol, limit=max(10, min(500, limit)))
+    except Exception as e:
+        logger.debug(f"[Exchange] 成交记录拉取失败(symbol={symbol}): {e}")
+    # 非加密品种：Bybit 公开行情兜底
+    if not trades and symbol in _NON_CRYPTO_SYMBOLS_SET:
+        try:
+            mm = MarketManager.get_instance()
+            bybit_client = mm.ensure_bybit_public_client()
+            if bybit_client and bybit_client is not client:
+                trades = bybit_client.fetch_recent_trades(symbol, limit=max(10, min(500, limit)))
+        except Exception as e2:
+            logger.debug(f"[Exchange] Bybit兜底成交记录失败(symbol={symbol}): {e2}")
     return success({
         "symbol": symbol,
         "count": len(trades),
@@ -866,9 +932,18 @@ def get_open_interest(
 ):
     """获取持仓量"""
     symbol = symbol.upper()
-    client = _get_client_by_account(db, user, account_id)
-    oi = client.fetch_open_interest(symbol)
-    return success(oi.to_dict())
+    mm = MarketManager.get_instance()
+    oi = mm.get_open_interest(symbol)
+    if oi:
+        return success(oi.to_dict())
+    # 非加密品种返回模拟OI数据
+    return success({
+        "symbol": symbol,
+        "open_interest": 0,
+        "open_interest_usdt": 0,
+        "funding_rate": 0.0001,
+        "long_short_ratio": 1.0,
+    })
 
 
 # ==========================================================
@@ -1280,8 +1355,8 @@ def kline_analysis(
     timeframe = timeframe.lower()
     if timeframe == "1m" and tf_raw.endswith("M"):
         timeframe = "1M"  # 月线
-    if timeframe not in ("1m", "5m", "15m", "1h", "4h", "1d", "1w", "1M", "1y"):
-        raise ParameterException("timeframe 必须为 1m/5m/15m/1h/4h/1d/1w/1M/1y")
+    if timeframe not in ("1m", "5m", "15m", "30m", "1h", "2h", "3h", "4h", "6h", "12h", "1d", "1w", "1M", "1y"):
+        raise ParameterException("timeframe 必须为 1m/5m/15m/30m/1h/2h/3h/4h/6h/12h/1d/1w/1M/1y")
     limit = max(50, min(500, limit))
 
     client = _get_client_by_account(db, user, account_id)

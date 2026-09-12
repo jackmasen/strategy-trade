@@ -8,9 +8,15 @@
         </div>
       </div>
       <div class="header-actions">
-        <el-select v-model="timeframe" size="default" style="width: 100px; margin-right: 10px;" @change="loadOverview">
+        <el-select v-model="timeframe" size="default" style="width: 110px; margin-right: 10px;" @change="loadOverview">
+          <el-option label="15分钟" value="15m" />
+          <el-option label="30分钟" value="30m" />
           <el-option label="1小时" value="1h" />
+          <el-option label="2小时" value="2h" />
+          <el-option label="3小时" value="3h" />
           <el-option label="4小时" value="4h" />
+          <el-option label="6小时" value="6h" />
+          <el-option label="12小时" value="12h" />
           <el-option label="日线" value="1d" />
         </el-select>
         <el-button type="primary" :icon="Refresh" :loading="loading" @click="loadOverview">

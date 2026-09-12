@@ -371,6 +371,8 @@ def risk_monitor(self):
     return {"status": "ok", "checked": checked, "closed": closed, "details": close_details}
 
 
+_failed_close_counts: dict = {}
+
 def _close_position_for_risk(
     db, pos: TradePosition, acc: ExchangeAccount, close_price: float,
     *, tp_hit: bool, sl_hit: bool, drawdown_hit: bool, daily_limit_hit: bool,
@@ -378,13 +380,44 @@ def _close_position_for_risk(
 ):
     from backend.exchanges.base import ExchangeClientBase
     from backend.exchanges._types import ORDER_TYPE_MARKET, SIDE_LONG, SIDE_SHORT
+    from backend.core.security import decrypt_api_key
+
+    MAX_RETRIES = 3
+
+    pid = pos.id
+    fail_count = _failed_close_counts.get(pid, 0)
+    if fail_count >= MAX_RETRIES:
+        logger.warning(f"风险平仓 position_id={pid} 已连续失败{fail_count}次，标记异常停止重试")
+        try:
+            pos.close_reason = 9
+            pos.status = 3
+            pos.remark = f"API连续失败{fail_count}次,手动处理"
+            db.commit()
+        except Exception:
+            db.rollback()
+        _failed_close_counts.pop(pid, None)
+        return False
+
+    api_key_plain = ""
+    try:
+        api_key_plain = decrypt_api_key(acc.api_key or "") or ""
+    except Exception:
+        pass
+    if not api_key_plain or len(api_key_plain) < 10:
+        _failed_close_counts[pid] = fail_count + 1
+        logger.warning(
+            f"风险平仓跳过(position_id={pid}): 交易所{acc.exchange} API Key无效或过短 "
+            f"(失败{_failed_close_counts[pid]}/{MAX_RETRIES})"
+        )
+        return False
+
     _close_client = False
     if client is None:
         client = ExchangeClientBase.create(
             exchange=acc.exchange,
-            api_key=acc.api_key or "",
-            api_secret=acc.api_secret or "",
-            passphrase=acc.api_passphrase or "",
+            api_key=api_key_plain,
+            api_secret=decrypt_api_key(acc.api_secret or "") or "",
+            passphrase=decrypt_api_key(acc.api_passphrase or "") or "",
             testnet=bool(acc.testnet),
             exchange_account_id=acc.id,
         )
@@ -407,14 +440,19 @@ def _close_position_for_risk(
             client_order_id=f"risk_{pos.id}_{datetime.now().strftime('%H%M%S')}",
         )
         close_success = True
+        _failed_close_counts.pop(pid, None)
     except Exception as e:
-        logger.error(f"风险平仓交易所API失败(position_id={pos.id}): {e} — 跳过DB标记,下轮重试")
+        _failed_close_counts[pid] = fail_count + 1
+        logger.warning(
+            f"风险平仓交易所API失败(position_id={pid}, "
+            f"失败{_failed_close_counts[pid]}/{MAX_RETRIES}): {e}"
+        )
         if _close_client:
             try:
                 client.close()
             except Exception:
                 pass
-        return False  # Don't mark as closed
+        return False
 
     if close_success:
         # 更新仓位

@@ -97,13 +97,22 @@ class MarketManager:
         # Bybit 公开行情客户端（无需API Key，用于补充非加密品种实时价格）
         self._bybit_client: Optional[ExchangeClientBase] = None
         self._crypto_syms = {"BTC", "ETH", "SOL"}  # 加密货币走主用交易所
-        self._non_crypto_syms = {"XAU", "XAG", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "TCEHY", "SKHYNIX", "SNDK"}
+        self._non_crypto_syms = {"XAU", "XAG", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NFLX", "TCEHY", "SKHYNIX", "SNDK", "INTC", "AMD", "SMCI", "PLTR", "KO", "PG", "WMT", "JNJ", "PEP", "MCD", "JPM", "MSTR", "COIN"}
 
     # ==========================================================
     #  注册交易所 client
     # ==========================================================
     def register_client(self, client: ExchangeClientBase) -> None:
         key = f"{client.EXCHANGE_NAME}_{client.exchange_account_id}"
+        existing = self._clients.get(key)
+        if existing is client:
+            return
+        now = time.time()
+        last_reg = getattr(self, f"_last_reg_{key}", 0)
+        if now - last_reg < 30 and existing is not None:
+            logger.debug(f"[Market] 交易所 {key} 30秒内重复注册，跳过")
+            return
+        setattr(self, f"_last_reg_{key}", now)
         self._clients[key] = client
         if self._primary_client is None:
             self._primary_client = client
@@ -575,11 +584,14 @@ class MarketManager:
 
     def _rest_fallback_loop(self) -> None:
         """每 5s：若有订阅的 symbol 没在 _tickers 中，就用 REST 拉 ticker；
-        并按 ticker price 更新 open kline bucket（离线 fallback）"""
+        并按 ticker price 更新 open kline bucket（离线 fallback）
+        连续失败时指数退避，避免高频打API"""
+        _consecutive_fails = 0
         while not self._stop_event.is_set():
             try:
-                # 每 5s
-                for _ in range(5):
+                # 动态间隔：正常5s，失败后最大60s
+                interval = min(5 * (2 ** _consecutive_fails), 60)
+                for _ in range(interval):
                     if self._stop_event.is_set():
                         return
                     time.sleep(1.0)
@@ -590,6 +602,7 @@ class MarketManager:
                     continue
                 # 只处理已订阅 + 主用5品种
                 syms = list(self._symbols_subscribed) or ["BTC", "ETH", "SOL", "XAU", "WTI", "SKHYNIX", "SNDK"]
+                batch_ok = True
                 for sym in syms:
                     client = self.get_data_client(sym)
                     if not client:
@@ -598,6 +611,7 @@ class MarketManager:
                         ticker = client.fetch_ticker(sym)
                         self._on_ws_ticker(ticker)
                     except Exception as e:
+                        batch_ok = False
                         # 主用失败时尝试 Bybit 兜底
                         if client != self._bybit_client and self._bybit_client:
                             try:
@@ -607,6 +621,10 @@ class MarketManager:
                                 logger.debug(f"[Market] REST fallback ticker {sym} 失败(主用+Bybit): {e2}")
                         else:
                             logger.debug(f"[Market] REST fallback ticker {sym} 失败: {e}")
+                if batch_ok:
+                    _consecutive_fails = 0
+                else:
+                    _consecutive_fails = min(_consecutive_fails + 1, 5)
             except Exception as e:
                 logger.debug(f"[Market] rest_fallback 异常: {e}")
 

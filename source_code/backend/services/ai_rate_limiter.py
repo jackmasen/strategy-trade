@@ -34,6 +34,15 @@ from contextlib import contextmanager
 
 from backend.core.logging_config import logger
 
+_warn_last_ts: dict = {}
+
+def _throttled_warn(key: str, msg: str, throttle_sec: float = 60.0) -> None:
+    now = time.time()
+    last = _warn_last_ts.get(key)
+    if last is None or (now - last) > throttle_sec:
+        logger.warning(msg)
+        _warn_last_ts[key] = now
+
 
 # ============================================================
 # 1. 令牌桶限流器
@@ -150,7 +159,7 @@ class RateLimiterManager:
         current_rpm = bucket.rate_per_minute
         new_rpm = max(5.0, current_rpm * 0.5)
         bucket.set_rate(new_rpm)
-        logger.warning(f"[RateLimiter] 触发限流 {key}: RPM {current_rpm:.0f} → {new_rpm:.0f}，冷却 {retry_after_seconds:.0f}s")
+        _throttled_warn(f"trigger_limit_{key}", f"[RateLimiter] 触发限流 {key}: RPM {current_rpm:.0f} → {new_rpm:.0f}，冷却 {retry_after_seconds:.0f}s")
         # 清空令牌，强制冷却
         with bucket._lock:
             bucket.tokens = 0
@@ -480,7 +489,7 @@ class AIRequestCoordinator:
                         else:
                             # 不能等或等太久 → 限流
                             self._incr_stat("rate_limited")
-                            logger.warning(f"[AI-Coord] 限流触发: {rate_key}, 需等待 {wait_time:.1f}s，已拒绝")
+                            _throttled_warn(f"rate_limited_{rate_key}", f"[AI-Coord] 限流触发: {rate_key}, 需等待 {wait_time:.1f}s，已拒绝")
                             return None, "rate_limited"
 
                     if not self.rate_limiter.try_acquire(rate_key, rpm=self.default_rpm):
@@ -502,7 +511,7 @@ class AIRequestCoordinator:
                     return result, "live"
             except TimeoutError:
                 self._incr_stat("rate_limited")
-                logger.warning(f"[AI-Coord] 并发等待超时: {symbol} {timeframe}")
+                _throttled_warn(f"concurrent_timeout_{symbol}_{timeframe}", f"[AI-Coord] 并发等待超时: {symbol} {timeframe}")
                 return None, "rate_limited"
 
         try:

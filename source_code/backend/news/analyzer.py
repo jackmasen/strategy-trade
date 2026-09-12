@@ -57,11 +57,30 @@ SYMBOL_KEYWORDS: List[Tuple[str, List[str]]] = [
     ("NVDA", ["nvidia", " nvda ", "nvda/", "gpu", "graphic card", "ai chip", "h100", "a100", "h200", "b100", "gb200", "黄仁勋", "cuda", "geforce", "rtx", "data center", "accelerated computing"]),
     ("AAPL", ["apple", " aapl ", "aapl/", "iphone", "ipad", "macbook", "tim cook", "库克", "vision pro", "apple intelligence", "app store", "apple watch", "airpods", "macos", "ios"]),
     ("MSFT", ["microsoft", " msft ", "msft/", "azure", "windows", "office 365", "satya", "盖茨", "openai", "copilot", "bing", "github", "linkedin", "teams", "xbox", "surface", "active directory"]),
+    ("GOOGL", ["google", " googl ", "googl/", "alphabet", "sundar", "皮查伊", "android", "youtube", "gmail", "google cloud", "gcp", "waymo", "gemini"]),
+    ("AMZN", ["amazon", " amzn ", "amzn/", "jeff bezos", "贝佐斯", "aws", "amazon web services", "prime video", "amazon echo", "alexa", "kindle", "whole foods", "amazon logistics"]),
+    ("META", ["meta platforms", " meta ", "meta/", "facebook", "fb ", "mark zuckerberg", "扎克伯格", "instagram", "whatsapp", "meta ai", "metaverse", "oculus", "quest", "threads", "reels"]),
+    ("NFLX", ["netflix", " nflx ", "nflx/", "reed hastings", "奈飞", "流媒体", "streaming", "netflix original", "stranger things", "squid game"]),
     # US Stocks - China
     ("TCEHY", ["tencent", " tcehy ", "tcehy/", "腾讯", "wechat", "微信", "pony ma", "马化腾", "honor of kings", "weixin", "tiktok", "pubg mobile", "league of legends"]),
     # Semiconductor / Memory
     ("SKHYNIX", ["sk hynix", "skhynix", "海力士", "hbm", "高带宽存储", "dram", "晶圆", "000660", "hbm3", "hbm3e", "ddr5", "lpddr"]),
     ("SNDK", ["sandisk", "sndk", "闪迪", "nand flash", "nand", "闪存", "ssd", "western digital", "wd", "uflash"]),
+    ("INTC", ["intel", " intc ", "intc/", "英特尔", "pat gelsinger", "基辛格", "intel foundry", "14a", "18a", "xeon", "core i", "pentium", "celeron", "alder lake", "meteor lake"]),
+    ("AMD", [" amd ", "amd/", "advanced micro devices", "苏姿丰", "lisa su", "ryzen", "epyc", "radeon", "mi300", "mi350", "instinct", "athlon", "xilinx", "fpga"]),
+    ("SMCI", ["super micro", " smci ", "smci/", "超微电脑", "supermicro", "liquid cooling", "液冷", "ai server", "服务器", "rack scale"]),
+    ("PLTR", ["palantir", " pltr ", "pltr/", "peter thiel", "亚历克斯卡普", "alex karp", "ai software", "数据软件", "government contract", "国防合同"]),
+    # US Stocks - Consumer / Financial
+    ("KO", ["coca-cola", "coca cola", " ko ", "ko/", "可口可乐", "coke", "warren buffett", "巴菲特", "berkshire", "碳酸饮料", "soft drink", "cola", "可口可乐公司"]),
+    ("PG", ["procter & gamble", "procter and gamble", " pg ", "pg/", "宝洁", "p&g", "tide", "汰渍", "pampers", "帮宝适", "gillette", "吉列", "日用消费品", "consumer staples"]),
+    ("WMT", ["walmart", " wmt ", "wmt/", "沃尔玛", "sam's club", "山姆会员店", "walmart+", "doug mcmillon", "零售", "retail", "e-commerce", "电商", "供应链", "supply chain"]),
+    ("JNJ", ["johnson & johnson", "johnson and johnson", " jnj ", "jnj/", "强生", "j&j", "talc", "爽身粉", "pharmaceutical", "医药", "医疗器械", "medical device", "vaccine", "疫苗"]),
+    ("PEP", ["pepsico", " pep ", "pep/", "百事", "pepsi", "百事可乐", "frito-lay", "菲多利", "lay's", "乐事", "doritos", "多力多滋", "quaker", "桂格", "snack", "零食"]),
+    ("MCD", ["mcdonald", " mcd ", "mcd/", "麦当劳", "mcdonald's", "big mac", "巨无霸", "happy meal", "开心乐园餐", "mccafe", "麦咖啡", "fast food", "快餐", "franchise", "特许经营"]),
+    ("JPM", ["jpmorgan", "jpmorgan chase", " jpm ", "jpm/", "摩根大通", "jamie dimon", "戴蒙", "investment bank", "投资银行", "wall street bank", "商业银行", "commercial bank", "wealth management", "财富管理"]),
+    # US Stocks - Crypto concept
+    ("MSTR", ["microstrategy", " mstr ", "mstr/", "micro strategy", "michael saylor", "塞勒", "btc reserve", "比特币储备", "bitcoin treasury", "corporate bitcoin", "企业比特币"]),
+    ("COIN", ["coinbase", " coin ", "coin/", "coinbase global", "加密货币交易所", "crypto exchange", "数字资产交易所", "digital asset exchange", "coinbase pro", "coinbase prime"]),
 ]
 
 # 宏观类关键词：命中的会把品种扩散成全部（宏观对所有品种都可能有影响）
@@ -78,6 +97,18 @@ MACRO_KEYWORDS = [
     "pmi", "manufacturing", "industrial production", "retail sales", "consumer confidence",
     "housing market", "mortgage", "real estate",
     "ai bubble", "tech sell-off", "tech rally", "magnificent seven", "mag 7",
+    # 中文宏观关键词
+    "美联储", "加息", "降息", "利率决议", "鲍威尔", "鹰派", "鸽派", "缩表", "qe", "量化宽松",
+    "非农", "非农数据", "非农就业", "失业率", "就业数据", "初请失业金", "cpi", "通胀", "pce",
+    "gdp", "衰退", "经济衰退", "经济危机", "软着陆", "债务上限", "美债", "国债收益率", "10年期国债",
+    "财报季", "财报", "业绩", "指引", "营收", "利润", "每股收益",
+    "股市", "美股", "标普", "标普500", "纳斯达克", "道琼斯", "牛市", "熊市", "暴跌", "回调",
+    "波动率", "vix", "恐慌指数", "恐惧贪婪", "风险偏好", "避险", "地缘政治", "贸易战", "关税",
+    "制裁", "禁运", "裁员", "招聘冻结", "pmi", "制造业", "工业产出", "零售销售", "消费者信心",
+    "房地产", "抵押贷款", "科技股", "七巨头", "magnificent seven",
+    "金十数据", "财联社", "华尔街见闻", "第一财经", "21财经", "东方财富",
+    "eia", "原油库存", "石油价格", "opec", "欧佩克",
+    "黄金价格", "金价", "白银", "贵金属",
 ]
 
 # 加密宏观：比特币 ETF、监管类

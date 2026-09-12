@@ -1329,7 +1329,22 @@ def dashboard_report(
 
 # ======================== AI 综合预测 ========================
 
-PREDICTION_SYMBOLS = ["BTC", "ETH", "SOL", "XAU", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "TCEHY", "SKHYNIX", "SNDK"]
+PREDICTION_SYMBOLS = [
+    # 加密货币
+    "BTC", "ETH", "SOL",
+    # 贵金属/能源
+    "XAU", "WTI",
+    # 美股-科技
+    "TSLA", "NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NFLX",
+    # 美股-中概
+    "TCEHY",
+    # 美股-半导体
+    "INTC", "AMD", "SMCI", "PLTR", "SKHYNIX", "SNDK",
+    # 美股-消费/金融
+    "KO", "PG", "WMT", "JNJ", "PEP", "MCD", "JPM",
+    # 美股-加密概念
+    "MSTR", "COIN",
+]
 
 _OKX_INST_MAP = {
     "WTI": ["CL-USDT-SWAP", "CLUSDT", "WTI-USDT-SWAP"],

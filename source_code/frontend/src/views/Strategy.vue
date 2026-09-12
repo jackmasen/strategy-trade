@@ -150,10 +150,20 @@
         <el-row :gutter="16">
           <el-col :span="12">
             <el-form-item label="K线周期" prop="timeframe">
-              <el-select v-model="form.timeframe" style="width:100%;">
+              <el-select v-model="form.timeframe" style="width:100%;" filterable>
+                <el-option value="15m" label="仅 15 分钟" />
+                <el-option value="30m" label="仅 30 分钟" />
                 <el-option value="1h" label="仅 1 小时" />
+                <el-option value="2h" label="仅 2 小时" />
+                <el-option value="3h" label="仅 3 小时" />
                 <el-option value="4h" label="仅 4 小时" />
+                <el-option value="6h" label="仅 6 小时" />
+                <el-option value="12h" label="仅 12 小时" />
+                <el-option value="1d" label="仅 1 天" />
                 <el-option value="1h,4h" label="1H + 4H（推荐）" />
+                <el-option value="15m,1h,4h" label="15M + 1H + 4H" />
+                <el-option value="1h,4h,1d" label="1H + 4H + 1D" />
+                <el-option value="4h,1d" label="4H + 1D" />
               </el-select>
             </el-form-item>
           </el-col>

@@ -37,8 +37,13 @@ _BYBIT_SYMBOL_MAP = {
     "TSLA": "TSLAUSDT", "NVDA": "NVDAUSDT", "AAPL": "AAPLUSDT",
     "MSFT": "MSFTUSDT", "TCEHY": "TENCENTUSDT",
     "SKHYNIX": "SKHYNIXUSDT", "SNDK": "SNDKUSDT",
+    "GOOGL": "GOOGLUSDT", "AMZN": "AMZNUSDT", "META": "METAUSDT", "NFLX": "NFLXUSDT",
+    "INTC": "INTCUSDT", "AMD": "AMDUSDT", "SMCI": "SMCIUSDT", "PLTR": "PLTRUSDT",
+    "KO": "KOUSDT", "PG": "PGUSDT", "WMT": "WMTUSDT", "JNJ": "JNJUSDT",
+    "PEP": "PEPUSDT", "MCD": "MCDUSDT", "JPM": "JPMUSDT",
+    "MSTR": "MSTRUSDT", "COIN": "COINUSDT",
 }
-_NON_CRYPTO_SYMBOLS = {"XAU", "XAG", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "TCEHY", "SKHYNIX", "SNDK"}
+_NON_CRYPTO_SYMBOLS = {"XAU", "XAG", "WTI", "TSLA", "NVDA", "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NFLX", "TCEHY", "SKHYNIX", "SNDK", "INTC", "AMD", "SMCI", "PLTR", "KO", "PG", "WMT", "JNJ", "PEP", "MCD", "JPM", "MSTR", "COIN"}
 _commodity_price_cache: Dict[str, dict] = {}
 
 
@@ -76,7 +81,7 @@ def _fetch_bybit_klines(symbol: str, timeframe: str, limit: int = 100) -> List:
     bybit_sym = _BYBIT_SYMBOL_MAP.get(symbol)
     if not bybit_sym:
         return []
-    tf_map = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "4h": "240", "1d": "D"}
+    tf_map = {"1m": "1", "5m": "5", "15m": "15", "30m": "30", "1h": "60", "2h": "120", "3h": "180", "4h": "240", "6h": "360", "12h": "720", "1d": "D"}
     interval = tf_map.get(timeframe, "240")
     try:
         r = _requests.get(
@@ -381,7 +386,7 @@ def _signal_to_dict(signal, include_factors=True):
 
 @router.get("/overview")
 def signal_overview(
-    symbols: str = Query(default="BTC,ETH,SOL,XAU,WTI,TSLA,NVDA,AAPL,MSFT,TCEHY,SKHYNIX,SNDK", description="币种列表，逗号分隔"),
+    symbols: str = Query(default="BTC,ETH,SOL,XAU,WTI,TSLA,NVDA,AAPL,MSFT,GOOGL,AMZN,META,NFLX,TCEHY,SKHYNIX,SNDK,INTC,AMD,SMCI,PLTR,KO,PG,WMT,JNJ,PEP,MCD,JPM,MSTR,COIN", description="币种列表，逗号分隔"),
     timeframe: str = Query(default="4h", description="时间周期"),
     save: bool = Query(default=False, description="是否保存信号到历史"),
     user: User = Depends(get_current_user),

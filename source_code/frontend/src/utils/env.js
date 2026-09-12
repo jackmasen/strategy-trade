@@ -74,6 +74,7 @@ export const EXCHANGE_META = {
   1: { name: '币安 Binance', color: '#F3BA2F' },
   2: { name: '欧易 OKX',     color: '#FFFFFF' },
   3: { name: 'Bybit',        color: '#F7A600' },
+  4: { name: 'Gate',         color: '#2354E6' },
 }
 
 // 订单方向

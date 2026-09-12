@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2 class="page-title"><el-icon><Wallet /></el-icon>交易所子账号管理</h2>
-        <div class="page-subtitle">绑定币安 / OKX / Bybit 交易所子账号API，支持多账号隔离与余额同步</div>
+        <div class="page-subtitle">绑定币安 / OKX / Bybit / Gate 交易所子账号API，支持多账号隔离与余额同步</div>
       </div>
       <el-button type="primary" :icon="Plus" size="large" @click="openCreate">
         绑定新子账号
@@ -16,6 +16,7 @@
         <el-option :value="1" label="币安 Binance" />
         <el-option :value="2" label="欧易 OKX" />
         <el-option :value="3" label="Bybit" />
+        <el-option :value="4" label="Gate" />
       </el-select>
       <el-select v-model="filters.status" placeholder="状态" clearable style="width: 140px;">
         <el-option :value="1" label="启用" />
@@ -33,7 +34,7 @@
           <div class="flex-between mb-12">
             <div class="flex gap-12">
               <div class="ex-logo" :style="{ background: EXCHANGE_META[a.exchange]?.color }">
-                {{ a.exchange === 1 ? 'BN' : 'OK' }}
+                {{ {1:'BN',2:'OK',3:'BB',4:'GT'}[a.exchange] || 'EX' }}
               </div>
               <div>
                 <div class="text-strong" style="font-size:16px;">{{ a.sub_account_name }}</div>
@@ -118,6 +119,7 @@
                 <el-option label="币安 Binance" :value="1" />
                 <el-option label="欧易 OKX" :value="2" />
                 <el-option label="Bybit" :value="3" />
+                <el-option label="Gate" :value="4" />
               </el-select>
             </el-form-item>
           </el-col>

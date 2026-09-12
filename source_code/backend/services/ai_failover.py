@@ -27,6 +27,17 @@ from sqlalchemy import inspect as sa_inspect
 COOLDOWN_429_SECONDS = 120  # 触发 429 后冷却 2 分钟
 COOLDOWN_RECOVER_KEY_MINUTES = 5  # 冷却状态 Key 5 分钟后自动恢复可尝试
 
+# 告警限流：相同消息60秒内只打一次 warning
+_warn_last_time: dict = {}
+WARN_THROTTLE_SEC = 60
+
+def _throttled_warn(key: str, msg: str) -> None:
+    now = datetime.now()
+    last = _warn_last_time.get(key)
+    if last is None or (now - last).total_seconds() > WARN_THROTTLE_SEC:
+        logger.warning(msg)
+        _warn_last_time[key] = now
+
 
 def _get_coordinator() -> AIRequestCoordinator:
     return AIRequestCoordinator.get_instance()
@@ -140,7 +151,7 @@ def _try_primary_config(db: Session, analysis_type: str, symbol: str,
         )
 
         if source == "rate_limited" or result is None:
-            logger.warning(f"[AI-Failover] 主配置被限流或无结果，跳过 (source={source})")
+            _throttled_warn("primary_rate_limited", f"[AI-Failover] 主配置被限流或无结果，跳过 (source={source})")
             return None
 
         if result.success:
@@ -154,12 +165,12 @@ def _try_primary_config(db: Session, analysis_type: str, symbol: str,
             # 如果是 429，触发冷却
             if result.error_code == ERR_PROVIDER_429:
                 coordinator.notify_429(provider_name, endpoint, retry_after=COOLDOWN_429_SECONDS)
-                logger.warning(f"[AI-Failover] 主配置触发 429，已冷却 {COOLDOWN_429_SECONDS}s")
-            logger.warning(f"[AI-Failover] 主配置调用失败: {result.error_msg}")
+                _throttled_warn("primary_429", f"[AI-Failover] 主配置触发 429，已冷却 {COOLDOWN_429_SECONDS}s")
+            _throttled_warn("primary_fail", f"[AI-Failover] 主配置调用失败: {result.error_msg}")
             return None
     except Exception as e:
         db.rollback()
-        logger.warning(f"[AI-Failover] 主配置异常: {e}")
+        _throttled_warn("primary_exception", f"[AI-Failover] 主配置异常: {e}")
         return None
 
 
@@ -229,7 +240,7 @@ def _try_key_pool(db: Session, analysis_type: str, symbol: str,
                 if k.fail_count >= 2:
                     k.status = "cooling"
                 db.commit()
-                logger.warning(f"[AI-Failover] Key '{k.name}' 被限流 (source={source})，跳过")
+                _throttled_warn(f"key_limited_{k.id}", f"[AI-Failover] Key '{k.name}' 被限流 (source={source})，跳过")
                 continue
 
             if result.success:
@@ -258,7 +269,7 @@ def _try_key_pool(db: Session, analysis_type: str, symbol: str,
                 k.last_error = f"429限流，冷却 {COOLDOWN_429_SECONDS}s: {last_error[:100]}"
                 k.last_checked = datetime.now()
                 db.commit()
-                logger.warning(f"[AI-Failover] Key '{k.name}' 触发429，标记为 cooling 状态")
+                _throttled_warn(f"key_429_{k.id}", f"[AI-Failover] Key '{k.name}' 触发429，标记为 cooling 状态")
                 continue
         except Exception as e:
             last_error = str(e)[:200]
@@ -270,7 +281,7 @@ def _try_key_pool(db: Session, analysis_type: str, symbol: str,
         if k.fail_count >= 3:
             k.status = "failed"
         db.commit()
-        logger.warning(f"[AI-Failover] 接口池 Key '{k.name}' (id={k.id}) 失败({k.fail_count}次): {last_error}")
+        _throttled_warn(f"key_fail_{k.id}", f"[AI-Failover] 接口池 Key '{k.name}' (id={k.id}) 失败({k.fail_count}次): {last_error}")
 
     return {"success": False, "error": f"所有接口池Key均失败，最后错误: {last_error}",
             "used_key_id": None, "used_key_name": "", "result": None}

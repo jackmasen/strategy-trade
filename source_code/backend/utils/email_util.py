@@ -18,6 +18,9 @@ import time as _time
 _last_email_error_time: float = 0.0
 _last_email_error_msg: str = ""
 EMAIL_ERROR_THROTTLE_SEC = 300
+# 认证失败后10分钟内不再尝试发送，避免持续报错
+_auth_fail_cooldown_until: float = 0.0
+AUTH_FAIL_COOLDOWN_SEC = 600
 
 
 def _get_smtp_config() -> dict:
@@ -98,10 +101,17 @@ def send_email(
     Returns:
         bool: 是否发送成功
     """
+    global _auth_fail_cooldown_until, _last_email_error_time, _last_email_error_msg
+
     smtp = _get_smtp_config()
     if not smtp.get("enabled", True):
         logger.debug("[Email] 邮件推送已关闭，跳过")
         return False
+
+    now_ts = _time.time()
+    if _auth_fail_cooldown_until > now_ts:
+        return False
+
     smtp_host = smtp["host"]
     smtp_port = smtp["port"]
     smtp_pwd = smtp["password"]
@@ -142,10 +152,15 @@ def send_email(
         return True
 
     except Exception as e:
-        global _last_email_error_time, _last_email_error_msg
         now = _time.time()
         err_msg = str(e)
-        if (now - _last_email_error_time > EMAIL_ERROR_THROTTLE_SEC
+        is_auth_error = "535" in err_msg or "Authentication" in err_msg or "not accepted" in err_msg
+        if is_auth_error:
+            _auth_fail_cooldown_until = now + AUTH_FAIL_COOLDOWN_SEC
+            logger.warning(
+                f"[Email] SMTP认证失败，{AUTH_FAIL_COOLDOWN_SEC}s内不再尝试: {e}"
+            )
+        elif (now - _last_email_error_time > EMAIL_ERROR_THROTTLE_SEC
                 or err_msg != _last_email_error_msg):
             logger.error(f"[Email] 邮件发送失败: {e}")
             _last_email_error_time = now
