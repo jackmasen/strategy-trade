@@ -1,0 +1,789 @@
+{
+  "variant_A": {
+    "symbol": "XAU",
+    "variant": "A",
+    "emv_period": 14,
+    "signal_period": 9,
+    "start_cap": 10000.0,
+    "end_cap": 5821.6,
+    "total_return_pct": -41.78,
+    "trade_count": 350,
+    "win_rate_pct": 25.14,
+    "profit_factor": 2.0,
+    "avg_win_pct": 1.25,
+    "avg_loss_pct": -0.62,
+    "sharpe": -1.39,
+    "max_drawdown_pct": 43.05,
+    "win_streak": 4,
+    "lose_streak": 15,
+    "tp_count": 88,
+    "sl_count": 262,
+    "signal_count": 0,
+    "timeout_count": 0,
+    "end_count": 0,
+    "last5": [
+      {
+        "entry": "2026-06-20 12:00",
+        "exit": "2026-06-20 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -4.15,
+        "reason": "sl",
+        "bars": 1
+      },
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -36.61,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 12:00",
+        "exit": "2026-07-15 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.29,
+        "pnl_usdt": 57.45,
+        "reason": "tp",
+        "bars": 10
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -38.9,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2026-07-29 20:00",
+        "exit": "2026-07-31 16:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.35,
+        "pnl_usdt": 58.29,
+        "reason": "tp",
+        "bars": 11
+      }
+    ]
+  },
+  "variant_B": {
+    "symbol": "XAU",
+    "variant": "B",
+    "emv_period": 14,
+    "signal_period": 9,
+    "start_cap": 10000.0,
+    "end_cap": 6544.56,
+    "total_return_pct": -34.55,
+    "trade_count": 316,
+    "win_rate_pct": 25.63,
+    "profit_factor": 2.07,
+    "avg_win_pct": 1.24,
+    "avg_loss_pct": -0.6,
+    "sharpe": -1.13,
+    "max_drawdown_pct": 35.81,
+    "win_streak": 4,
+    "lose_streak": 15,
+    "tp_count": 81,
+    "sl_count": 235,
+    "signal_count": 0,
+    "timeout_count": 0,
+    "end_count": 0,
+    "last5": [
+      {
+        "entry": "2026-06-20 12:00",
+        "exit": "2026-06-20 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -4.66,
+        "reason": "sl",
+        "bars": 1
+      },
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -41.16,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 20:00",
+        "exit": "2026-07-16 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.26,
+        "pnl_usdt": 62.88,
+        "reason": "tp",
+        "bars": 14
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -43.73,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2026-07-29 20:00",
+        "exit": "2026-07-31 16:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.35,
+        "pnl_usdt": 65.53,
+        "reason": "tp",
+        "bars": 11
+      }
+    ]
+  },
+  "variant_C": {
+    "symbol": "XAU",
+    "variant": "C",
+    "emv_period": 14,
+    "signal_period": 9,
+    "start_cap": 10000.0,
+    "end_cap": 6324.53,
+    "total_return_pct": -36.75,
+    "trade_count": 300,
+    "win_rate_pct": 24.33,
+    "profit_factor": 2.09,
+    "avg_win_pct": 1.26,
+    "avg_loss_pct": -0.6,
+    "sharpe": -1.3,
+    "max_drawdown_pct": 38.93,
+    "win_streak": 2,
+    "lose_streak": 16,
+    "tp_count": 73,
+    "sl_count": 227,
+    "signal_count": 0,
+    "timeout_count": 0,
+    "end_count": 0,
+    "last5": [
+      {
+        "entry": "2026-06-13 08:00",
+        "exit": "2026-06-16 20:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.76,
+        "pnl_usdt": -40.06,
+        "reason": "sl",
+        "bars": 21
+      },
+      {
+        "entry": "2026-06-20 12:00",
+        "exit": "2026-06-20 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -4.47,
+        "reason": "sl",
+        "bars": 1
+      },
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -39.5,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 12:00",
+        "exit": "2026-07-15 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.29,
+        "pnl_usdt": 61.99,
+        "reason": "tp",
+        "bars": 10
+      },
+      {
+        "entry": "2026-07-29 20:00",
+        "exit": "2026-07-31 16:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.35,
+        "pnl_usdt": 63.32,
+        "reason": "tp",
+        "bars": 11
+      }
+    ]
+  },
+  "param_sweep_best_sharpe": {
+    "emv_period": 14,
+    "signal_period": 9,
+    "symbol": "XAU",
+    "variant": "B",
+    "start_cap": 10000.0,
+    "end_cap": 6544.56,
+    "total_return_pct": -34.55,
+    "trade_count": 316,
+    "win_rate_pct": 25.63,
+    "profit_factor": 2.07,
+    "avg_win_pct": 1.24,
+    "avg_loss_pct": -0.6,
+    "sharpe": -1.13,
+    "max_drawdown_pct": 35.81,
+    "win_streak": 4,
+    "lose_streak": 15,
+    "tp_count": 81,
+    "sl_count": 235,
+    "signal_count": 0,
+    "timeout_count": 0,
+    "end_count": 0,
+    "last5": [
+      {
+        "entry": "2026-06-20 12:00",
+        "exit": "2026-06-20 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -4.66,
+        "reason": "sl",
+        "bars": 1
+      },
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -41.16,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 20:00",
+        "exit": "2026-07-16 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.26,
+        "pnl_usdt": 62.88,
+        "reason": "tp",
+        "bars": 14
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -43.73,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2026-07-29 20:00",
+        "exit": "2026-07-31 16:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.35,
+        "pnl_usdt": 65.53,
+        "reason": "tp",
+        "bars": 11
+      }
+    ]
+  },
+  "param_sweep_best_return": {
+    "emv_period": 14,
+    "signal_period": 9,
+    "symbol": "XAU",
+    "variant": "B",
+    "start_cap": 10000.0,
+    "end_cap": 6544.56,
+    "total_return_pct": -34.55,
+    "trade_count": 316,
+    "win_rate_pct": 25.63,
+    "profit_factor": 2.07,
+    "avg_win_pct": 1.24,
+    "avg_loss_pct": -0.6,
+    "sharpe": -1.13,
+    "max_drawdown_pct": 35.81,
+    "win_streak": 4,
+    "lose_streak": 15,
+    "tp_count": 81,
+    "sl_count": 235,
+    "signal_count": 0,
+    "timeout_count": 0,
+    "end_count": 0,
+    "last5": [
+      {
+        "entry": "2026-06-20 12:00",
+        "exit": "2026-06-20 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -4.66,
+        "reason": "sl",
+        "bars": 1
+      },
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -41.16,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 20:00",
+        "exit": "2026-07-16 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.26,
+        "pnl_usdt": 62.88,
+        "reason": "tp",
+        "bars": 14
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -43.73,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2026-07-29 20:00",
+        "exit": "2026-07-31 16:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.35,
+        "pnl_usdt": 65.53,
+        "reason": "tp",
+        "bars": 11
+      }
+    ]
+  },
+  "combo_基础 · 纯交叉": {
+    "symbol": "XAU",
+    "variant": "A",
+    "emv_period": 14,
+    "signal_period": 9,
+    "start_cap": 10000.0,
+    "end_cap": 6860.39,
+    "total_return_pct": -31.4,
+    "trade_count": 425,
+    "win_rate_pct": 34.82,
+    "profit_factor": 1.62,
+    "avg_win_pct": 1.24,
+    "avg_loss_pct": -0.77,
+    "sharpe": -0.77,
+    "max_drawdown_pct": 33.98,
+    "win_streak": 5,
+    "lose_streak": 11,
+    "tp_count": 145,
+    "sl_count": 276,
+    "signal_count": 0,
+    "timeout_count": 3,
+    "end_count": 1,
+    "last5": [
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -43.17,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 12:00",
+        "exit": "2026-07-15 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.29,
+        "pnl_usdt": 67.74,
+        "reason": "tp",
+        "bars": 10
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -45.88,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2026-07-28 08:00",
+        "exit": "2026-07-31 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.25,
+        "pnl_usdt": 66.03,
+        "reason": "tp",
+        "bars": 16
+      },
+      {
+        "entry": "2026-07-31 16:00",
+        "exit": "2026-07-31 20:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 0.0,
+        "pnl_usdt": -2.14,
+        "reason": "end",
+        "bars": 2
+      }
+    ]
+  },
+  "combo_基础 · MA 过滤": {
+    "symbol": "XAU",
+    "variant": "B",
+    "emv_period": 14,
+    "signal_period": 9,
+    "start_cap": 10000.0,
+    "end_cap": 6727.28,
+    "total_return_pct": -32.73,
+    "trade_count": 385,
+    "win_rate_pct": 33.77,
+    "profit_factor": 1.63,
+    "avg_win_pct": 1.25,
+    "avg_loss_pct": -0.77,
+    "sharpe": -0.85,
+    "max_drawdown_pct": 34.82,
+    "win_streak": 4,
+    "lose_streak": 12,
+    "tp_count": 128,
+    "sl_count": 254,
+    "signal_count": 0,
+    "timeout_count": 2,
+    "end_count": 1,
+    "last5": [
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -42.34,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 20:00",
+        "exit": "2026-07-16 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.26,
+        "pnl_usdt": 64.68,
+        "reason": "tp",
+        "bars": 14
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -44.99,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2026-07-28 08:00",
+        "exit": "2026-07-31 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.25,
+        "pnl_usdt": 64.75,
+        "reason": "tp",
+        "bars": 16
+      },
+      {
+        "entry": "2026-07-31 16:00",
+        "exit": "2026-07-31 20:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 0.0,
+        "pnl_usdt": -2.09,
+        "reason": "end",
+        "bars": 2
+      }
+    ]
+  },
+  "combo_+ EMV强度过滤": {
+    "symbol": "XAU",
+    "variant": "B",
+    "emv_period": 14,
+    "signal_period": 9,
+    "start_cap": 10000.0,
+    "end_cap": 6903.42,
+    "total_return_pct": -30.97,
+    "trade_count": 324,
+    "win_rate_pct": 33.02,
+    "profit_factor": 1.62,
+    "avg_win_pct": 1.25,
+    "avg_loss_pct": -0.77,
+    "sharpe": -0.88,
+    "max_drawdown_pct": 32.29,
+    "win_streak": 4,
+    "lose_streak": 10,
+    "tp_count": 107,
+    "sl_count": 217,
+    "signal_count": 0,
+    "timeout_count": 0,
+    "end_count": 0,
+    "last5": [
+      {
+        "entry": "2026-06-25 12:00",
+        "exit": "2026-06-26 08:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.83,
+        "pnl_usdt": -46.22,
+        "reason": "sl",
+        "bars": 5
+      },
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -43.42,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 20:00",
+        "exit": "2026-07-16 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.26,
+        "pnl_usdt": 66.33,
+        "reason": "tp",
+        "bars": 14
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -46.13,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2026-07-29 20:00",
+        "exit": "2026-07-31 16:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.35,
+        "pnl_usdt": 69.12,
+        "reason": "tp",
+        "bars": 11
+      }
+    ]
+  },
+  "combo_+ Trailing Stop": {
+    "symbol": "XAU",
+    "variant": "B",
+    "emv_period": 14,
+    "signal_period": 9,
+    "start_cap": 10000.0,
+    "end_cap": 6544.56,
+    "total_return_pct": -34.55,
+    "trade_count": 316,
+    "win_rate_pct": 25.63,
+    "profit_factor": 2.07,
+    "avg_win_pct": 1.24,
+    "avg_loss_pct": -0.6,
+    "sharpe": -1.13,
+    "max_drawdown_pct": 35.81,
+    "win_streak": 4,
+    "lose_streak": 15,
+    "tp_count": 81,
+    "sl_count": 235,
+    "signal_count": 0,
+    "timeout_count": 0,
+    "end_count": 0,
+    "last5": [
+      {
+        "entry": "2026-06-20 12:00",
+        "exit": "2026-06-20 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -4.66,
+        "reason": "sl",
+        "bars": 1
+      },
+      {
+        "entry": "2026-07-01 00:00",
+        "exit": "2026-07-03 00:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": -0.75,
+        "pnl_usdt": -41.16,
+        "reason": "sl",
+        "bars": 12
+      },
+      {
+        "entry": "2026-07-13 20:00",
+        "exit": "2026-07-16 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.26,
+        "pnl_usdt": 62.88,
+        "reason": "tp",
+        "bars": 14
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -43.73,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2026-07-29 20:00",
+        "exit": "2026-07-31 16:00",
+        "side": "SHORT",
+        "lev": 2,
+        "pnl_pct": 1.35,
+        "pnl_usdt": 65.53,
+        "reason": "tp",
+        "bars": 11
+      }
+    ]
+  },
+  "combo_★实战 · 只做多 + 全套": {
+    "symbol": "XAU",
+    "variant": "B",
+    "emv_period": 14,
+    "signal_period": 9,
+    "start_cap": 10000.0,
+    "end_cap": 8036.06,
+    "total_return_pct": -19.64,
+    "trade_count": 188,
+    "win_rate_pct": 26.6,
+    "profit_factor": 2.08,
+    "avg_win_pct": 1.23,
+    "avg_loss_pct": -0.59,
+    "sharpe": -0.75,
+    "max_drawdown_pct": 21.1,
+    "win_streak": 4,
+    "lose_streak": 15,
+    "tp_count": 50,
+    "sl_count": 138,
+    "signal_count": 0,
+    "timeout_count": 0,
+    "end_count": 0,
+    "last5": [
+      {
+        "entry": "2026-06-07 00:00",
+        "exit": "2026-06-08 20:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.77,
+        "pnl_usdt": -52.43,
+        "reason": "sl",
+        "bars": 11
+      },
+      {
+        "entry": "2026-06-13 08:00",
+        "exit": "2026-06-16 20:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.76,
+        "pnl_usdt": -51.44,
+        "reason": "sl",
+        "bars": 21
+      },
+      {
+        "entry": "2026-06-20 12:00",
+        "exit": "2026-06-20 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -5.75,
+        "reason": "sl",
+        "bars": 1
+      },
+      {
+        "entry": "2026-07-13 20:00",
+        "exit": "2026-07-16 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 1.26,
+        "pnl_usdt": 77.99,
+        "reason": "tp",
+        "bars": 14
+      },
+      {
+        "entry": "2026-07-16 16:00",
+        "exit": "2026-07-17 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.81,
+        "pnl_usdt": -54.24,
+        "reason": "sl",
+        "bars": 3
+      }
+    ]
+  },
+  "yearly_breakdown": {
+    "2020": {
+      "return_pct": -0.06,
+      "trades": 19,
+      "win_pct": 26.32
+    },
+    "2021": {
+      "return_pct": -6.62,
+      "trades": 27,
+      "win_pct": 14.81
+    },
+    "2022": {
+      "return_pct": -1.11,
+      "trades": 30,
+      "win_pct": 33.33
+    },
+    "2023": {
+      "return_pct": -5.89,
+      "trades": 32,
+      "win_pct": 25.0
+    },
+    "2024": {
+      "return_pct": 0.24,
+      "trades": 27,
+      "win_pct": 29.63
+    },
+    "2025": {
+      "return_pct": -3.88,
+      "trades": 38,
+      "win_pct": 28.95
+    },
+    "2026": {
+      "return_pct": -2.32,
+      "trades": 15,
+      "win_pct": 26.67
+    }
+  }
+}

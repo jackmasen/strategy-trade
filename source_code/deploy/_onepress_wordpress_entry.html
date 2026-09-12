@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>策略交易系统 · 一键安装向导（WordPress 式 Famous 5 分钟）</title>
+<style>
+  *{box-sizing:border-box}
+  body{margin:0;padding:30px 22px 80px;font-family:"Microsoft YaHei","PingFang SC",Segoe UI,Arial,sans-serif;background:linear-gradient(135deg,#0b1220,#132039 55%,#0b1220);color:#e2e8f0}
+  .wrap{max-width:1060px;margin:0 auto}
+  h1{margin:0 0 6px;font-size:32px;background:linear-gradient(90deg,#60a5fa,#a78bfa,#f472b6);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+  .sub{color:#94a3b8;margin-bottom:26px;font-size:15px}
+  .card{background:rgba(15,23,42,.7);border:1px solid rgba(148,163,184,.18);border-radius:18px;padding:22px 26px;margin-bottom:22px;backdrop-filter:blur(6px);box-shadow:0 18px 48px rgba(0,0,0,.32)}
+  h2{margin:0 0 14px;font-size:22px;letter-spacing:.5px;color:#e0f2fe}
+  h3{font-size:17px;color:#93c5fd;margin:14px 0 8px}
+  .chip{display:inline-block;padding:2px 10px;border-radius:999px;font-size:12.5px;font-weight:700;margin-right:6px}
+  .chip.ok{background:rgba(16,185,129,.18);color:#34d399;border:1px solid rgba(52,211,153,.5)}
+  .chip.err{background:rgba(239,68,68,.22);color:#fca5a5;border:1px solid rgba(252,165,165,.55)}
+  .chip.warn{background:rgba(245,158,11,.18);color:#fbbf24;border:1px solid rgba(251,191,36,.5)}
+  .chip.info{background:rgba(59,130,246,.18);color:#93c5fd;border:1px solid rgba(147,197,253,.5)}
+  code,.mono{font-family:Consolas,"Courier New",monospace;background:#0b1120;border:1px solid rgba(148,163,184,.25);padding:2px 9px;border-radius:8px;color:#fde68a;word-break:break-all}
+  pre,.pre{font-family:Consolas,"Courier New",monospace;background:#050816;border:1px solid rgba(59,130,246,.35);border-radius:14px;padding:16px 18px;line-height:1.75;color:#cbd5e1;overflow-x:auto;white-space:pre-wrap;word-break:break-word;margin:10px 0}
+  .ok{background:rgba(16,185,129,.08);border:1px solid rgba(16,185,129,.35);border-left:5px solid #10b981;border-radius:12px;padding:14px 18px;margin:12px 0;color:#a7f3d0}
+  .warn{background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.35);border-left:5px solid #fbbf24;border-radius:12px;padding:14px 18px;margin:12px 0;color:#fde68a}
+  .danger{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.35);border-left:5px solid #ef4444;border-radius:12px;padding:14px 18px;margin:12px 0;color:#fecaca}
+  .btn{display:inline-block;padding:12px 20px;border-radius:14px;border:none;cursor:pointer;text-decoration:none;font-weight:700;letter-spacing:.4px}
+  .btn.primary{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 10px 28px rgba(16,185,129,.4)}
+  .btn.secondary{background:rgba(255,255,255,.12);color:#fff;border:1px solid rgba(255,255,255,.28);font-weight:600}
+  .btn[disabled]{opacity:.45;cursor:not-allowed}
+  .actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:12px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:860px){.grid2{grid-template-columns:1fr}}
+  .kbd{background:#0b1120;border:1px solid #334155;border-bottom-width:3px;border-radius:8px;padding:2px 8px;font-family:Consolas,monospace;color:#fde68a;font-size:12.5px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:6px}
+  th,td{padding:9px 12px;border-bottom:1px solid rgba(148,163,184,.18);text-align:left;vertical-align:top}
+  th{background:rgba(30,41,59,.7);color:#cbd5e1}
+  footer{margin-top:26px;text-align:center;font-size:12px;color:#64748b;line-height:1.8}
+  details summary{cursor:pointer;padding:6px 2px;color:#93c5fd}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>🏁 策略交易系统 · WordPress 式一键安装向导（Famous 5 分钟）</h1>
+<div class="sub">你已经点击域名了 → 现在就在安装向导里。下方会自动检测后端是否已启动，失败就给你 <b>1 行命令</b> 复制粘贴。<span class="chip info">和装 WordPress 一模一样</span></div>
+
+<!-- ================= 第一步：后端启动自检 ================= -->
+<div class="card">
+  <h2>① 后端启动自检 <span id="stateChip" class="chip info">检测中...</span></h2>
+
+  <div id="boxBackendOk" style="display:none" class="ok">
+    <h3 style="margin-top:0;color:#10b981">✅ 后端 uvicorn 已经在 8000 端口跑起来了！</h3>
+    <p>直接点下方按钮进入 <b>完整 Web 安装向导（环境预检 → 填配置 → 一键安装）</b>，向导里会自动：写 .env → 建表 → 创建你自定义的管理员账号密码。</p>
+    <div class="actions">
+      <a class="btn primary" id="btnGoInstall" href="/install">▶️ 进入完整安装向导 /install（3 步完成）</a>
+      <a class="btn secondary" href="/health" target="_blank">❤️ 测 /health 存活</a>
+      <a class="btn secondary" href="/docs" target="_blank">📘 去 Swagger /docs</a>
+    </div>
+  </div>
+
+  <div id="boxBackendNotYet" style="display:none">
+    <h3 style="margin-top:0">⚠️  后端还没启动（WordPress 式体验差最后 1 步）</h3>
+    <p>你已经完成了宝塔建站 + 上传源码 + 点击域名。现在就差<b>启动一下 Python 后端</b>（和 WordPress 区别：WordPress 是 PHP 默认 Nginx 就带了；Python 需要自己起一个 uvicorn 进程）。</p>
+    <div class="warn">
+      <b>最简单：1 条命令（强烈推荐 ⭐）</b>
+      <p>宝塔左侧菜单 → <b>终端</b>（或点击站点 → <b>终端</b>按钮），粘贴下面这一行回车即可：</p>
+<pre id="oneLineCmd">cd /www/wwwroot/$(ls -t /www/wwwroot | head -1) 2>/dev/null || cd /www/wwwroot/*/ ; test -f deploy/onepress-install.sh &amp;&amp; bash deploy/onepress-install.sh</pre>
+      <div class="actions">
+        <button class="btn primary" onclick="copyText(document.getElementById('oneLineCmd').innerText,this)">📋 复制 1 行启动命令</button>
+        <button class="btn secondary" onclick="recheck()">🔄 我已经粘贴回车了 → 再检测一次</button>
+      </div>
+    </div>
+
+    <details>
+      <summary>📌 不想打字？用宝塔「Python 项目管理器」GUI 填值（点我展开）</summary>
+      <p>宝塔软件商店安装「Python 项目管理器」，然后添加项目，按下面填：</p>
+      <table>
+        <thead><tr><th>字段</th><th>填什么</th></tr></thead>
+        <tbody>
+          <tr><td>项目名称</td><td><code>strategy-trade</code></td></tr>
+          <tr><td>项目路径</td><td><code id="btPath">/www/wwwroot/你的站点目录</code></td></tr>
+          <tr><td>Python 版本</td><td>3.10 / 3.11 / 3.12 任意（没有就先装）</td></tr>
+          <tr><td>框架</td><td>FastAPI / uvicorn</td></tr>
+          <tr><td>启动方式</td><td>模块方式：<code>uvicorn main:app --host 127.0.0.1 --port 8000 --log-file logs/uvicorn.log</code></td></tr>
+          <tr><td>安装依赖</td><td>✅ 勾选</td></tr>
+          <tr><td>启动用户</td><td><code>www</code></td></tr>
+        </tbody>
+      </table>
+    </details>
+
+    <details>
+      <summary>🧭 不知道站点根路径在哪里？（点我看 5 秒怎么找）</summary>
+      <ol style="line-height:2">
+        <li>宝塔左侧菜单 → <b>网站</b> → 找到你刚才加的站点一行</li>
+        <li>点击 <b>根目录</b> 四个字 → 弹出文件管理器，顶部路径栏就是站点根（例如 <code>/www/wwwroot/trade.xxx.com</code>）</li>
+        <li>把上面 <span class="kbd">1 行启动命令</span> 的 <code>/www/wwwroot/*/</code> 换成你的实际路径，更稳；但一般直接粘贴自动通配符也能定位到</li>
+      </ol>
+    </details>
+
+    <div class="warn" style="margin-top:18px">
+      <b>📝 你粘贴回车后，命令会自动做什么？</b>
+      <ol style="line-height:2">
+        <li>自动找 Python 3.10+（含宝塔 pyenv 的）</li>
+        <li>创建 <code>.venv</code> 虚拟环境</li>
+        <li>用清华镜像 <code>pip install -r requirements.txt</code>（失败自动退回官方源）</li>
+        <li>清理旧 uvicorn 进程（若存在）→ <code>nohup 后台启动 uvicorn 127.0.0.1:8000</code>，日志写到 <code>logs/uvicorn.log</code></li>
+        <li>等 4 秒后探测 <code>/health</code>，打印成功提示</li>
+      </ol>
+      <p>看到终端输出 <span class="chip ok">/health 探测返回 200</span> 就表示后端启动成功。</p>
+    </div>
+
+    <div class="actions" style="margin-top:10px">
+      <button class="btn primary" onclick="recheck()">🔄 回车完毕了？点这里再检测后端状态</button>
+      <span class="hint" style="color:#94a3b8;margin-top:12px">后端起来后，页面会自动变成绿色「✅ 后端已经跑起来了」的按钮，直接点进 /install 即可。</span>
+    </div>
+  </div>
+</div>
+
+<!-- ================= 第二步：解压验证 ================= -->
+<div class="card">
+  <h2>② 当前目录解压完整性自检 <span id="zipChip" class="chip info">自检中...</span></h2>
+  <p>下面这几个关键文件必须存在，不存在就说明 zip 解压错了（嵌在二级目录里了）：</p>
+  <ul id="fileCheckList" style="line-height:2"></ul>
+  <div id="zipHintOk" style="display:none" class="ok">✅ 解压正确，main.py 在站点根目录。</div>
+  <div id="zipHintBad" style="display:none" class="danger">
+    ❌ 解压错误：main.py / deploy / backend 不在站点根。<br>
+    解决：打开宝塔文件管理器，你会看到一个二级文件夹（比如 <code>strategy-trade-onepress-v1.0.0-xxx/</code>），<b>进入这个二级文件夹 → 全选所有文件/目录 → 剪切 → 回站点根 → 粘贴</b>，然后刷新本页。
+  </div>
+</div>
+
+<!-- ================= 第三步：安装向导速览 ================= -->
+<div class="card">
+  <h2>③ 后端起来后，/install 向导会做什么？</h2>
+  <div class="grid2">
+    <div class="ok">
+      <h3 style="margin-top:0;color:#10b981">3.1 环境预检</h3>
+      <ul style="line-height:1.9">
+        <li>Python 版本（≥ 3.10）</li>
+        <li>磁盘 ≥ 5 GB</li>
+        <li>内存</li>
+        <li>MySQL / SQLite 连接测试</li>
+        <li>Redis 连接（不通也能跑，只是不开 Celery）</li>
+        <li>缺失的 Py 包清单（会告诉你缺什么）</li>
+        <li>frontend/dist 是否已构建</li>
+      </ul>
+    </div>
+    <div class="ok">
+      <h3 style="margin-top:0;color:#10b981">3.2 安装配置（就像 WordPress wp-config.php）</h3>
+      <ul style="line-height:1.9">
+        <li>管理员账号密码（<b>自定义，不强制 admin/Admin@2024</b>，长度≥8 + 字母+数字）</li>
+        <li>APP_SECRET_KEY（留空自动生成 64 位）</li>
+        <li>✅ 勾选 SQLite（强烈推荐第一次用，不用建库！）</li>
+        <li>MySQL / Redis / 币安 / OKX / 代理 / AI 模型（都可留空，装好再改）</li>
+        <li>点击【▶️ 运行安装】2~5 秒即可</li>
+      </ul>
+    </div>
+  </div>
+  <div class="warn" style="margin-top:16px">
+    <b>3.3 一键输出部署配置</b><br>
+    安装完成后第 ③ 步会直接输出：
+    <ul style="line-height:2">
+      <li>📋 宝塔「Python 项目管理器」字段填充值表</li>
+      <li>📋 1 行后台启动命令（nohup uvicorn）</li>
+      <li>📋 Nginx 反代片段（站点设置 → 配置文件里直接粘贴）</li>
+    </ul>
+    <p>复制三份里任意一份 + 贴 Nginx 片段就全部完成。</p>
+  </div>
+</div>
+
+<!-- ================= 验收 3 信号 ================= -->
+<div class="card">
+  <h2>✅ 最后验收 3 个信号（Famous 5 秒结束）</h2>
+  <ol style="line-height:2.1">
+    <li>访问 <a class="mono" target="_blank" href="/health">/health</a> → 返回 <code>{"status":"ok","installed":true}</code></li>
+    <li>访问 <a class="mono" target="_blank" href="/docs">/docs</a> → Swagger UI，<code>POST /api/v1/auth/login</code> 用你刚才填的管理员账号密码，返回里有 <code>access_token</code></li>
+    <li>访问 <a class="mono" target="_blank" href="/">/</a> → 前端登录页正常（没构建 dist 时是引导页，也算 OK，/docs 能用就行）</li>
+  </ol>
+</div>
+
+<footer>
+  🟢 真·WordPress 式体验：宝塔创建网站 → 绑定域名 → 上传 onepress zip → 解压 → <b>点击域名立刻进入本向导</b> → 1 行命令启动后端 → 进入 /install 3 步走 → 完成。<br>
+  关键文件：<code>deploy/onepress-install.sh</code> · <code>deploy/onepress-nginx-snippet.conf</code> · <code>0_宝塔WordPress式一键搭建说明.htm</code>
+</footer>
+
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+// ---------- 复制工具 ----------
+async function copyText(t, btn){
+  try {
+    await navigator.clipboard.writeText(t);
+    if (btn){ const old = btn.innerText; btn.innerText = '✅ 已复制'; setTimeout(()=>btn.innerText = old, 1600); }
+    else alert('✅ 已复制到剪贴板。');
+  } catch (_){
+    const ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); if (btn){ const old = btn.innerText; btn.innerText = '✅ 已复制(旧API)'; setTimeout(()=>btn.innerText = old, 1600); } }
+    catch(e){ alert('复制失败，请手动选中复制。'); }
+    document.body.removeChild(ta);
+  }
+}
+// ---------- 探测后端 ----------
+async function recheck(){
+  const chip = $('stateChip');
+  chip.className = 'chip info'; chip.innerText = '检测中...';
+  let ok = false;
+  try {
+    const resp = await fetch('/health?_=' + Date.now(), {cache:'no-store'});
+    ok = resp.status === 200;
+  } catch(_) { ok = false; }
+  // Nginx 可能还没贴反代片段，用同源测 /health 不一定到 8000；再加一个对 8000 的探测（用户本地测试可能是 http 域同机）
+  if (!ok){
+    try {
+      const base = location.protocol + '//' + location.hostname + ':8000';
+      const r2 = await fetch(base + '/health?_=' + Date.now(), {cache:'no-store'});
+      ok = r2.status === 200;
+      if (ok){
+        // 8000 直连通，提示用户可以直接用 8000 走完整向导
+        $('btnGoInstall').href = base + '/install';
+      }
+    } catch(_){}
+  }
+  if (ok){
+    $('boxBackendOk').style.display = 'block';
+    $('boxBackendNotYet').style.display = 'none';
+    chip.className = 'chip ok'; chip.innerText = '后端已运行 ✅';
+  } else {
+    $('boxBackendOk').style.display = 'none';
+    $('boxBackendNotYet').style.display = 'block';
+    chip.className = 'chip warn'; chip.innerText = '后端未启动 ⚠️（复制下方 1 行命令粘贴到宝塔终端回车）';
+  }
+}
+// ---------- 解压完整性（前端侧只能尽力，看相对 URL 是否存在 HEAD 200/404/403）----------
+async function checkFiles(){
+  const list = [
+    ['main.py','main.py（后端入口）'],
+    ['requirements.txt','requirements.txt'],
+    ['deploy/onepress-install.sh','deploy/onepress-install.sh'],
+    ['deploy/onepress-nginx-snippet.conf','deploy/onepress-nginx-snippet.conf'],
+    ['0_宝塔WordPress式一键搭建说明.htm','0_宝塔WordPress式一键搭建说明.htm'],
+  ];
+  const ul = $('fileCheckList');
+  ul.innerHTML = '';
+  let all = true;
+  const results = await Promise.all(list.map(async p => {
+    try {
+      const r = await fetch(p[0] + '?_=' + Date.now(), {method:'HEAD', cache:'no-store'});
+      return [p[0], p[1], r.status < 500 && r.status !== 404];
+    } catch(_){ return [p[0], p[1], false]; }
+  }));
+  for (const [,label,ok] of results){
+    const li = document.createElement('li');
+    li.innerHTML = (ok ? '<span class="chip ok">✅</span> ' : '<span class="chip err">❌</span> ') + '<code class="mono">' + label + '</code>';
+    ul.appendChild(li);
+    if (!ok) all = false;
+  }
+  if (all){
+    $('zipHintOk').style.display = 'block'; $('zipHintBad').style.display = 'none';
+    $('zipChip').className = 'chip ok'; $('zipChip').innerText = '解压正确 ✅';
+  } else {
+    $('zipHintOk').style.display = 'none'; $('zipHintBad').style.display = 'block';
+    $('zipChip').className = 'chip err'; $('zipChip').innerText = '解压错误 ❌（main.py 不在根目录）';
+  }
+}
+// ---------- 猜宝塔站点路径 ----------
+(function(){
+  const p = location.pathname.substring(0, location.pathname.lastIndexOf('/')) || '';
+  if (p){ $('btPath').innerText = p; }
+})();
+// ---------- 启动 ----------
+window.addEventListener('DOMContentLoaded', () => { recheck(); checkFiles(); });
+</script>
+</body>
+</html>

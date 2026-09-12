@@ -1,0 +1,59 @@
+version: "3.8"
+
+services:
+  miniflux-db:
+    image: postgres:15
+    container_name: miniflux-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=miniflux
+      - POSTGRES_PASSWORD=miniflux123
+      - POSTGRES_DB=miniflux
+    volumes:
+      - miniflux_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "miniflux"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - news-net
+
+  miniflux:
+    image: miniflux/miniflux:latest
+    container_name: miniflux
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - DATABASE_URL=postgres://miniflux:miniflux123@miniflux-db/miniflux?sslmode=disable
+      - RUN_MIGRATIONS=1
+      - CREATE_ADMIN=1
+      - ADMIN_USERNAME=admin
+      - ADMIN_PASSWORD=miniflux123
+    depends_on:
+      miniflux-db:
+        condition: service_healthy
+    networks:
+      - news-net
+
+  rsshub:
+    image: diygod/rsshub:latest
+    container_name: rsshub
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1200:1200"
+    environment:
+      - NODE_ENV=production
+      - CACHE_TYPE=memory
+      - CACHE_EXPIRE=600
+    networks:
+      - news-net
+
+volumes:
+  miniflux_pgdata:
+    driver: local
+
+networks:
+  news-net:
+    driver: bridge

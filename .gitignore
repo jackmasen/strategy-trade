@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.env
+*.db
+*.sqlite
+*.sqlite3
+
+# Node / Frontend
+node_modules/
+dist/
+dist.bak*/
+.DS_Store
+*.log
+.vscode/
+.idea/
+
+# Backup files
+*.bak
+*.bak.*
+
+# Python build
+build/
+*.egg-info/
+
+# Trading system
+logs/
+data/
+cache/
+backups/
+
+# Test files
+test_*.py
+simulate_*.json
+test_*.sh
+
+# Local analysis
+ai-trading-analysis/
+.trae-html-share-packages/

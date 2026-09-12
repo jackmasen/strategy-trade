@@ -1,0 +1,1094 @@
+"""
+Strategy Evolution Service - 策略自我进化服务
+====================================================
+核心能力：
+  1. 假信号自动识别   - 从历史验证信号中挖掘失效模式
+  2. 因子重要性分析   - 计算各因子对胜率的贡献度
+  3. 参数自适应优化   - 根据表现动态调整阈值和权重
+  4. 进化方案生成     - AI分析历史数据，给出策略优化建议
+
+设计原则：
+  - 数据驱动：所有优化建议都基于历史验证数据
+  - 保守进化：样本量不足时不调整，避免过拟合
+  - 可追溯：每次进化都有完整记录，可回滚
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import math
+import threading
+import time
+from datetime import datetime, timedelta
+from typing import Dict, List, Optional, Tuple
+
+from sqlalchemy.orm import Session
+
+from backend.core.logging_config import logger
+from backend.models.analytics import (
+    QuantSignalRecord,
+    FalseSignalPattern,
+    FactorPerformanceStat,
+    EvolutionProposal,
+    EvolutionRun,
+)
+from backend.models.strategy import StrategyConfig
+
+
+class StrategyEvolutionService:
+    """策略自我进化服务"""
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._running = False
+        self._stop_event = threading.Event()
+
+    # ============================================================
+    # 1. 假信号模式挖掘
+    # ============================================================
+    def analyze_false_signal_patterns(self, db: Session, symbol: str = "ALL",
+                                       min_samples: int = 10) -> List[FalseSignalPattern]:
+        """
+        从已验证的历史信号中挖掘假信号模式
+
+        分析维度：
+        - 单因子极值：某因子极端看多但结果是假信号
+        - 因子矛盾：多个因子方向不一致时的胜率
+        - 市场状态：不同市场状态下的假信号率
+        - 波动率环境：高波动/低波动下的假信号模式
+        """
+        # 获取已验证的信号
+        query = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.direction.in_(["bullish", "bearish"]),
+        )
+        if symbol and symbol != "ALL":
+            query = query.filter(QuantSignalRecord.symbol == symbol)
+        records = query.order_by(QuantSignalRecord.timestamp.desc()).limit(500).all()
+
+        if not records:
+            return []
+
+        patterns = []
+
+        # ---- 模式1：单因子方向与结果的关系 ----
+        factor_names = ["market_regime", "capital_flow", "leverage", "liquidation",
+                       "volatility", "news_sentiment", "strategy_advantage"]
+
+        for factor in factor_names:
+            # 按因子方向分组统计
+            bullish_correct = 0  # 因子看涨 & 结果止盈
+            bullish_wrong = 0    # 因子看涨 & 结果止损/过期
+            bearish_correct = 0
+            bearish_wrong = 0
+            neutral_total = 0
+
+            for rec in records:
+                fs = rec.factor_scores or {}
+                score = fs.get(factor, 0)
+                if score is None:
+                    continue
+
+                # 因子方向
+                if score > 2:
+                    f_dir = "bullish"
+                elif score < -2:
+                    f_dir = "bearish"
+                else:
+                    f_dir = "neutral"
+                    neutral_total += 1
+                    continue
+
+                # 实际结果
+                is_win = rec.outcome == "hit_tp"
+                actual_dir = "bullish" if rec.direction == "bullish" else "bearish"
+
+                # 只统计因子方向与信号方向一致的情况（因子支持了这个决策）
+                if f_dir == rec.direction:
+                    if is_win:
+                        bullish_correct += 1 if f_dir == "bullish" else 0
+                        bearish_correct += 1 if f_dir == "bearish" else 0
+                    else:
+                        bullish_wrong += 1 if f_dir == "bullish" else 0
+                        bearish_wrong += 1 if f_dir == "bearish" else 0
+
+            total_bullish = bullish_correct + bullish_wrong
+            total_bearish = bearish_correct + bearish_wrong
+
+            # 看涨假信号模式
+            if total_bullish >= min_samples:
+                wr = bullish_correct / total_bullish
+                if wr < 0.4:  # 胜率低于40%，是危险模式
+                    key = f"factor_{factor}_bullish_weak"
+                    pat = self._get_or_create_pattern(db, key, "factor_combo")
+                    pat.total_signals = total_bullish
+                    pat.win_count = bullish_correct
+                    pat.false_count = bullish_wrong
+                    pat.win_rate = round(wr * 100, 1)
+                    pat.description = f"{self._factor_cn(factor)}因子看涨时胜率仅{wr*100:.1f}%"
+                    pat.factor_conditions = {factor: "bullish (>2分)"}
+                    pat.suggestion = f"降低{self._factor_cn(factor)}因子看涨时的权重，或增加额外过滤条件"
+                    pat.severity = self._calc_severity(wr, total_bullish)
+                    patterns.append(pat)
+
+            # 看跌假信号模式
+            if total_bearish >= min_samples:
+                wr = bearish_correct / total_bearish
+                if wr < 0.4:
+                    key = f"factor_{factor}_bearish_weak"
+                    pat = self._get_or_create_pattern(db, key, "factor_combo")
+                    pat.total_signals = total_bearish
+                    pat.win_count = bearish_correct
+                    pat.false_count = bearish_wrong
+                    pat.win_rate = round(wr * 100, 1)
+                    pat.description = f"{self._factor_cn(factor)}因子看跌时胜率仅{wr*100:.1f}%"
+                    pat.factor_conditions = {factor: "bearish (<-2分)"}
+                    pat.suggestion = f"降低{self._factor_cn(factor)}因子看跌时的权重"
+                    pat.severity = self._calc_severity(wr, total_bearish)
+                    patterns.append(pat)
+
+        # ---- 模式2：因子矛盾模式（方向不一致的因子数 > 3） ----
+        contradiction_wins = 0
+        contradiction_losses = 0
+        for rec in records:
+            fs = rec.factor_scores or {}
+            bullish_factors = sum(1 for v in fs.values() if v and v > 2)
+            bearish_factors = sum(1 for v in fs.values() if v and v < -2)
+            # 矛盾：看多和看空的因子都不少
+            if bullish_factors >= 2 and bearish_factors >= 2:
+                if rec.outcome == "hit_tp":
+                    contradiction_wins += 1
+                else:
+                    contradiction_losses += 1
+
+        contradiction_total = contradiction_wins + contradiction_losses
+        if contradiction_total >= min_samples:
+            wr = contradiction_wins / contradiction_total
+            key = "multi_factor_contradiction"
+            pat = self._get_or_create_pattern(db, key, "factor_combo")
+            pat.total_signals = contradiction_total
+            pat.win_count = contradiction_wins
+            pat.false_count = contradiction_losses
+            pat.win_rate = round(wr * 100, 1)
+            pat.description = f"多因子矛盾（≥2个看涨且≥2个看跌）时胜率{wr*100:.1f}%"
+            pat.factor_conditions = {"bullish_factors": "≥2", "bearish_factors": "≥2"}
+            pat.suggestion = "因子矛盾时提高开单阈值，或等待更多因子达成一致"
+            pat.severity = self._calc_severity(wr, contradiction_total)
+            patterns.append(pat)
+
+        # ---- 模式3：市场状态模式 ----
+        regime_stats = {}
+        for rec in records:
+            regime = rec.market_regime or "unknown"
+            if regime not in regime_stats:
+                regime_stats[regime] = {"win": 0, "lose": 0, "total": 0}
+            regime_stats[regime]["total"] += 1
+            if rec.outcome == "hit_tp":
+                regime_stats[regime]["win"] += 1
+            else:
+                regime_stats[regime]["lose"] += 1
+
+        for regime, stats in regime_stats.items():
+            if stats["total"] >= min_samples:
+                wr = stats["win"] / stats["total"]
+                if wr < 0.4:
+                    key = f"regime_{regime}_weak"
+                    pat = self._get_or_create_pattern(db, key, "regime")
+                    pat.total_signals = stats["total"]
+                    pat.win_count = stats["win"]
+                    pat.false_count = stats["lose"]
+                    pat.win_rate = round(wr * 100, 1)
+                    pat.market_regime = regime
+                    regime_cn = {"ranging": "震荡市", "strong_trend_up": "强势上涨",
+                                "strong_trend_down": "强势下跌", "weak_trend_up": "弱势上涨",
+                                "weak_trend_down": "弱势下跌"}
+                    regime_name = regime_cn.get(regime, regime)
+                    pat.description = f"{regime_name}下胜率仅{wr*100:.1f}%"
+                    pat.suggestion = f"在{regime_name}中降低仓位或暂停开单"
+                    pat.severity = self._calc_severity(wr, stats["total"])
+                    patterns.append(pat)
+
+        db.commit()
+        return patterns
+
+    def _get_or_create_pattern(self, db: Session, pattern_key: str,
+                                pattern_type: str) -> FalseSignalPattern:
+        pat = db.query(FalseSignalPattern).filter(
+            FalseSignalPattern.pattern_key == pattern_key
+        ).first()
+        if not pat:
+            pat = FalseSignalPattern(pattern_key=pattern_key, pattern_type=pattern_type)
+            db.add(pat)
+        pat.last_updated = datetime.utcnow()
+        return pat
+
+    def _calc_severity(self, win_rate: float, sample_size: int) -> str:
+        """根据胜率和样本量计算严重程度"""
+        if win_rate < 0.2 and sample_size >= 20:
+            return "critical"
+        elif win_rate < 0.3 and sample_size >= 15:
+            return "high"
+        elif win_rate < 0.4 and sample_size >= 10:
+            return "medium"
+        return "low"
+
+    def _factor_cn(self, factor: str) -> str:
+        """因子中文名"""
+        names = {
+            "market_regime": "市场状态",
+            "capital_flow": "资金流向",
+            "leverage": "杠杆集中度",
+            "liquidation": "清算压力",
+            "volatility": "波动率",
+            "news_sentiment": "新闻情绪",
+            "strategy_advantage": "策略优势",
+        }
+        return names.get(factor, factor)
+
+    # ============================================================
+    # 2. 因子重要性分析
+    # ============================================================
+    def analyze_factor_importance(self, db: Session, symbol: str = "ALL") -> List[FactorPerformanceStat]:
+        """
+        分析每个因子的重要性（对最终收益的贡献度）
+
+        方法：
+        - 方向准确率：因子方向与最终结果方向的一致率
+        - 强度相关性：因子得分大小与收益幅度的相关系数
+        - 综合重要性：准确率 * 相关性 * 样本量系数
+        """
+        query = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.direction.in_(["bullish", "bearish"]),
+        )
+        if symbol and symbol != "ALL":
+            query = query.filter(QuantSignalRecord.symbol == symbol)
+        records = query.order_by(QuantSignalRecord.timestamp.desc()).limit(500).all()
+
+        if not records:
+            return []
+
+        factor_names = ["market_regime", "capital_flow", "leverage", "liquidation",
+                       "volatility", "news_sentiment", "strategy_advantage"]
+
+        # 当前默认权重
+        current_weights = {
+            "market_regime": 0.18, "capital_flow": 0.15, "leverage": 0.12,
+            "liquidation": 0.10, "volatility": 0.15, "news_sentiment": 0.15,
+            "strategy_advantage": 0.15,
+        }
+
+        stats_list = []
+
+        for factor in factor_names:
+            correct = 0
+            wrong = 0
+            scores = []  # 因子得分
+            returns = []  # 对应收益率
+
+            for rec in records:
+                fs = rec.factor_scores or {}
+                score = fs.get(factor, 0) or 0
+                ret = rec.outcome_return_pct or 0
+
+                if abs(score) < 1:
+                    continue  # 中性信号不参与方向准确率统计
+
+                scores.append(score)
+                returns.append(ret)
+
+                # 因子方向是否正确
+                signal_dir = 1 if rec.direction == "bullish" else -1
+                factor_dir = 1 if score > 0 else -1
+                is_win = ret > 0
+
+                # 因子与信号方向一致时，是否正确
+                if factor_dir == signal_dir:
+                    if is_win:
+                        correct += 1
+                    else:
+                        wrong += 1
+
+            total = correct + wrong
+            accuracy = correct / total if total > 0 else 0.5
+
+            # 计算相关系数
+            correlation = 0
+            if len(scores) >= 5:
+                n = len(scores)
+                mean_s = sum(scores) / n
+                mean_r = sum(returns) / n
+                num = sum((s - mean_s) * (r - mean_r) for s, r in zip(scores, returns))
+                den_s = math.sqrt(sum((s - mean_s) ** 2 for s in scores))
+                den_r = math.sqrt(sum((r - mean_r) ** 2 for r in returns))
+                if den_s > 0 and den_r > 0:
+                    correlation = num / (den_s * den_r)
+
+            # 重要性评分：准确率(50%) + 相关系数绝对值(30%) + 样本量(20%)
+            sample_factor = min(1.0, total / 30.0)  # 30个样本以上给满分
+            importance = (
+                accuracy * 50
+                + abs(correlation) * 30
+                + sample_factor * 20
+            )
+
+            # 建议权重：基于重要性重新分配
+            suggested = current_weights[factor] * (0.5 + importance / 100)
+
+            # 写入DB
+            stat = db.query(FactorPerformanceStat).filter(
+                FactorPerformanceStat.factor_name == factor,
+                FactorPerformanceStat.market_regime == "all",
+                FactorPerformanceStat.symbol == symbol,
+            ).first()
+            if not stat:
+                stat = FactorPerformanceStat(factor_name=factor, symbol=symbol)
+                db.add(stat)
+
+            stat.accuracy = round(accuracy * 100, 1)
+            stat.correlation = round(correlation, 3)
+            stat.importance_score = round(importance, 1)
+            stat.current_weight = current_weights[factor]
+            stat.suggested_weight = round(suggested, 3)
+            stat.sample_size = total
+            stat.bullish_correct = correct  # 简化：合并存储
+            stat.bullish_wrong = wrong
+            stat.last_updated = datetime.utcnow()
+
+            stats_list.append(stat)
+
+        db.commit()
+        return stats_list
+
+    # ============================================================
+    # 2.5 因子间相关性分析
+    # ============================================================
+    def analyze_factor_correlations(self, db: Session, symbol: str = "ALL") -> dict:
+        """
+        分析7因子之间的两两相关性矩阵
+
+        高相关因子对意味着信息冗余，可考虑合并或降权；
+        低相关因子对意味着互补，应保持各自权重。
+
+        Returns:
+            {
+                "matrix": {f1: {f2: corr}},
+                "high_correlation_pairs": [(f1, f2, corr)],
+                "low_correlation_pairs": [(f1, f2, corr)],
+                "redundancy_suggestions": [{f1, f2, corr, suggestion}],
+            }
+        """
+        query = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.direction.in_(["bullish", "bearish"]),
+        )
+        if symbol and symbol != "ALL":
+            query = query.filter(QuantSignalRecord.symbol == symbol)
+        records = query.order_by(QuantSignalRecord.timestamp.desc()).limit(500).all()
+
+        if len(records) < 20:
+            return {"matrix": {}, "high_correlation_pairs": [], "low_correlation_pairs": [], "redundancy_suggestions": []}
+
+        factor_names = ["market_regime", "capital_flow", "leverage", "liquidation",
+                       "volatility", "news_sentiment", "strategy_advantage"]
+
+        factor_series = {f: [] for f in factor_names}
+        for rec in records:
+            fs = rec.factor_scores or {}
+            for f in factor_names:
+                factor_series[f].append(fs.get(f, 0) or 0)
+
+        matrix = {}
+        high_pairs = []
+        low_pairs = []
+        suggestions = []
+
+        for i, f1 in enumerate(factor_names):
+            matrix[f1] = {}
+            for j, f2 in enumerate(factor_names):
+                if i == j:
+                    matrix[f1][f2] = 1.0
+                    continue
+                if j < i:
+                    matrix[f1][f2] = matrix[f2][f1]
+                    continue
+                corr = self._pearson_corr(factor_series[f1], factor_series[f2])
+                matrix[f1][f2] = round(corr, 3)
+
+                if abs(corr) > 0.6:
+                    high_pairs.append((f1, f2, round(corr, 3)))
+                    suggestions.append({
+                        "f1": f1, "f2": f2, "correlation": round(corr, 3),
+                        "suggestion": f"{self._factor_cn(f1)}与{self._factor_cn(f2)}相关性{corr:.2f}，信息冗余，建议合并或降低权重较低的因子",
+                    })
+                elif abs(corr) < 0.15:
+                    low_pairs.append((f1, f2, round(corr, 3)))
+
+        high_pairs.sort(key=lambda x: abs(x[2]), reverse=True)
+        low_pairs.sort(key=lambda x: abs(x[2]))
+
+        logger.info(f"[Evolution] 因子相关性分析完成: {len(high_pairs)}高相关对, {len(low_pairs)}低相关对")
+        return {
+            "matrix": matrix,
+            "high_correlation_pairs": high_pairs,
+            "low_correlation_pairs": low_pairs,
+            "redundancy_suggestions": suggestions,
+        }
+
+    @staticmethod
+    def _pearson_corr(x: List[float], y: List[float]) -> float:
+        n = min(len(x), len(y))
+        if n < 5:
+            return 0.0
+        x = x[:n]
+        y = y[:n]
+        mean_x = sum(x) / n
+        mean_y = sum(y) / n
+        num = sum((xi - mean_x) * (yi - mean_y) for xi, yi in zip(x, y))
+        den_x = math.sqrt(sum((xi - mean_x) ** 2 for xi in x))
+        den_y = math.sqrt(sum((yi - mean_y) ** 2 for yi in y))
+        if den_x > 0 and den_y > 0:
+            return num / (den_x * den_y)
+        return 0.0
+
+    # ============================================================
+    # 2.6 进化频率自适应
+    # ============================================================
+    def determine_evolution_frequency(self, db: Session) -> dict:
+        """
+        根据近期表现自适应调整进化频率
+
+        逻辑：
+        - 胜率急剧下降（>15%跌幅） → 加速进化（每2小时）
+        - 连续亏损（≥3次） → 加速进化（每3小时）
+        - 胜率稳定（波动<5%） → 正常频率（每12小时）
+        - 信号量不足 → 减速（每24小时）
+        - 近期已进化 → 冷却期跳过
+
+        Returns:
+            {
+                "recommended_interval_hours": int,
+                "reason": str,
+                "recent_win_rate": float,
+                "prev_win_rate": float,
+                "recent_loss_streak": int,
+                "recent_signal_count": int,
+                "should_run_now": bool,
+            }
+        """
+        now = datetime.utcnow()
+        recent_cutoff = now - timedelta(hours=24)
+        prev_cutoff = now - timedelta(hours=48)
+
+        recent_signals = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.direction.in_(["bullish", "bearish"]),
+            QuantSignalRecord.created_at >= recent_cutoff,
+        ).all()
+        prev_signals = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.direction.in_(["bullish", "bearish"]),
+            QuantSignalRecord.created_at >= prev_cutoff,
+            QuantSignalRecord.created_at < recent_cutoff,
+        ).all()
+
+        recent_wr = 0.0
+        prev_wr = 0.0
+        if recent_signals:
+            recent_wins = sum(1 for s in recent_signals if s.outcome == "hit_tp")
+            recent_wr = recent_wins / len(recent_signals)
+        if prev_signals:
+            prev_wins = sum(1 for s in prev_signals if s.outcome == "hit_tp")
+            prev_wr = prev_wins / len(prev_signals)
+
+        recent_loss_streak = 0
+        for s in sorted(recent_signals, key=lambda x: x.timestamp if x.timestamp else now, reverse=True):
+            if s.outcome in ("hit_sl", "expired"):
+                recent_loss_streak += 1
+            else:
+                break
+
+        last_run = db.query(EvolutionRun).order_by(EvolutionRun.started_at.desc()).first()
+        hours_since_last = None
+        if last_run and last_run.started_at:
+            hours_since_last = (now - last_run.started_at).total_seconds() / 3600
+
+        recommended_hours = 12
+        reason = "正常频率"
+        should_run = True
+
+        if len(recent_signals) < 5:
+            recommended_hours = 24
+            reason = f"信号量不足({len(recent_signals)}条)，减速"
+        elif recent_loss_streak >= 3:
+            recommended_hours = 3
+            reason = f"连续亏损{recent_loss_streak}次，加速进化"
+        elif prev_wr > 0 and (prev_wr - recent_wr) > 0.15:
+            recommended_hours = 2
+            reason = f"胜率骤降({prev_wr*100:.1f}%→{recent_wr*100:.1f}%)，紧急进化"
+        elif abs(prev_wr - recent_wr) < 0.05 and recent_wr > 0.5:
+            recommended_hours = 12
+            reason = f"胜率稳定({recent_wr*100:.1f}%)，正常频率"
+        elif recent_wr < 0.35:
+            recommended_hours = 4
+            reason = f"胜率偏低({recent_wr*100:.1f}%)，适度加速"
+
+        if hours_since_last is not None and hours_since_last < recommended_hours:
+            should_run = False
+            reason += f"（距上次进化仅{hours_since_last:.1f}h，冷却中）"
+
+        return {
+            "recommended_interval_hours": recommended_hours,
+            "reason": reason,
+            "recent_win_rate": round(recent_wr * 100, 1),
+            "prev_win_rate": round(prev_wr * 100, 1),
+            "recent_loss_streak": recent_loss_streak,
+            "recent_signal_count": len(recent_signals),
+            "should_run_now": should_run,
+            "hours_since_last": round(hours_since_last, 1) if hours_since_last else None,
+        }
+
+    # ============================================================
+    # 3. 生成进化优化方案
+    # ============================================================
+    def generate_evolution_proposals(self, db: Session, strategy_id: Optional[int] = None) -> List[EvolutionProposal]:
+        """
+        基于假信号模式和因子重要性分析，生成优化方案
+
+        方案类型：
+        - weight: 因子权重调整
+        - threshold: 开单阈值调整
+        - parameter: TP/SL/杠杆参数调整
+        - regime_filter: 市场状态过滤
+        """
+        proposals = []
+
+        # 获取最新的假信号模式（中等以上严重程度）
+        patterns = db.query(FalseSignalPattern).filter(
+            FalseSignalPattern.severity.in_(["medium", "high", "critical"]),
+            FalseSignalPattern.total_signals >= 10,
+        ).order_by(FalseSignalPattern.win_rate.asc()).limit(10).all()
+
+        # 获取因子重要性排名
+        factor_stats = db.query(FactorPerformanceStat).filter(
+            FactorPerformanceStat.symbol == "ALL",
+            FactorPerformanceStat.market_regime == "all",
+        ).order_by(FactorPerformanceStat.importance_score.desc()).all()
+
+        # ---- 方案1：因子权重优化 ----
+        if factor_stats and len(factor_stats) >= 5:
+            top_factors = factor_stats[:3]
+            bottom_factors = factor_stats[-2:]
+
+            current_w = {s.factor_name: s.current_weight for s in factor_stats}
+            proposed_w = dict(current_w)
+
+            # 表现好的因子增加权重，表现差的减少权重
+            total_top = sum(s.importance_score for s in top_factors)
+            total_bottom = sum(s.importance_score for s in bottom_factors)
+
+            if total_top > 0 and total_bottom > 0:
+                # 从底部因子转移权重到顶部因子（每次最多调整2%）
+                transfer = min(0.02, 0.02 * (total_top - total_bottom) / 100)
+                for s in top_factors:
+                    proposed_w[s.factor_name] = round(current_w[s.factor_name] + transfer / 3, 4)
+                for s in bottom_factors:
+                    proposed_w[s.factor_name] = round(max(0.05, current_w[s.factor_name] - transfer / 2), 4)
+
+            # 归一化
+            total_pw = sum(proposed_w.values())
+            proposed_w = {k: round(v / total_pw, 4) for k, v in proposed_w.items()}
+
+            # 计算预期提升（简化估算）
+            avg_importance_top = sum(s.importance_score for s in top_factors) / 3
+            avg_importance_bottom = sum(s.importance_score for s in bottom_factors) / 2
+            expected_improve = max(0, (avg_importance_top - avg_importance_bottom) * 0.1)
+
+            proposal = EvolutionProposal(
+                proposal_type="weight",
+                title="因子权重优化建议",
+                description=f"根据历史表现，将更多权重分配给预测能力强的因子，同时降低表现差的因子权重。",
+                current_config={"factor_weights": current_w},
+                proposed_config={"factor_weights": proposed_w},
+                expected_win_rate_improvement=round(expected_improve, 2),
+                expected_profit_factor_improvement=round(expected_improve * 0.1, 2),
+                confidence=round(min(95, 40 + len(patterns) * 3), 0),
+                evidence_summary=f"基于{len(factor_stats)}个因子的历史表现分析，Top3因子重要性评分{avg_importance_top:.1f}，Bottom2因子{avg_importance_bottom:.1f}",
+                supporting_patterns=[p.id for p in patterns[:3]],
+            )
+            db.add(proposal)
+            proposals.append(proposal)
+
+        # ---- 方案2：提高开单阈值 ----
+        # 如果整体胜率低于45%，建议提高阈值
+        verified_records = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.direction.in_(["bullish", "bearish"]),
+        ).limit(100).all()
+
+        if verified_records and len(verified_records) >= 20:
+            wins = sum(1 for r in verified_records if r.outcome == "hit_tp")
+            current_wr = wins / len(verified_records)
+
+            if current_wr < 0.45:
+                proposal = EvolutionProposal(
+                    proposal_type="threshold",
+                    title="提高开单阈值建议",
+                    description=f"当前整体胜率{current_wr*100:.1f}%（{wins}/{len(verified_records)}），低于目标45%。建议将开单评分阈值从5.0提高到5.5，过滤掉边际信号。",
+                    current_config={"score_threshold": 5.0},
+                    proposed_config={"score_threshold": 5.5},
+                    expected_win_rate_improvement=round((0.55 - current_wr) * 100, 1),
+                    expected_drawdown_reduction=round((0.45 - current_wr) * 50, 1),
+                    confidence=round(min(90, 50 + len(verified_records)), 0),
+                    evidence_summary=f"分析了{len(verified_records)}个已验证信号，当前胜率{current_wr*100:.1f}%，低于目标值",
+                )
+                db.add(proposal)
+                proposals.append(proposal)
+
+        # ---- 方案3：震荡市降低仓位 ----
+        ranging_patterns = [p for p in patterns if p.market_regime and "rang" in p.market_regime.lower()]
+        if ranging_patterns:
+            p = ranging_patterns[0]
+            proposal = EvolutionProposal(
+                proposal_type="regime_filter",
+                title="震荡市仓位控制建议",
+                description=f"震荡市下信号胜率仅{p.win_rate}%，显著低于趋势市。建议在震荡市中降低50%仓位，或提高开单阈值。",
+                current_config={"ranging_position_pct": 100},
+                proposed_config={"ranging_position_pct": 50, "ranging_threshold_bonus": 0.5},
+                expected_win_rate_improvement=round((0.5 - p.win_rate / 100) * 20, 1),
+                expected_drawdown_reduction=round((0.5 - p.win_rate / 100) * 30, 1),
+                confidence=round(min(85, 40 + p.total_signals * 2), 0),
+                evidence_summary=f"震荡市{p.total_signals}个信号，胜率{p.win_rate}%",
+                supporting_patterns=[p.id],
+            )
+            db.add(proposal)
+            proposals.append(proposal)
+
+        # ---- 方案4：TP/SL优化 ----
+        # 分析平均收益和亏损比例
+        if verified_records and len(verified_records) >= 20:
+            win_returns = [r.outcome_return_pct for r in verified_records
+                          if r.outcome == "hit_tp" and r.outcome_return_pct]
+            loss_returns = [abs(r.outcome_return_pct) for r in verified_records
+                           if r.outcome == "hit_sl" and r.outcome_return_pct]
+
+            if win_returns and loss_returns:
+                avg_win = sum(win_returns) / len(win_returns)
+                avg_loss = sum(loss_returns) / len(loss_returns)
+                current_pf = avg_win / avg_loss if avg_loss > 0 else 1
+
+                if current_pf < 1.2:
+                    proposal = EvolutionProposal(
+                        proposal_type="parameter",
+                        title="止盈止损比例优化建议",
+                        description=f"当前盈亏比{current_pf:.2f}（平均盈利{avg_win:.2f}% / 平均亏损{avg_loss:.2f}%），低于1.5的健康值。建议扩大止盈或缩小止损。",
+                        current_config={"tp_ratio": 4.0, "sl_ratio": 2.0, "actual_pf": round(current_pf, 2)},
+                        proposed_config={"tp_ratio": 5.0, "sl_ratio": 1.8},
+                        expected_profit_factor_improvement=round(1.5 - current_pf, 2),
+                        confidence=round(min(80, 40 + len(win_returns)), 0),
+                        evidence_summary=f"{len(win_returns)}次止盈平均{avg_win:.2f}%，{len(loss_returns)}次止损平均{avg_loss:.2f}%",
+                    )
+                    db.add(proposal)
+                    proposals.append(proposal)
+
+        db.commit()
+        return proposals
+
+    # ============================================================
+    # 4. 完整进化运行
+    # ============================================================
+    def run_full_evolution(self, db: Session, symbol: str = "ALL",
+                            strategy_id: Optional[int] = None) -> EvolutionRun:
+        """运行一次完整的进化分析"""
+        if self._running:
+            raise RuntimeError("进化分析正在运行中，请稍候")
+
+        with self._lock:
+            self._running = True
+
+        run = EvolutionRun(run_type="full", status="running")
+        db.add(run)
+        db.commit()
+        db.refresh(run)
+
+        try:
+            # 步骤1：假信号模式挖掘
+            patterns = self.analyze_false_signal_patterns(db, symbol=symbol)
+            run.patterns_found = len(patterns)
+
+            # 步骤2：因子重要性分析
+            factor_stats = self.analyze_factor_importance(db, symbol=symbol)
+
+            # 步骤2.5：因子相关性分析
+            corr_result = self.analyze_factor_correlations(db, symbol=symbol)
+            high_corr_count = len(corr_result.get("high_correlation_pairs", []))
+
+            # 步骤3：生成进化方案
+            proposals = self.generate_evolution_proposals(db, strategy_id=strategy_id)
+            run.proposals_generated = len(proposals)
+
+            # 统计信号数
+            signals_count = db.query(QuantSignalRecord).filter(
+                QuantSignalRecord.verified == True
+            ).count()
+            run.signals_analyzed = signals_count
+            run.symbols_analyzed = 1 if symbol != "ALL" else 5
+
+            run.status = "completed"
+            run.completed_at = datetime.utcnow()
+            db.commit()
+
+        except Exception as e:
+            logger.error(f"[Evolution] 进化分析失败: {e}")
+            run.status = "failed"
+            run.error_message = str(e)
+            run.completed_at = datetime.utcnow()
+            db.commit()
+            import traceback
+            traceback.print_exc()
+        finally:
+            with self._lock:
+                self._running = False
+
+        return run
+
+    # ============================================================
+    # 5. 获取进化仪表盘数据
+    # ============================================================
+    def get_dashboard_data(self, db: Session, symbol: str = "ALL") -> dict:
+        """获取进化仪表盘汇总数据"""
+        try:
+            # 基础统计
+            total_signals = db.query(QuantSignalRecord).filter(
+                QuantSignalRecord.verified == True,
+                QuantSignalRecord.direction.in_(["bullish", "bearish"]),
+            ).count()
+            win_signals = db.query(QuantSignalRecord).filter(
+                QuantSignalRecord.verified == True,
+                QuantSignalRecord.outcome == "hit_tp",
+            ).count()
+            sl_signals = db.query(QuantSignalRecord).filter(
+                QuantSignalRecord.verified == True,
+                QuantSignalRecord.outcome == "hit_sl",
+            ).count()
+            expired_signals = db.query(QuantSignalRecord).filter(
+                QuantSignalRecord.verified == True,
+                QuantSignalRecord.outcome == "expired",
+            ).count()
+
+            win_rate = round(win_signals / total_signals * 100, 1) if total_signals > 0 else 0
+
+            # 假信号模式（按严重程度排序）
+            patterns = db.query(FalseSignalPattern).order_by(
+                FalseSignalPattern.severity.desc(),
+                FalseSignalPattern.win_rate.asc(),
+            ).limit(10).all()
+
+            # 因子重要性
+            factor_stats = db.query(FactorPerformanceStat).filter(
+                FactorPerformanceStat.symbol == symbol,
+                FactorPerformanceStat.market_regime == "all",
+            ).order_by(FactorPerformanceStat.importance_score.desc()).all()
+
+            # 待处理的方案
+            pending_proposals = db.query(EvolutionProposal).filter(
+                EvolutionProposal.status == "pending",
+            ).order_by(EvolutionProposal.confidence.desc()).limit(5).all()
+
+            # 最近的进化运行
+            last_run = db.query(EvolutionRun).order_by(EvolutionRun.started_at.desc()).first()
+        except Exception as e:
+            logger.warning(f"[Evolution] 仪表盘查询失败（表可能未创建）: {e}")
+            return {
+                "summary": {"total_verified_signals": 0, "win_signals": 0,
+                           "loss_signals": 0, "expired_signals": 0, "win_rate": 0},
+                "patterns": [], "factor_stats": [], "pending_proposals": [], "last_run": None,
+            }
+
+        return {
+            "summary": {
+                "total_verified_signals": total_signals,
+                "win_signals": win_signals,
+                "loss_signals": sl_signals,
+                "expired_signals": expired_signals,
+                "win_rate": win_rate,
+            },
+            "patterns": [self._pattern_to_dict(p) for p in patterns],
+            "factor_stats": [self._factor_stat_to_dict(s) for s in factor_stats],
+            "pending_proposals": [self._proposal_to_dict(p) for p in pending_proposals],
+            "last_run": {
+                "id": last_run.id if last_run else None,
+                "status": last_run.status if last_run else None,
+                "started_at": last_run.started_at.isoformat() if last_run else None,
+                "patterns_found": last_run.patterns_found if last_run else 0,
+                "proposals_generated": last_run.proposals_generated if last_run else 0,
+            } if last_run else None,
+        }
+
+    def _pattern_to_dict(self, p: FalseSignalPattern) -> dict:
+        severity_cn = {"low": "低", "medium": "中", "high": "高", "critical": "严重"}
+        return {
+            "id": p.id,
+            "pattern_key": p.pattern_key,
+            "pattern_type": p.pattern_type,
+            "description": p.description,
+            "total_signals": p.total_signals,
+            "win_count": p.win_count,
+            "false_count": p.false_count,
+            "win_rate": p.win_rate,
+            "severity": p.severity,
+            "severity_cn": severity_cn.get(p.severity, p.severity),
+            "suggestion": p.suggestion,
+            "market_regime": p.market_regime,
+            "factor_conditions": p.factor_conditions,
+        }
+
+    def _factor_stat_to_dict(self, s: FactorPerformanceStat) -> dict:
+        factor_cn = {
+            "market_regime": "市场状态", "capital_flow": "资金流向",
+            "leverage": "杠杆集中度", "liquidation": "清算压力",
+            "volatility": "波动率", "news_sentiment": "新闻情绪",
+            "strategy_advantage": "策略优势",
+        }
+        return {
+            "id": s.id,
+            "factor_name": s.factor_name,
+            "factor_name_cn": factor_cn.get(s.factor_name, s.factor_name),
+            "accuracy": s.accuracy,
+            "correlation": s.correlation,
+            "importance_score": s.importance_score,
+            "current_weight": s.current_weight,
+            "suggested_weight": s.suggested_weight,
+            "sample_size": s.sample_size,
+        }
+
+    def _proposal_to_dict(self, p: EvolutionProposal) -> dict:
+        type_cn = {
+            "weight": "权重调整", "threshold": "阈值调整",
+            "parameter": "参数优化", "regime_filter": "状态过滤",
+            "strategy": "策略更换", "new_factor": "新增因子",
+        }
+        return {
+            "id": p.id,
+            "proposal_type": p.proposal_type,
+            "proposal_type_cn": type_cn.get(p.proposal_type, p.proposal_type),
+            "title": p.title,
+            "description": p.description,
+            "current_config": p.current_config,
+            "proposed_config": p.proposed_config,
+            "expected_win_rate_improvement": p.expected_win_rate_improvement,
+            "expected_profit_factor_improvement": p.expected_profit_factor_improvement,
+            "expected_drawdown_reduction": p.expected_drawdown_reduction,
+            "confidence": p.confidence,
+            "status": p.status,
+            "evidence_summary": p.evidence_summary,
+            "created_at": p.created_at.isoformat() if p.created_at else None,
+        }
+
+
+    # ============================================================
+    # 6. 方案应用（真正修改策略参数）
+    # ============================================================
+    def apply_proposal_to_strategy(
+        self, db: Session, proposal: EvolutionProposal, strategy_id: Optional[int] = None
+    ) -> Tuple[bool, str]:
+        try:
+            strategy = None
+            if strategy_id:
+                strategy = db.query(StrategyConfig).filter(
+                    StrategyConfig.id == strategy_id
+                ).first()
+            if not strategy:
+                strategy = db.query(StrategyConfig).filter(
+                    StrategyConfig.is_active == True
+                ).first()
+            if not strategy:
+                return False, "没有找到活跃策略"
+
+            snapshot = self._save_strategy_snapshot(strategy)
+            proposed = proposal.proposed_config or {}
+            ptype = proposal.proposal_type
+            changes = []
+
+            if ptype == "weight":
+                fw = proposed.get("factor_weights", {})
+                tech_w = sum(v for k, v in fw.items() if "tech" in k.lower() or "rsi" in k.lower() or "macd" in k.lower() or "boll" in k.lower())
+                news_w = sum(v for k, v in fw.items() if "news" in k.lower() or "sentiment" in k.lower())
+                ai_w = sum(v for k, v in fw.items() if "ai" in k.lower() or "ml" in k.lower())
+                total = tech_w + news_w + ai_w
+                if total > 0:
+                    new_tech = round(tech_w / total, 4)
+                    new_news = round(news_w / total, 4)
+                    new_ai = round(ai_w / total, 4)
+                    if abs(new_tech - strategy.weight_technical) > 0.05:
+                        new_tech = round(strategy.weight_technical + 0.05 * (1 if new_tech > strategy.weight_technical else -1), 4)
+                    if abs(new_news - strategy.weight_news) > 0.05:
+                        new_news = round(strategy.weight_news + 0.05 * (1 if new_news > strategy.weight_news else -1), 4)
+                    new_ai = round(1.0 - new_tech - new_news, 4)
+                    s = new_tech + new_news + new_ai
+                    strategy.weight_technical = round(new_tech / s, 4)
+                    strategy.weight_news = round(new_news / s, 4)
+                    strategy.weight_ai = round(new_ai / s, 4)
+                    changes.append(f"权重技术{strategy.weight_technical}/新闻{strategy.weight_news}/AI{strategy.weight_ai}")
+
+            elif ptype == "threshold":
+                new_th = proposed.get("score_threshold")
+                if new_th is not None:
+                    new_th = max(4.0, min(7.0, float(new_th)))
+                    if abs(new_th - strategy.score_threshold) > 1.0:
+                        new_th = round(strategy.score_threshold + 1.0 * (1 if new_th > strategy.score_threshold else -1), 1)
+                    strategy.score_threshold = round(new_th, 1)
+                    changes.append(f"开仓阈值{strategy.score_threshold}")
+
+            elif ptype == "parameter":
+                new_tp = proposed.get("tp_ratio")
+                new_sl = proposed.get("sl_ratio")
+                if new_tp is not None:
+                    new_tp = max(2.0, min(8.0, float(new_tp)))
+                    if abs(new_tp - strategy.tp_ratio) > 2.0:
+                        new_tp = round(strategy.tp_ratio + 2.0 * (1 if new_tp > strategy.tp_ratio else -1), 1)
+                    strategy.tp_ratio = round(new_tp, 1)
+                    changes.append(f"止盈{strategy.tp_ratio}%")
+                if new_sl is not None:
+                    new_sl = max(1.0, min(4.0, float(new_sl)))
+                    if abs(new_sl - strategy.sl_ratio) > 1.0:
+                        new_sl = round(strategy.sl_ratio + 1.0 * (1 if new_sl > strategy.sl_ratio else -1), 1)
+                    strategy.sl_ratio = round(new_sl, 1)
+                    changes.append(f"止损{strategy.sl_ratio}%")
+
+            elif ptype == "regime_filter":
+                bonus = proposed.get("ranging_threshold_bonus", 0.5)
+                strategy.score_threshold = round(min(7.0, strategy.score_threshold + bonus), 1)
+                changes.append(f"震荡市过滤阈值+{bonus}")
+
+            proposal.current_config = snapshot
+            proposal.status = "applied"
+            proposal.applied_at = datetime.utcnow()
+            db.commit()
+
+            logger.info(f"[Evolution] 方案#{proposal.id}已应用: {'; '.join(changes)}")
+            return True, "; ".join(changes)
+
+        except Exception as e:
+            db.rollback()
+            logger.error(f"[Evolution] 应用方案失败: {e}")
+            return False, str(e)
+
+    def _save_strategy_snapshot(self, strategy: StrategyConfig) -> dict:
+        return {
+            "strategy_id": strategy.id,
+            "score_threshold": strategy.score_threshold,
+            "strong_score_threshold": strategy.strong_score_threshold,
+            "weight_technical": strategy.weight_technical,
+            "weight_news": strategy.weight_news,
+            "weight_ai": strategy.weight_ai,
+            "tp_ratio": strategy.tp_ratio,
+            "sl_ratio": strategy.sl_ratio,
+            "leverage_fixed": strategy.leverage_fixed,
+        }
+
+    def rollback_proposal(self, db: Session, proposal: EvolutionProposal) -> Tuple[bool, str]:
+        try:
+            snapshot = proposal.current_config or {}
+            if not snapshot:
+                return False, "没有快照数据"
+            strategy = db.query(StrategyConfig).filter(
+                StrategyConfig.id == snapshot.get("strategy_id")
+            ).first()
+            if not strategy:
+                return False, "策略不存在"
+            strategy.score_threshold = snapshot.get("score_threshold", strategy.score_threshold)
+            strategy.weight_technical = snapshot.get("weight_technical", strategy.weight_technical)
+            strategy.weight_news = snapshot.get("weight_news", strategy.weight_news)
+            strategy.weight_ai = snapshot.get("weight_ai", strategy.weight_ai)
+            strategy.tp_ratio = snapshot.get("tp_ratio", strategy.tp_ratio)
+            strategy.sl_ratio = snapshot.get("sl_ratio", strategy.sl_ratio)
+            strategy.leverage_fixed = snapshot.get("leverage_fixed", strategy.leverage_fixed)
+            proposal.status = "rolled_back"
+            db.commit()
+            logger.info(f"[Evolution] 方案#{proposal.id}已回滚")
+            return True, "回滚成功"
+        except Exception as e:
+            db.rollback()
+            return False, str(e)
+
+    def auto_evolve(self, db: Session, auto_apply_threshold: float = 75.0) -> dict:
+        logger.info(f"[Evolution] ===== 自动进化开始（阈值={auto_apply_threshold}）=====")
+        result = {
+            "run_id": None, "patterns_found": 0, "proposals_generated": 0,
+            "auto_applied": 0, "skipped_low_confidence": 0, "apply_results": [],
+            "frequency_check": None,
+        }
+        try:
+            # 频率自适应检查
+            freq = self.determine_evolution_frequency(db)
+            result["frequency_check"] = freq
+            if not freq["should_run_now"]:
+                logger.info(f"[Evolution] 跳过本次进化: {freq['reason']}")
+                return result
+
+            run = self.run_full_evolution(db)
+            result["run_id"] = run.id
+            result["patterns_found"] = run.patterns_found or 0
+            result["proposals_generated"] = run.proposals_generated or 0
+            if run.status != "completed":
+                return result
+            proposals = db.query(EvolutionProposal).filter(
+                EvolutionProposal.status == "pending"
+            ).order_by(EvolutionProposal.confidence.desc()).all()
+            if not proposals:
+                logger.info("[Evolution] 没有待处理方案")
+                return result
+            for p in proposals:
+                if p.confidence >= auto_apply_threshold:
+                    success, msg = self.apply_proposal_to_strategy(db, p)
+                    result["apply_results"].append({
+                        "proposal_id": p.id, "type": p.proposal_type,
+                        "confidence": p.confidence, "success": success, "message": msg,
+                    })
+                    if success:
+                        result["auto_applied"] += 1
+                else:
+                    result["skipped_low_confidence"] += 1
+            logger.info(f"[Evolution] 完成: 模式{result['patterns_found']}, 方案{result['proposals_generated']}, 应用{result['auto_applied']}")
+        except Exception as e:
+            logger.error(f"[Evolution] 自动进化异常: {e}")
+            import traceback; traceback.print_exc()
+        return result
+
+    def verify_evolution_result(self, db: Session, proposal_id: int) -> dict:
+        proposal = db.query(EvolutionProposal).filter(EvolutionProposal.id == proposal_id).first()
+        if not proposal or proposal.status != "applied":
+            return {"valid": False, "message": "方案未应用"}
+        applied_at = proposal.applied_at
+        if not applied_at:
+            return {"valid": False, "message": "无应用时间"}
+        before = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.created_at < applied_at,
+        ).all()
+        before_wins = sum(1 for s in before if s.outcome == "hit_tp")
+        before_wr = round(before_wins / len(before) * 100, 1) if before else 0
+        after = db.query(QuantSignalRecord).filter(
+            QuantSignalRecord.verified == True,
+            QuantSignalRecord.created_at >= applied_at,
+        ).all()
+        if len(after) < 5:
+            return {"valid": True, "before_win_rate": before_wr, "after_win_rate": None,
+                    "after_signals_count": len(after),
+                    "message": f"应用后信号不足5个({len(after)})，暂无法评估"}
+        after_wins = sum(1 for s in after if s.outcome == "hit_tp")
+        after_wr = round(after_wins / len(after) * 100, 1) if after else 0
+        return {"valid": True, "before_win_rate": before_wr, "after_win_rate": after_wr,
+                "improvement": round(after_wr - before_wr, 1), "improved": after_wr > before_wr,
+                "before_signals": len(before), "after_signals": len(after)}
+
+# 单例
+_evolution_service: Optional[StrategyEvolutionService] = None
+
+
+def get_evolution_service() -> StrategyEvolutionService:
+    global _evolution_service
+    if _evolution_service is None:
+        _evolution_service = StrategyEvolutionService()
+    return _evolution_service

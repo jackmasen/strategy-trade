@@ -1,0 +1,2109 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>系统监控仪表盘</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;
+  background:#070D13;color:#E6EDF3;min-height:100vh;
+}
+.container{max-width:1400px;margin:0 auto;padding:24px 20px 40px;}
+
+/* Header */
+.header{
+  display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:24px;padding-bottom:16px;border-bottom:1px solid #1A2A3A;
+}
+.header-left h1{font-size:24px;font-weight:700;color:#E6EDF3;letter-spacing:-0.5px;}
+.header-left .subtitle{font-size:13px;color:#7A8A9A;margin-top:4px;}
+.header-right{display:flex;align-items:center;gap:12px;}
+.refresh-btn{
+  background:#1A382A;color:#25D07D;border:1px solid rgba(37,208,125,0.3);
+  padding:8px 16px;border-radius:8px;cursor:pointer;font-size:13px;
+  display:flex;align-items:center;gap:6px;transition:all 0.2s;
+}
+.refresh-btn:hover{background:#25D07D;color:#0A131B;}
+.refresh-btn.loading{opacity:0.6;cursor:not-allowed;}
+.status-badge{
+  padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;
+  display:flex;align-items:center;gap:6px;
+}
+.status-badge.healthy{background:rgba(37,208,125,0.15);color:#25D07D;border:1px solid rgba(37,208,125,0.3);}
+.status-badge.warning{background:rgba(230,162,60,0.15);color:#e6a23c;border:1px solid rgba(230,162,60,0.3);}
+.status-badge.critical{background:rgba(245,108,108,0.15);color:#f56c6c;border:1px solid rgba(245,108,108,0.3);}
+.pulse-dot{width:8px;height:8px;border-radius:50%;background:currentColor;animation:pulse 2s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 currentColor;}70%{box-shadow:0 0 0 8px transparent;}100%{box-shadow:0 0 0 0 transparent;}}
+
+/* Overview Cards */
+.overview-grid{
+  display:grid;grid-template-columns:2fr 1fr 1fr 1fr;gap:16px;margin-bottom:20px;
+}
+.card{
+  background:#0F1A24;border-radius:12px;border:1px solid #1E3246;padding:20px;
+}
+.status-card{
+  background:linear-gradient(135deg,#0F1A24 0%,#16232E 100%);
+  display:flex;align-items:center;gap:20px;position:relative;overflow:hidden;
+}
+.status-card.healthy{border-color:rgba(37,208,125,0.3);}
+.status-card.warning{border-color:rgba(230,162,60,0.3);}
+.status-card.critical{border-color:rgba(245,108,108,0.3);}
+.status-icon-wrap{
+  position:relative;width:72px;height:72px;display:flex;align-items:center;justify-content:center;
+}
+.status-icon{
+  width:56px;height:56px;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;font-size:28px;
+  background:rgba(37,208,125,0.15);color:#25D07D;z-index:2;
+}
+.status-card.warning .status-icon{background:rgba(230,162,60,0.15);color:#e6a23c;}
+.status-card.critical .status-icon{background:rgba(245,108,108,0.15);color:#f56c6c;}
+.status-ring{
+  position:absolute;width:72px;height:72px;border-radius:50%;
+  background:rgba(37,208,125,0.2);animation:ringPulse 2s ease-out infinite;
+}
+.status-card.warning .status-ring{background:rgba(230,162,60,0.2);}
+.status-card.critical .status-ring{background:rgba(245,108,108,0.2);animation-duration:1s;}
+@keyframes ringPulse{0%{transform:scale(0.8);opacity:1;}100%{transform:scale(1.4);opacity:0;}}
+.status-info{flex:1;}
+.status-title{font-size:22px;font-weight:700;color:#E6EDF3;margin-bottom:4px;}
+.status-desc{font-size:13px;color:#7A8A9A;margin-bottom:8px;}
+.status-meta{display:flex;gap:16px;font-size:12px;color:#5A6A7A;}
+.issue-tags{display:flex;flex-direction:column;gap:6px;}
+.issue-tag{
+  padding:4px 10px;border-radius:12px;font-size:12px;font-weight:600;
+  background:rgba(245,108,108,0.15);color:#f56c6c;
+}
+.issue-tag.warning{background:rgba(230,162,60,0.15);color:#e6a23c;}
+
+/* Metric Cards */
+.metric-label{font-size:13px;color:#7A8A9A;margin-bottom:8px;}
+.metric-value{
+  font-size:32px;font-weight:700;font-family:'JetBrains Mono',Consolas,monospace;
+  margin-bottom:10px;color:#25D07D;
+}
+.metric-value.warning{color:#e6a23c;}
+.metric-value.critical{color:#f56c6c;}
+.progress-bar{
+  height:6px;border-radius:3px;background:#1A2A3A;overflow:hidden;margin-bottom:8px;
+}
+.progress-fill{height:100%;border-radius:3px;background:#25D07D;transition:width 0.5s;}
+.progress-fill.warning{background:#e6a23c;}
+.progress-fill.critical{background:#f56c6c;}
+.metric-sub{font-size:11px;color:#5A6A7A;}
+
+/* Tabs */
+.tabs{
+  display:flex;gap:4px;margin-bottom:16px;border-bottom:1px solid #1A2A3A;
+  overflow-x:auto;padding-bottom:1px;
+}
+.tab-btn{
+  padding:10px 18px;background:none;border:none;color:#7A8A9A;cursor:pointer;
+  font-size:14px;font-weight:500;border-bottom:2px solid transparent;
+  transition:all 0.2s;white-space:nowrap;
+}
+.tab-btn:hover{color:#B0BEC5;}
+.tab-btn.active{color:#25D07D;border-bottom-color:#25D07D;}
+
+/* Two Column Layout */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px;}
+
+/* Section Cards */
+.section-card{
+  background:#0F1A24;border-radius:12px;border:1px solid #1E3246;
+  margin-bottom:20px;overflow:hidden;
+}
+.section-header{
+  padding:16px 20px;border-bottom:1px solid #1A2A3A;
+  display:flex;justify-content:space-between;align-items:center;
+}
+.section-title{font-size:15px;font-weight:600;color:#E6EDF3;}
+.section-body{padding:20px;}
+
+/* Service List */
+.service-list{display:flex;flex-direction:column;gap:12px;}
+.service-item{
+  display:flex;align-items:center;gap:14px;padding:14px;
+  background:#0A131B;border-radius:8px;border:1px solid #1A2A3A;
+}
+.service-icon{
+  width:40px;height:40px;border-radius:10px;
+  display:flex;align-items:center;justify-content:center;font-size:20px;
+}
+.service-icon.db{background:rgba(64,158,255,0.15);color:#409eff;}
+.service-icon.redis{background:rgba(230,162,60,0.15);color:#e6a23c;}
+.service-icon.sched{background:rgba(103,194,58,0.15);color:#67c23a;}
+.service-icon.news{background:rgba(155,89,182,0.15);color:#9b59b6;}
+.service-info{flex:1;}
+.service-name{font-size:14px;color:#E6EDF3;font-weight:500;}
+.service-desc{font-size:12px;color:#7A8A9A;margin-top:2px;}
+.service-status{
+  padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;
+}
+.service-status.ok{background:rgba(37,208,125,0.15);color:#25D07D;}
+.service-status.warn{background:rgba(230,162,60,0.15);color:#e6a23c;}
+.service-status.err{background:rgba(245,108,108,0.15);color:#f56c6c;}
+.service-status.off{background:rgba(144,147,153,0.15);color:#909399;}
+
+/* Issue List */
+.issue-list{display:flex;flex-direction:column;gap:10px;}
+.issue-item{
+  display:flex;align-items:flex-start;gap:10px;padding:12px;
+  background:#0A131B;border-radius:8px;border-left:3px solid #e6a23c;
+}
+.issue-item.critical{border-left-color:#f56c6c;background:rgba(245,108,108,0.08);}
+.issue-icon{font-size:16px;margin-top:1px;flex-shrink:0;color:#e6a23c;}
+.issue-item.critical .issue-icon{color:#f56c6c;}
+.issue-text{font-size:13px;color:#E6EDF3;line-height:1.5;}
+
+/* Log Stats */
+.log-stats{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;}
+.log-stat{
+  text-align:center;padding:16px 12px;background:#0A131B;
+  border-radius:8px;border:1px solid #1A2A3A;
+}
+.log-stat-count{font-size:24px;font-weight:700;font-family:Consolas,monospace;margin-bottom:4px;}
+.log-stat.info .log-stat-count{color:#409eff;}
+.log-stat.warning .log-stat-count{color:#e6a23c;}
+.log-stat.error .log-stat-count{color:#f56c6c;}
+.log-stat.debug .log-stat-count{color:#909399;}
+.log-stat.total .log-stat-count{color:#25D07D;}
+.log-stat-label{font-size:12px;color:#7A8A9A;}
+
+/* Self Check */
+.check-overview{
+  display:flex;align-items:center;gap:24px;padding:20px;
+  background:linear-gradient(135deg,rgba(37,208,125,0.08),rgba(37,208,125,0.02));
+  border:1px solid rgba(37,208,125,0.2);border-radius:10px;margin-bottom:16px;
+}
+.check-overview.warning{
+  background:linear-gradient(135deg,rgba(230,162,60,0.08),rgba(230,162,60,0.02));
+  border-color:rgba(230,162,60,0.2);
+}
+.check-overview.critical{
+  background:linear-gradient(135deg,rgba(245,108,108,0.08),rgba(245,108,108,0.02));
+  border-color:rgba(245,108,108,0.2);
+}
+.check-score{text-align:center;}
+.check-score-num{font-size:42px;font-weight:700;color:#25D07D;font-family:Consolas,monospace;line-height:1;}
+.check-overview.warning .check-score-num{color:#e6a23c;}
+.check-overview.critical .check-score-num{color:#f56c6c;}
+.check-score-label{font-size:12px;color:#7A8A9A;margin-top:4px;}
+.check-info-title{font-size:18px;font-weight:600;color:#E6EDF3;margin-bottom:6px;}
+.check-info-detail{font-size:13px;color:#B0BEC5;margin-bottom:4px;}
+.check-info-time{font-size:12px;color:#5A6A7A;}
+
+.check-list{display:flex;flex-direction:column;gap:6px;}
+.check-item{
+  display:flex;align-items:center;gap:12px;padding:10px 14px;
+  background:#0A131B;border-radius:6px;border:1px solid #1A2A3A;
+}
+.check-item.fail{border-color:rgba(245,108,108,0.3);background:rgba(245,108,108,0.05);}
+.check-status{flex-shrink:0;font-size:16px;}
+.check-status.pass{color:#25D07D;}
+.check-status.fail{color:#f56c6c;}
+.check-name{font-size:13px;color:#E6EDF3;min-width:180px;}
+.check-detail{flex:1;font-size:12px;color:#7A8A9A;}
+.check-item.fail .check-detail{color:#f56c6c;}
+
+/* Log Viewer */
+.log-controls{
+  display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;
+}
+.log-controls select, .log-controls input{
+  background:#0A131B;border:1px solid #1A2A3A;color:#E6EDF3;
+  padding:8px 12px;border-radius:6px;font-size:13px;outline:none;
+}
+.log-controls select:focus, .log-controls input:focus{border-color:#25D07D;}
+.log-controls input{min-width:180px;}
+.log-viewer{
+  background:#070D13;border-radius:8px;border:1px solid #1A2A3A;
+  max-height:500px;overflow-y:auto;padding:12px;
+  font-family:Consolas,'Courier New',monospace;font-size:12px;line-height:1.6;
+}
+.log-line{
+  display:flex;gap:8px;padding:2px 6px;border-radius:3px;
+  white-space:pre-wrap;word-break:break-all;
+}
+.log-line:hover{background:rgba(255,255,255,0.03);}
+.log-line.level-ERROR{background:rgba(245,108,108,0.06);}
+.log-line.level-WARNING{background:rgba(230,162,60,0.04);}
+.log-time{color:#5A6A7A;flex-shrink:0;}
+.log-lvl{font-weight:600;flex-shrink:0;min-width:60px;}
+.log-lvl.INFO{color:#409eff;}
+.log-lvl.WARNING{color:#e6a23c;}
+.log-lvl.ERROR{color:#f56c6c;}
+.log-lvl.DEBUG{color:#909399;}
+.log-mod{color:#7A8A9A;flex-shrink:0;min-width:180px;}
+.log-msg{color:#B0BEC5;flex:1;}
+
+.log-pagination{
+  display:flex;justify-content:center;gap:6px;margin-top:12px;
+}
+.page-btn{
+  padding:6px 12px;background:#0A131B;border:1px solid #1A2A3A;
+  color:#B0BEC5;border-radius:6px;cursor:pointer;font-size:12px;
+}
+.page-btn:hover:not(:disabled){border-color:#25D07D;color:#25D07D;}
+.page-btn:disabled{opacity:0.4;cursor:not-allowed;}
+.page-btn.active{background:#25D07D;color:#0A131B;border-color:#25D07D;}
+
+/* Analysis */
+.analysis-section{background:linear-gradient(135deg,rgba(64,158,255,0.08),rgba(64,158,255,0.02));border:1px solid rgba(64,158,255,0.2);}
+.analysis-header{display:flex;align-items:center;gap:10px;}
+.analysis-icon{font-size:20px;color:#409eff;}
+.analysis-item{
+  padding:14px;background:#0A131B;border-radius:8px;margin-bottom:10px;
+  border-left:3px solid #409eff;
+}
+.analysis-item.critical{border-left-color:#f56c6c;}
+.analysis-item.warning{border-left-color:#e6a23c;}
+.analysis-item.info{border-left-color:#409eff;}
+.analysis-item.success{border-left-color:#25D07D;}
+.analysis-title{font-size:14px;font-weight:600;color:#E6EDF3;margin-bottom:6px;display:flex;align-items:center;gap:8px;}
+.analysis-title .severity{
+  padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600;
+}
+.analysis-title .severity.critical{background:rgba(245,108,108,0.2);color:#f56c6c;}
+.analysis-title .severity.warning{background:rgba(230,162,60,0.2);color:#e6a23c;}
+.analysis-title .severity.info{background:rgba(64,158,255,0.2);color:#409eff;}
+.analysis-title .severity.success{background:rgba(37,208,125,0.2);color:#25D07D;}
+.analysis-desc{font-size:13px;color:#B0BEC5;line-height:1.6;margin-bottom:8px;}
+.analysis-suggestion{
+  font-size:12px;color:#7A8A9A;padding:8px 12px;
+  background:rgba(0,0,0,0.2);border-radius:6px;
+}
+.analysis-suggestion code{
+  background:#070D13;padding:2px 6px;border-radius:3px;
+  color:#e6a23c;font-family:Consolas,monospace;font-size:11px;
+}
+
+/* Loading */
+.loading-overlay{
+  position:fixed;top:0;left:0;right:0;bottom:0;
+  background:rgba(7,13,19,0.8);display:flex;align-items:center;justify-content:center;
+  z-index:999;
+}
+.loading-spinner{
+  width:40px;height:40px;border:3px solid #1A2A3A;
+  border-top-color:#25D07D;border-radius:50%;animation:spin 0.8s linear infinite;
+}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Error state */
+.error-state{text-align:center;padding:60px 20px;}
+.error-state .icon{font-size:48px;color:#f56c6c;margin-bottom:16px;}
+.error-state .title{font-size:18px;color:#E6EDF3;margin-bottom:8px;}
+.error-state .desc{font-size:13px;color:#7A8A9A;}
+
+/* Footer */
+.footer{
+  text-align:center;padding:20px 0;color:#5A6A7A;font-size:12px;
+  border-top:1px solid #1A2A3A;margin-top:30px;
+}
+
+@media(max-width:1200px){
+  .overview-grid{grid-template-columns:1fr 1fr;}
+  .two-col{grid-template-columns:1fr;}
+  .log-stats{grid-template-columns:repeat(3,1fr);}
+}
+@media(max-width:768px){
+  .overview-grid{grid-template-columns:1fr;}
+  .log-stats{grid-template-columns:repeat(2,1fr);}
+  .check-name{min-width:auto;}
+  .log-mod{display:none;}
+}
+
+/* ============ AI Control Center ============ */
+.ai-task-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 14px;
+}
+.ai-task-card {
+  background: linear-gradient(135deg, #0F1A24 0%, #16232E 100%);
+  border: 1px solid #1E3246;
+  border-radius: 12px;
+  padding: 20px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  text-align: center;
+}
+.ai-task-card:hover {
+  border-color: #25D07D;
+  transform: translateY(-3px);
+  box-shadow: 0 6px 20px rgba(37,208,125,0.15);
+}
+.ai-task-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  margin: 0 auto 12px;
+}
+.ai-task-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: #E6EDF3;
+  margin-bottom: 6px;
+}
+.ai-task-desc {
+  font-size: 12px;
+  color: #7A8A9A;
+  line-height: 1.5;
+}
+@media(max-width:768px){
+  .ai-task-grid{grid-template-columns: repeat(2, 1fr);}
+}
+
+/* Task Items */
+.task-item {
+  background: #0A131B;
+  border: 1px solid #1A2A3A;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.task-item:hover {
+  border-color: #25D07D;
+  background: rgba(37,208,125,0.04);
+}
+.task-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.task-name { font-size: 14px; font-weight: 600; color: #E6EDF3; }
+.task-status {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-weight: 600;
+}
+.status-success { background: rgba(37,208,125,0.15); color: #25D07D; }
+.status-failed { background: rgba(245,108,108,0.15); color: #f56c6c; }
+.status-running { background: rgba(230,162,60,0.15); color: #e6a23c; }
+
+.task-item-meta {
+  display: flex;
+  gap: 16px;
+  font-size: 12px;
+  color: #7A8A9A;
+  margin-bottom: 8px;
+}
+.task-progress-bar {
+  height: 6px;
+  background: #0A131B;
+  border-radius: 3px;
+  overflow: hidden;
+  border: 1px solid #1A2A3A;
+}
+.task-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #e6a23c, #25D07D);
+  border-radius: 3px;
+  transition: width 0.3s;
+}
+.task-progress-text {
+  font-size: 11px;
+  color: #94A3B8;
+  text-align: right;
+  margin-top: 4px;
+}
+.task-error {
+  margin-top: 8px;
+  padding: 8px 12px;
+  background: rgba(245,108,108,0.1);
+  border-radius: 6px;
+  color: #f56c6c;
+  font-size: 12px;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(4px);
+}
+.modal-content {
+  background: #0F1A24;
+  border: 1px solid #1E3246;
+  border-radius: 16px;
+  width: 480px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.modal-large { width: 680px; }
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid #1A2A3A;
+  font-size: 16px;
+  font-weight: 600;
+  color: #E6EDF3;
+}
+.modal-close {
+  cursor: pointer;
+  font-size: 24px;
+  color: #7A8A9A;
+  line-height: 1;
+  transition: color 0.2s;
+}
+.modal-close:hover { color: #f56c6c; }
+.modal-body {
+  padding: 20px 24px;
+  overflow-y: auto;
+  flex: 1;
+}
+.modal-footer {
+  padding: 14px 24px;
+  border-top: 1px solid #1A2A3A;
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+.btn-primary, .btn-secondary {
+  padding: 8px 20px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+}
+.btn-primary {
+  background: #25D07D;
+  color: #0A131B;
+}
+.btn-primary:hover { background: #20b86d; }
+.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-secondary {
+  background: #1A2A3A;
+  color: #CBD5E1;
+  border: 1px solid #2A3A4A;
+}
+.btn-secondary:hover { background: #243444; }
+
+.form-input {
+  width: 100%;
+  padding: 10px 12px;
+  background: #0A131B;
+  border: 1px solid #1A2A3A;
+  border-radius: 8px;
+  color: #E6EDF3;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-input:focus { border-color: #25D07D; }
+.form-input::placeholder { color: #5A6A7A; }
+select.form-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%237A8A9A' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  padding-right: 32px;
+}
+
+/* Detail View */
+.detail-section { margin-bottom: 20px; }
+.detail-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #E6EDF3;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #1A2A3A;
+}
+.detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.detail-item {
+  background: #0A131B;
+  padding: 10px 14px;
+  border-radius: 8px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.di-label { font-size: 12px; color: #7A8A9A; }
+.di-value { font-size: 13px; font-weight: 600; color: #CBD5E1; font-family: monospace; }
+
+.result-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.stat-card {
+  background: #0A131B;
+  padding: 14px;
+  border-radius: 8px;
+  text-align: center;
+}
+.stat-label { font-size: 12px; color: #7A8A9A; margin-bottom: 6px; }
+.stat-value { font-size: 18px; font-weight: 700; }
+.stat-profit { color: #25D07D; }
+.stat-loss { color: #f56c6c; }
+.stat-neutral { color: #CBD5E1; }
+
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.result-table th {
+  background: #0A131B;
+  padding: 8px 10px;
+  text-align: left;
+  color: #7A8A9A;
+  font-weight: 500;
+  border-bottom: 1px solid #1A2A3A;
+}
+.result-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #0F1A24;
+  color: #CBD5E1;
+}
+.result-table tr:hover td { background: rgba(37,208,125,0.04); }
+.result-table .profit { color: #25D07D; }
+.result-table .loss { color: #f56c6c; }
+
+.side-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.side-tag.long { background: rgba(37,208,125,0.15); color: #25D07D; }
+.side-tag.short { background: rgba(245,108,108,0.15); color: #f56c6c; }
+
+.signal-tag {
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+}
+.signal-tag.strong-buy { background: rgba(37,208,125,0.2); color: #25D07D; }
+.signal-tag.buy { background: rgba(37,208,125,0.1); color: #25D07D; }
+.signal-tag.neutral { background: rgba(122,138,154,0.15); color: #7A8A9A; }
+.signal-tag.sell { background: rgba(245,108,108,0.1); color: #f56c6c; }
+.signal-tag.strong-sell { background: rgba(245,108,108,0.2); color: #f56c6c; }
+
+.conclusion-box {
+  margin-top: 16px;
+  background: linear-gradient(135deg, rgba(37,208,125,0.08), rgba(59,130,246,0.08));
+  border: 1px solid rgba(37,208,125,0.2);
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+.conclusion-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #25D07D;
+  margin-bottom: 6px;
+}
+.conclusion-text {
+  font-size: 13px;
+  color: #CBD5E1;
+  line-height: 1.7;
+}
+
+@media(max-width:768px){
+  .result-stats-grid{grid-template-columns: repeat(2, 1fr);}
+  .detail-grid{grid-template-columns: 1fr;}
+  .modal-content{width: 95vw;}
+  .modal-large{width: 95vw;}
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <!-- Header -->
+  <div class="header">
+    <div class="header-left">
+      <h1>&#x1F4CA; 系统监控仪表盘</h1>
+      <div class="subtitle">实时状态 · 运行日志 · 智能分析 · 自动检测</div>
+    </div>
+    <div class="header-right">
+      <div class="status-badge" id="statusBadge">
+        <span class="pulse-dot"></span>
+        <span id="statusText">加载中...</span>
+      </div>
+      <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">
+        <span>&#x21BB;</span>
+        <span>刷新</span>
+      </button>
+    </div>
+
+    <!-- Tab: AI Control Center -->
+    <div id="tab-aicontrol" style="display:none;">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">
+            <span style="color:#25D07D;">&#x1F916;</span> AI控制中心
+            <span style="font-size:12px;color:#7A8A9A;font-weight:400;margin-left:8px;">模拟回测 · 策略扫描 · AI分析 · 全面测试</span>
+          </div>
+          <button class="refresh-btn" style="padding:6px 14px;font-size:12px;" onclick="loadAiTasks()">
+            <span>&#x21BB;</span> 刷新任务
+          </button>
+        </div>
+        <div class="section-body">
+          <div class="ai-task-creator">
+            <div class="ai-task-grid">
+              <div class="ai-task-card" onclick="showTaskForm('backtest')">
+                <div class="ai-task-icon" style="background:rgba(37,208,125,0.15);color:#25D07D;">&#x1F4C8;</div>
+                <div class="ai-task-name">模拟回测</div>
+                <div class="ai-task-desc">单币种策略历史回测，验证策略有效性</div>
+              </div>
+              <div class="ai-task-card" onclick="showTaskForm('strategy_scan')">
+                <div class="ai-task-icon" style="background:rgba(59,130,246,0.15);color:#3B82F6;">&#x1F50D;</div>
+                <div class="ai-task-name">策略扫描</div>
+                <div class="ai-task-desc">多币种多时间级别批量扫描，发现交易机会</div>
+              </div>
+              <div class="ai-task-card" onclick="showTaskForm('ai_analysis')">
+                <div class="ai-task-icon" style="background:rgba(168,85,247,0.15);color:#A855F7;">&#x1F9E0;</div>
+                <div class="ai-task-name">AI市场分析</div>
+                <div class="ai-task-desc">技术面+情绪面+风险评估综合分析</div>
+              </div>
+              <div class="ai-task-card" onclick="showTaskForm('full_test')">
+                <div class="ai-task-icon" style="background:rgba(245,158,11,0.15);color:#F59E0B;">&#x26A1;</div>
+                <div class="ai-task-name">全面测试</div>
+                <div class="ai-task-desc">回测+扫描+AI分析一站式全面诊断</div>
+              </div>
+            </div>
+          </div>
+
+          <div style="margin-top:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+              <div class="section-title" style="font-size:15px;margin:0;">&#x1F4CB; 任务列表</div>
+              <div id="sseStatus" style="font-size:12px;color:#7A8A9A;display:flex;align-items:center;gap:6px;">
+                <span class="sse-dot" id="sseDot" style="width:8px;height:8px;border-radius:50%;background:#7A8A9A;display:inline-block;"></span>
+                <span id="sseStatusText">就绪</span>
+              </div>
+            </div>
+            <div id="aiTaskList">
+              <div style="text-align:center;color:#7A8A9A;padding:30px 0;">暂无任务，点击上方卡片创建</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Loading -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+  </div>
+
+  <!-- Error State (hidden by default) -->
+  <div class="error-state" id="errorState" style="display:none;">
+    <div class="icon">&#x26A0;</div>
+    <div class="title" id="errorTitle">无法连接</div>
+    <div class="desc" id="errorDesc">请检查分享链接是否有效或已过期</div>
+  </div>
+
+  <!-- Main Content (hidden until loaded) -->
+  <div id="mainContent" style="display:none;">
+    <!-- Overview Cards -->
+    <div class="overview-grid">
+      <div class="card status-card" id="statusCard">
+        <div class="status-icon-wrap">
+          <div class="status-ring"></div>
+          <div class="status-icon" id="statusIcon">&#x2714;</div>
+        </div>
+        <div class="status-info">
+          <div class="status-title" id="bigStatusText">系统运行正常</div>
+          <div class="status-desc" id="bigStatusDesc">所有服务运行良好</div>
+          <div class="status-meta">
+            <span id="versionInfo">v1.2.0</span>
+            <span id="uptimeInfo">运行 --</span>
+          </div>
+        </div>
+        <div class="issue-tags" id="issueTags"></div>
+      </div>
+
+      <div class="card">
+        <div class="metric-label">CPU 使用率</div>
+        <div class="metric-value" id="cpuValue">--%</div>
+        <div class="progress-bar"><div class="progress-fill" id="cpuBar" style="width:0%"></div></div>
+      </div>
+
+      <div class="card">
+        <div class="metric-label">内存使用率</div>
+        <div class="metric-value" id="memValue">--%</div>
+        <div class="progress-bar"><div class="progress-fill" id="memBar" style="width:0%"></div></div>
+        <div class="metric-sub" id="memSub">--</div>
+      </div>
+
+      <div class="card">
+        <div class="metric-label">磁盘使用率</div>
+        <div class="metric-value" id="diskValue">--%</div>
+        <div class="progress-bar"><div class="progress-fill" id="diskBar" style="width:0%"></div></div>
+        <div class="metric-sub" id="diskSub">--</div>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="status" onclick="switchTab('status')">&#x1F4CC; 服务状态</button>
+      <button class="tab-btn" data-tab="check" onclick="switchTab('check')">&#x2705; 功能自检</button>
+      <button class="tab-btn" data-tab="logs" onclick="switchTab('logs')">&#x1F4DD; 运行日志</button>
+      <button class="tab-btn" data-tab="analysis" onclick="switchTab('analysis')">&#x1F9E0; 智能分析</button>
+      <button class="tab-btn" data-tab="aicontrol" onclick="switchTab('aicontrol')">&#x1F916; AI控制中心</button>
+    </div>
+
+    <!-- Tab: Status -->
+    <div id="tab-status">
+      <div class="two-col">
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">&#x1F4E1; 服务状态</div>
+          </div>
+          <div class="section-body">
+            <div class="service-list" id="serviceList"></div>
+          </div>
+        </div>
+        <div class="section-card">
+          <div class="section-header">
+            <div class="section-title">&#x26A0; 检测到的问题</div>
+          </div>
+          <div class="section-body">
+            <div class="issue-list" id="issueList"></div>
+          </div>
+        </div>
+      </div>
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">&#x1F4CA; 今日日志统计</div>
+        </div>
+        <div class="section-body">
+          <div class="log-stats" id="logStats"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Self Check -->
+    <div id="tab-check" style="display:none;">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">&#x2705; 功能自检结果</div>
+          <button class="refresh-btn" style="padding:6px 14px;font-size:12px;" onclick="runSelfCheck()">
+            <span>&#x21BB;</span> 重新检测
+          </button>
+        </div>
+        <div class="section-body">
+          <div class="check-overview" id="checkOverview">
+            <div class="check-score">
+              <div class="check-score-num" id="checkScore">--%</div>
+              <div class="check-score-label">通过率</div>
+            </div>
+            <div>
+              <div class="check-info-title" id="checkTitle">加载中...</div>
+              <div class="check-info-detail" id="checkDetail">--</div>
+              <div class="check-info-time" id="checkTime">--</div>
+            </div>
+          </div>
+          <div class="check-list" id="checkList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Logs -->
+    <div id="tab-logs" style="display:none;">
+      <div class="section-card">
+        <div class="section-header">
+          <div class="section-title">&#x1F4DD; 日志查看器</div>
+        </div>
+        <div class="section-body">
+          <div class="log-controls">
+            <select id="logType" onchange="loadLogs(1)">
+              <option value="app">应用日志</option>
+              <option value="error">错误日志</option>
+              <option value="trade">交易日志</option>
+            </select>
+            <select id="logLevel" onchange="loadLogs(1)">
+              <option value="">全部级别</option>
+              <option value="DEBUG">DEBUG</option>
+              <option value="INFO">INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+            <input type="text" id="logKeyword" placeholder="搜索关键词..." onkeypress="if(event.key==='Enter')loadLogs(1)">
+            <button class="refresh-btn" style="padding:6px 12px;font-size:12px;" onclick="loadLogs(1)">搜索</button>
+          </div>
+          <div class="log-viewer" id="logViewer">
+            <div style="text-align:center;color:#7A8A9A;padding:40px 0;">加载中...</div>
+          </div>
+          <div class="log-pagination" id="logPagination"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab: Analysis -->
+    <div id="tab-analysis" style="display:none;">
+      <div class="section-card analysis-section">
+        <div class="section-header">
+          <div class="section-title analysis-header">
+            <span class="analysis-icon">&#x1F9E0;</span>
+            智能诊断分析
+          </div>
+          <button class="refresh-btn" style="padding:6px 14px;font-size:12px;background:rgba(64,158,255,0.15);color:#409eff;border-color:rgba(64,158,255,0.3);" onclick="runAnalysis()">
+            <span>&#x21BB;</span> 重新分析
+          </button>
+        </div>
+        <div class="section-body" id="analysisContent">
+          <div style="text-align:center;color:#7A8A9A;padding:40px 0;">点击"重新分析"生成诊断报告</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div class="footer">
+    策略交易系统 · 监控仪表盘 · 数据每15秒自动刷新
+  </div>
+
+  <!-- Task Form Modal -->
+  <div id="taskModal" class="modal-overlay" style="display:none;" onclick="closeTaskModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span id="modalTitle">创建任务</span>
+        <span class="modal-close" onclick="closeTaskModal()">&times;</span>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+      <div class="modal-footer">
+        <button class="btn-secondary" onclick="closeTaskModal()">取消</button>
+        <button class="btn-primary" id="modalSubmitBtn" onclick="submitTask()">开始执行</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Task Detail Modal -->
+  <div id="taskDetailModal" class="modal-overlay" style="display:none;" onclick="closeTaskDetailModal(event)">
+    <div class="modal-content modal-large" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <span id="detailTitle">任务详情</span>
+        <span class="modal-close" onclick="closeTaskDetailModal()">&times;</span>
+      </div>
+      <div class="modal-body" id="detailBody"></div>
+    </div>
+  </div>
+</div>
+<script>
+// ============ Config ============
+const API_BASE = "/api/v1";
+let currentToken = null;
+let currentTab = "status";
+let logPage = 1;
+let logPageSize = 100;
+let logTotal = 0;
+let autoRefreshTimer = null;
+let selfCheckData = null;
+let logData = null;
+
+// ============ Init ============
+document.addEventListener("DOMContentLoaded", function() {
+  // Get token from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  currentToken = urlParams.get("token");
+  
+  if (!currentToken) {
+    showError("缺少令牌", "请使用完整的分享链接访问此页面");
+    return;
+  }
+  
+  loadAll();
+  startAutoRefresh();
+});
+
+function startAutoRefresh() {
+  autoRefreshTimer = setInterval(function() {
+    if (currentTab === "status") {
+      loadStatus();
+    }
+    if (currentTab === "logs") {
+      loadLogs(logPage);
+    }
+  }, 15000); // 15 seconds
+}
+
+// ============ Tab Switching ============
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll(".tab-btn").forEach(function(btn) {
+    btn.classList.toggle("active", btn.dataset.tab === tab);
+  });
+  document.getElementById("tab-status").style.display = tab === "status" ? "block" : "none";
+  document.getElementById("tab-check").style.display = tab === "check" ? "block" : "none";
+  document.getElementById("tab-logs").style.display = tab === "logs" ? "block" : "none";
+  document.getElementById("tab-analysis").style.display = tab === "analysis" ? "block" : "none";
+  document.getElementById("tab-aicontrol").style.display = tab === "aicontrol" ? "block" : "none";
+  
+  if (tab === "check" && !selfCheckData) {
+    loadSelfCheck();
+  }
+  if (tab === "logs" && !logData) {
+    loadLogs(1);
+  }
+  if (tab === "analysis" && document.getElementById("analysisContent").children.length <= 1) {
+    runAnalysis();
+  }
+  if (tab === "aicontrol") {
+    loadAiTasks();
+  }
+}
+
+// ============ API Helpers ============
+async function apiGet(path) {
+  const url = API_BASE + "/monitor/share/" + currentToken + path;
+  const resp = await fetch(url, {
+    headers: { "Content-Type": "application/json" }
+  });
+  const data = await resp.json();
+  if (data.code !== 0) {
+    throw new Error(data.message || "请求失败");
+  }
+  return data.data;
+}
+
+function showError(title, desc) {
+  document.getElementById("loadingOverlay").style.display = "none";
+  document.getElementById("mainContent").style.display = "none";
+  document.getElementById("errorState").style.display = "block";
+  document.getElementById("errorTitle").textContent = title;
+  document.getElementById("errorDesc").textContent = desc;
+}
+
+// ============ Load All ============
+async function loadAll() {
+  document.getElementById("loadingOverlay").style.display = "flex";
+  try {
+    await loadStatus();
+    document.getElementById("loadingOverlay").style.display = "none";
+    document.getElementById("mainContent").style.display = "block";
+  } catch (e) {
+    showError("链接无效或已过期", e.message || "请获取新的分享链接");
+  }
+}
+
+async function refreshAll() {
+  const btn = document.getElementById("refreshBtn");
+  btn.classList.add("loading");
+  try {
+    await loadStatus();
+    if (currentTab === "check") await loadSelfCheck();
+    if (currentTab === "logs") await loadLogs(logPage);
+    if (currentTab === "analysis") await runAnalysis();
+  } catch (e) {
+    console.error("Refresh failed:", e);
+  } finally {
+    btn.classList.remove("loading");
+  }
+}
+
+// ============ Status ============
+async function loadStatus() {
+  const data = await apiGet("/status");
+  
+  // Overall status
+  const overall = data.overall || "unknown";
+  const statusCard = document.getElementById("statusCard");
+  const badge = document.getElementById("statusBadge");
+  const statusText = document.getElementById("statusText");
+  const bigStatusText = document.getElementById("bigStatusText");
+  const bigStatusDesc = document.getElementById("bigStatusDesc");
+  const statusIcon = document.getElementById("statusIcon");
+  
+  statusCard.className = "card status-card " + overall;
+  badge.className = "status-badge " + overall;
+  
+  const statusMap = {
+    healthy: { text: "运行正常", big: "系统运行正常", desc: "所有服务运行良好", icon: "&#x2714;" },
+    warning: { text: "存在警告", big: "系统存在警告", desc: "存在非关键问题，建议检查", icon: "&#x26A0;" },
+    critical: { text: "系统异常", big: "系统严重异常", desc: "存在严重问题，请立即处理", icon: "&#x2716;" }
+  };
+  const s = statusMap[overall] || statusMap.healthy;
+  statusText.textContent = s.text;
+  bigStatusText.textContent = s.big;
+  bigStatusDesc.textContent = s.desc;
+  statusIcon.innerHTML = s.icon;
+  
+  // Version and uptime
+  document.getElementById("versionInfo").textContent = "v" + (data.version || "1.2.0");
+  document.getElementById("uptimeInfo").textContent = "运行 " + formatUptime(data.uptime_seconds);
+  
+  // Issue tags
+  const issueTags = document.getElementById("issueTags");
+  issueTags.innerHTML = "";
+  if (data.issue_count) {
+    if (data.issue_count.critical > 0) {
+      issueTags.innerHTML += '<div class="issue-tag">' + data.issue_count.critical + ' 严重问题</div>';
+    }
+    if (data.issue_count.warning > 0) {
+      issueTags.innerHTML += '<div class="issue-tag warning">' + data.issue_count.warning + ' 警告</div>';
+    }
+  }
+  
+  // Resources
+  const res = data.resources || {};
+  setMetric("cpu", res.cpu_percent, null, 80, 95);
+  setMetric("mem", res.memory_percent, 
+    (res.memory_used_mb || 0) + " / " + (res.memory_total_mb || 0) + " MB",
+    80, 95);
+  setMetric("disk", res.disk_percent,
+    (res.disk_free_gb || 0) + " GB 可用 / " + (res.disk_total_gb || 0) + " GB",
+    80, 95);
+  
+  // Services
+  renderServices(data);
+  
+  // Issues
+  renderIssues(data.issues || []);
+  
+  // Log stats
+  renderLogStats(data.logs || {});
+}
+
+function setMetric(key, value, subText, warnThresh, critThresh) {
+  const val = value || 0;
+  const valEl = document.getElementById(key + "Value");
+  const barEl = document.getElementById(key + "Bar");
+  const subEl = document.getElementById(key + "Sub");
+  
+  valEl.textContent = val.toFixed(1) + "%";
+  barEl.style.width = Math.min(val, 100) + "%";
+  
+  let cls = "";
+  if (val >= critThresh) cls = "critical";
+  else if (val >= warnThresh) cls = "warning";
+  
+  valEl.className = "metric-value " + cls;
+  barEl.className = "progress-fill " + cls;
+  
+  if (subEl && subText) {
+    subEl.textContent = subText;
+  }
+}
+
+function renderServices(data) {
+  const list = document.getElementById("serviceList");
+  const services = [];
+  
+  // Database
+  const dbConn = data.database?.connection;
+  services.push({
+    icon: "&#x1F4BE;",
+    iconCls: "db",
+    name: "数据库",
+    desc: dbConn === "ok" ? "连接正常" : (data.database?.error || "未知状态"),
+    status: dbConn === "ok" ? "ok" : "err",
+    statusText: dbConn === "ok" ? "运行中" : "异常"
+  });
+  
+  // Redis
+  const redisStatus = data.redis?.status;
+  services.push({
+    icon: "&#x26A1;",
+    iconCls: "redis",
+    name: "Redis",
+    desc: data.redis?.host ? (data.redis.host + ":" + data.redis.port) : "未配置",
+    status: redisStatus === "ok" ? "ok" : (redisStatus === "unavailable" ? "off" : "warn"),
+    statusText: redisStatus === "ok" ? "运行中" : (redisStatus === "unavailable" ? "未启用" : "异常")
+  });
+  
+  // Scheduler
+  const sched = data.scheduler;
+  services.push({
+    icon: "&#x23F1;",
+    iconCls: "sched",
+    name: "定时任务",
+    desc: (sched?.mode || "未知") + " 模式",
+    status: sched?.enabled ? "ok" : "warn",
+    statusText: sched?.enabled ? "运行中" : "未启用"
+  });
+  
+  // Render
+  list.innerHTML = services.map(function(s) {
+    return '<div class="service-item">' +
+      '<div class="service-icon ' + s.iconCls + '">' + s.icon + '</div>' +
+      '<div class="service-info">' +
+        '<div class="service-name">' + s.name + '</div>' +
+        '<div class="service-desc">' + s.desc + '</div>' +
+      '</div>' +
+      '<div class="service-status ' + s.status + '">' + s.statusText + '</div>' +
+    '</div>';
+  }).join("");
+  
+  // Task list if available
+  if (sched?.tasks?.length) {
+    const taskHtml = '<div style="margin-top:12px;padding-top:12px;border-top:1px solid #1A2A3A;">' +
+      '<div style="font-size:12px;color:#7A8A9A;margin-bottom:8px;">定时任务列表</div>' +
+      sched.tasks.map(function(t) {
+        return '<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;">' +
+          '<span style="width:6px;height:6px;border-radius:50%;background:#25D07D;"></span>' +
+          '<span style="color:#B0BEC5;flex:1;">' + t.name + '</span>' +
+          '<span style="color:#5A6A7A;">' + t.interval + '</span>' +
+          '<span style="color:#25D07D;font-size:11px;">运行中</span>' +
+        '</div>';
+      }).join("") +
+    '</div>';
+    list.innerHTML += taskHtml;
+  }
+}
+
+function renderIssues(issues) {
+  const list = document.getElementById("issueList");
+  if (!issues.length) {
+    list.innerHTML = '<div style="text-align:center;padding:30px 0;color:#909399;">' +
+      '<div style="font-size:32px;color:#25D07D;margin-bottom:10px;">&#x2714;</div>' +
+      '<div>系统运行正常，未检测到问题</div>' +
+    '</div>';
+    return;
+  }
+  
+  list.innerHTML = issues.map(function(i) {
+    const icon = i.level === "critical" ? "&#x2716;" : "&#x26A0;";
+    return '<div class="issue-item ' + i.level + '">' +
+      '<div class="issue-icon">' + icon + '</div>' +
+      '<div class="issue-text">' + escapeHtml(i.msg) + '</div>' +
+    '</div>';
+  }).join("");
+}
+
+function renderLogStats(logs) {
+  const stats = logs.level_counts || {};
+  const items = [
+    { key: "info", label: "INFO", count: stats.INFO || 0 },
+    { key: "warning", label: "WARNING", count: stats.WARNING || 0 },
+    { key: "error", label: "ERROR", count: stats.ERROR || 0 },
+    { key: "debug", label: "DEBUG", count: stats.DEBUG || 0 },
+    { key: "total", label: "日志文件", count: logs.total_log_files || 0 },
+  ];
+  
+  document.getElementById("logStats").innerHTML = items.map(function(i) {
+    return '<div class="log-stat ' + i.key + '">' +
+      '<div class="log-stat-count">' + i.count + '</div>' +
+      '<div class="log-stat-label">' + i.label + '</div>' +
+    '</div>';
+  }).join("");
+}
+
+// ============ Self Check ============
+async function loadSelfCheck() {
+  try {
+    selfCheckData = await apiGet("/self-check");
+    renderSelfCheck(selfCheckData);
+  } catch (e) {
+    document.getElementById("checkList").innerHTML = 
+      '<div style="text-align:center;color:#f56c6c;padding:20px;">加载失败: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function runSelfCheck() {
+  document.getElementById("checkList").innerHTML = 
+    '<div style="text-align:center;color:#7A8A9A;padding:20px;"><div style="font-size:24px;">&#x23F3;</div><div style="margin-top:8px;">正在检测...</div></div>';
+  await loadSelfCheck();
+}
+
+function renderSelfCheck(data) {
+  const overall = data.overall || "warning";
+  const overview = document.getElementById("checkOverview");
+  overview.className = "check-overview " + overall;
+  
+  document.getElementById("checkScore").textContent = data.pass_rate + "%";
+  document.getElementById("checkTitle").textContent = 
+    overall === "healthy" ? "一切正常" : (overall === "warning" ? "存在警告" : "严重异常");
+  document.getElementById("checkDetail").textContent = 
+    data.passed + " / " + data.total + " 项通过 · 耗时 " + data.elapsed_ms + "ms";
+  document.getElementById("checkTime").textContent = data.checked_at || "";
+  
+  const list = document.getElementById("checkList");
+  list.innerHTML = (data.checks || []).map(function(c) {
+    const statusIcon = c.passed ? "&#x2714;" : "&#x2716;";
+    const statusCls = c.passed ? "pass" : "fail";
+    let detail = "";
+    if (c.passed && c.detail && typeof c.detail === "object") {
+      detail = Object.keys(c.detail).map(function(k) {
+        return '<span style="color:#7A8A9A;">' + k + ': ' + c.detail[k] + '</span>';
+      }).join(" ");
+    } else if (!c.passed) {
+      detail = '<span style="color:#f56c6c;">' + escapeHtml(c.error || "") + '</span>';
+    }
+    return '<div class="check-item ' + statusCls + '">' +
+      '<div class="check-status ' + statusCls + '">' + statusIcon + '</div>' +
+      '<div class="check-name">' + escapeHtml(c.name) + '</div>' +
+      '<div class="check-detail">' + detail + '</div>' +
+    '</div>';
+  }).join("");
+}
+
+// ============ Logs ============
+async function loadLogs(page) {
+  logPage = page;
+  const type = document.getElementById("logType").value;
+  const level = document.getElementById("logLevel").value;
+  const keyword = document.getElementById("logKeyword").value;
+  
+  const viewer = document.getElementById("logViewer");
+  viewer.innerHTML = '<div style="text-align:center;color:#7A8A9A;padding:40px;">加载中...</div>';
+  
+  try {
+    const params = new URLSearchParams({
+      log_type: type,
+      level: level,
+      keyword: keyword,
+      page: page,
+      page_size: logPageSize
+    });
+    const data = await apiGet("/logs?" + params.toString());
+    logData = data;
+    logTotal = data.total || 0;
+    
+    renderLogs(data.entries || []);
+    renderLogPagination();
+  } catch (e) {
+    viewer.innerHTML = '<div style="text-align:center;color:#f56c6c;padding:20px;">加载失败: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function renderLogs(entries) {
+  const viewer = document.getElementById("logViewer");
+  if (!entries.length) {
+    viewer.innerHTML = '<div style="text-align:center;color:#7A8A9A;padding:40px;">暂无日志记录</div>';
+    return;
+  }
+  
+  viewer.innerHTML = entries.map(function(e) {
+    if (!e.level) {
+      return '<div class="log-line"><span class="log-msg" style="color:#7A8A9A;">' + escapeHtml(e.message || e.raw || "") + '</span></div>';
+    }
+    return '<div class="log-line level-' + e.level + '">' +
+      '<span class="log-time">' + (e.timestamp || "") + '</span>' +
+      '<span class="log-lvl ' + e.level + '">' + (e.level || "") + '</span>' +
+      '<span class="log-mod">' + (e.module || "") + ':' + (e.function || "") + ':' + (e.line || "") + '</span>' +
+      '<span class="log-msg">' + escapeHtml(e.message || "") + '</span>' +
+    '</div>';
+  }).join("");
+}
+
+function renderLogPagination() {
+  const totalPages = Math.ceil(logTotal / logPageSize);
+  const container = document.getElementById("logPagination");
+  
+  if (totalPages <= 1) {
+    container.innerHTML = "";
+    return;
+  }
+  
+  let html = "";
+  html += '<button class="page-btn" onclick="loadLogs(' + (logPage - 1) + ')" ' + (logPage <= 1 ? "disabled" : "") + '>上一页</button>';
+  
+  const maxVisible = 5;
+  let start = Math.max(1, logPage - Math.floor(maxVisible / 2));
+  let end = Math.min(totalPages, start + maxVisible - 1);
+  if (end - start + 1 < maxVisible) {
+    start = Math.max(1, end - maxVisible + 1);
+  }
+  
+  for (let i = start; i <= end; i++) {
+    html += '<button class="page-btn ' + (i === logPage ? "active" : "") + '" onclick="loadLogs(' + i + ')">' + i + '</button>';
+  }
+  
+  html += '<button class="page-btn" onclick="loadLogs(' + (logPage + 1) + ')" ' + (logPage >= totalPages ? "disabled" : "") + '>下一页</button>';
+  html += '<span style="color:#7A8A9A;font-size:12px;margin-left:8px;align-self:center;">共 ' + logTotal + ' 条</span>';
+  
+  container.innerHTML = html;
+}
+
+// ============ Smart Analysis ============
+async function runAnalysis() {
+  const container = document.getElementById("analysisContent");
+  container.innerHTML = '<div style="text-align:center;color:#7A8A9A;padding:40px;"><div style="font-size:28px;">&#x1F9E0;</div><div style="margin-top:10px;">正在分析系统状态...</div></div>';
+  
+  try {
+    // Get status and error logs in parallel
+    const [statusData, checkData] = await Promise.all([
+      apiGet("/status"),
+      apiGet("/self-check")
+    ]);
+    
+    // Get error logs for deeper analysis
+    let errorLogs = [];
+    try {
+      const errData = await apiGet("/logs?log_type=error&page_size=50");
+      errorLogs = errData.entries || [];
+    } catch(e) { /* ignore */ }
+    
+    const analysis = generateAnalysis(statusData, checkData, errorLogs);
+    renderAnalysis(analysis);
+  } catch (e) {
+    container.innerHTML = '<div style="text-align:center;color:#f56c6c;padding:20px;">分析失败: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+function generateAnalysis(statusData, checkData, errorLogs) {
+  const items = [];
+  
+  // 1. Overall health assessment
+  const overall = statusData.overall;
+  items.push({
+    severity: overall === "healthy" ? "success" : (overall === "warning" ? "warning" : "critical"),
+    title: "系统健康评估",
+    desc: overall === "healthy" 
+      ? "系统整体运行良好，所有核心服务正常。" 
+      : overall === "warning"
+        ? "系统存在一些非关键问题，建议尽快检查处理，避免演变为严重故障。"
+        : "系统存在严重问题，可能影响核心功能，建议立即排查处理。",
+    suggestion: overall === "healthy" 
+      ? "继续保持监控，关注异常告警。"
+      : "请查看下方具体问题项，按优先级逐一修复。"
+  });
+  
+  // 2. Resource analysis
+  const res = statusData.resources || {};
+  if (res.cpu_percent > 80) {
+    items.push({
+      severity: res.cpu_percent > 95 ? "critical" : "warning",
+      title: "CPU 使用率过高",
+      desc: "当前 CPU 使用率为 " + res.cpu_percent.toFixed(1) + "%，已超过安全阈值。",
+      suggestion: "检查是否有异常进程占用大量CPU，可使用 <code>top</code> 或 <code>ps aux</code> 查看进程状态。考虑优化定时任务频率或增加服务器配置。"
+    });
+  }
+  if (res.memory_percent > 80) {
+    items.push({
+      severity: res.memory_percent > 95 ? "critical" : "warning",
+      title: "内存使用率过高",
+      desc: "当前内存使用率为 " + res.memory_percent.toFixed(1) + "%，已超过安全阈值。",
+      suggestion: "检查是否存在内存泄漏，Python进程长期运行可能累积内存。建议定期重启服务或增加内存。"
+    });
+  }
+  if (res.disk_percent > 80) {
+    items.push({
+      severity: res.disk_percent > 95 ? "critical" : "warning",
+      title: "磁盘空间不足",
+      desc: "当前磁盘使用率为 " + res.disk_percent.toFixed(1) + "%，剩余空间 " + (res.disk_free_gb || 0) + " GB。",
+      suggestion: "清理日志文件和备份文件，可在系统管理页面执行缓存清理。必要时扩容磁盘。"
+    });
+  }
+  
+  // 3. Failed checks
+  const failed = (checkData.checks || []).filter(function(c) { return !c.passed; });
+  if (failed.length > 0) {
+    items.push({
+      severity: "warning",
+      title: "功能自检未通过项",
+      desc: "共 " + failed.length + " 项检测未通过：" + failed.map(function(f) { return f.name; }).join("、"),
+      suggestion: "点击'功能自检'标签页查看每项的具体错误信息，逐一排查修复。"
+    });
+  }
+  
+  // 4. Error log analysis
+  if (errorLogs.length > 0) {
+    // Group by module
+    const moduleErrors = {};
+    errorLogs.forEach(function(e) {
+      const mod = e.module || "unknown";
+      if (!moduleErrors[mod]) moduleErrors[mod] = 0;
+      moduleErrors[mod]++;
+    });
+    
+    const topModules = Object.entries(moduleErrors)
+      .sort(function(a, b) { return b[1] - a[1]; })
+      .slice(0, 3);
+    
+    items.push({
+      severity: errorLogs.length > 20 ? "critical" : "warning",
+      title: "错误日志分析",
+      desc: "最近读取到 " + errorLogs.length + " 条错误日志，主要集中在：" + 
+        topModules.map(function(m) { return m[0] + "(" + m[1] + "条)"; }).join("、"),
+      suggestion: "点击'运行日志'标签页，选择'错误日志'查看详细错误堆栈。常见问题：数据库连接失败、API Key错误、代理不可用。"
+    });
+    
+    // Look for known error patterns
+    const knownPatterns = [
+      { pattern: /cryptopanic|新闻|news/i, name: "新闻采集服务", fix: "检查 CryptoPanic API Key 配置和代理设置" },
+      { pattern: /proxy|代理|xray/i, name: "代理服务", fix: "检查代理节点状态，可在爬虫监控页查看详细信息" },
+      { pattern: /database|sql|sqlite|mysql/i, name: "数据库", fix: "检查数据库连接配置，确认MySQL/SQLite服务正常运行" },
+      { pattern: /redis/i, name: "Redis缓存", fix: "检查Redis服务是否启动，确认地址和密码配置正确" },
+      { pattern: /exchange|api.?key|binance|okx/i, name: "交易所API", fix: "检查交易所API Key配置，确认权限和余额" },
+      { pattern: /ai|openai|gpt/i, name: "AI服务", fix: "检查AI API Key配置和余额，确认网络连通性" },
+    ];
+    
+    knownPatterns.forEach(function(p) {
+      const matches = errorLogs.filter(function(e) {
+        return p.pattern.test(e.message || "") || p.pattern.test(e.module || "");
+      });
+      if (matches.length > 0) {
+        items.push({
+          severity: "info",
+          title: "疑似问题：" + p.name,
+          desc: "发现 " + matches.length + " 条相关错误日志。",
+          suggestion: "建议：" + p.fix
+        });
+      }
+    });
+  }
+  
+  // 5. Database status
+  if (statusData.database?.connection !== "ok") {
+    items.push({
+      severity: "critical",
+      title: "数据库连接异常",
+      desc: "数据库连接失败：" + (statusData.database?.error || "未知错误"),
+      suggestion: "检查数据库配置（.env文件），确认数据库服务已启动，网络可达。"
+    });
+  }
+  
+  // 6. Scheduler status
+  if (!statusData.scheduler?.enabled) {
+    items.push({
+      severity: "info",
+      title: "定时任务状态",
+      desc: "定时任务引擎当前状态：未启用或未检测到。",
+      suggestion: "确认 APScheduler 是否已启动，检查后端启动日志中是否有定时任务初始化成功的消息。"
+    });
+  }
+  
+  // 7. Recommendations summary
+  items.push({
+    severity: "info",
+    title: "优化建议",
+    desc: "基于当前系统状态，建议优先处理以下事项：",
+    suggestion: failed.length > 0 
+      ? "1. 修复功能自检中的失败项\n2. 清理系统日志和临时文件释放空间\n3. 定期检查系统资源使用趋势\n4. 配置告警通知以便及时发现问题"
+      : "1. 继续保持当前运行状态\n2. 定期备份数据和配置\n3. 关注日志中的异常警告\n4. 及时更新系统版本"
+  });
+  
+  return items;
+}
+
+function renderAnalysis(items) {
+  const container = document.getElementById("analysisContent");
+  container.innerHTML = items.map(function(item) {
+    return '<div class="analysis-item ' + item.severity + '">' +
+      '<div class="analysis-title">' +
+        '<span class="severity ' + item.severity + '">' + 
+          (item.severity === "critical" ? "严重" : 
+           item.severity === "warning" ? "警告" : 
+           item.severity === "success" ? "良好" : "提示") + 
+        '</span>' +
+        item.title +
+      '</div>' +
+      '<div class="analysis-desc">' + item.desc + '</div>' +
+      '<div class="analysis-suggestion"><strong>建议：</strong>' + item.suggestion + '</div>' +
+    '</div>';
+  }).join("");
+}
+
+// ============ Utilities ============
+function formatUptime(seconds) {
+  if (!seconds) return "--";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 24) {
+    const d = Math.floor(h / 24);
+    return d + "天" + (h % 24) + "小时";
+  }
+  return h + "小时" + m + "分";
+}
+
+function escapeHtml(text) {
+  if (!text) return "";
+  const div = document.createElement("div");
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// ============ AI Control Center ============
+let currentTaskType = "backtest";
+let aiTasks = [];
+let taskPollTimer = null;
+// SSE 连接管理: task_id -> EventSource
+let activeSseConnections = {};
+
+// 为指定任务建立 SSE 实时推送连接
+function setupTaskSse(taskId) {
+  if (activeSseConnections[taskId]) {
+    return; // 已经有连接了
+  }
+
+  const url = API_BASE + "/ai/tasks/" + taskId + "/stream";
+  const es = new EventSource(url);
+  activeSseConnections[taskId] = es;
+  updateSseStatusIndicator();
+
+  es.onmessage = function(event) {
+    try {
+      const data = JSON.parse(event.data);
+      handleSseEvent(data);
+    } catch (e) {
+      console.error("SSE parse error:", e);
+    }
+  };
+
+  es.onerror = function() {
+    // 连接出错，关闭并重试（3秒后）
+    closeTaskSse(taskId);
+    setTimeout(function() {
+      // 如果任务还在运行，重新建立连接
+      const task = aiTasks.find(function(t) { return t.task_id === taskId; });
+      if (task && (task.status === "running" || task.status === "pending")) {
+        setupTaskSse(taskId);
+      }
+    }, 3000);
+  };
+}
+
+// 关闭指定任务的 SSE 连接
+function closeTaskSse(taskId) {
+  if (activeSseConnections[taskId]) {
+    try {
+      activeSseConnections[taskId].close();
+    } catch (e) {}
+    delete activeSseConnections[taskId];
+    updateSseStatusIndicator();
+  }
+}
+
+// 处理 SSE 事件
+function handleSseEvent(event) {
+  const taskId = event.task_id;
+  const eventType = event.event;
+  const data = event.data;
+
+  // 更新任务列表中的对应任务
+  const idx = aiTasks.findIndex(function(t) { return t.task_id === taskId; });
+  if (idx === -1) {
+    // 任务不在列表中，刷新列表
+    refreshTaskList();
+    return;
+  }
+
+  const task = aiTasks[idx];
+
+  if (eventType === "progress") {
+    task.progress = data.progress;
+    task.status = data.status;
+  } else if (eventType === "completed") {
+    task.progress = 100;
+    task.status = "completed";
+    task.result = data.result;
+    task.completed_at = event.timestamp;
+    // 关闭 SSE 连接
+    closeTaskSse(taskId);
+    // 如果详情弹窗正打开着这个任务，更新详情
+    updateDetailIfOpen(taskId);
+  } else if (eventType === "failed") {
+    task.progress = data.progress || task.progress;
+    task.status = "failed";
+    task.error = data.error;
+    task.completed_at = event.timestamp;
+    closeTaskSse(taskId);
+    updateDetailIfOpen(taskId);
+  } else if (eventType === "heartbeat") {
+    // 心跳，不处理
+    return;
+  }
+
+  // 重新渲染任务列表
+  renderAiTaskList();
+
+  // 检查是否还有运行中的任务，没有的话清理所有连接
+  checkAndCleanSse();
+}
+
+// 如果详情弹窗正在显示某个任务，更新其内容
+function updateDetailIfOpen(taskId) {
+  const modal = document.getElementById("taskDetailModal");
+  if (modal && modal.style.display === "flex") {
+    const task = aiTasks.find(function(t) { return t.task_id === taskId; });
+    if (task) {
+      document.getElementById("detailBody").innerHTML = renderTaskDetail(task);
+    }
+  }
+}
+
+// 检查并清理已完成任务的 SSE 连接
+function checkAndCleanSse() {
+  const runningTaskIds = aiTasks
+    .filter(function(t) { return t.status === "running" || t.status === "pending"; })
+    .map(function(t) { return t.task_id; });
+
+  // 关闭不在运行中的任务的连接
+  for (const tid in activeSseConnections) {
+    if (runningTaskIds.indexOf(tid) === -1) {
+      closeTaskSse(tid);
+    }
+  }
+  
+  updateSseStatusIndicator();
+}
+
+// 更新 SSE 连接状态指示器
+function updateSseStatusIndicator() {
+  const dot = document.getElementById("sseDot");
+  const text = document.getElementById("sseStatusText");
+  if (!dot || !text) return;
+
+  const count = Object.keys(activeSseConnections).length;
+  if (count > 0) {
+    dot.style.background = "#25D07D";
+    dot.style.boxShadow = "0 0 6px rgba(37,208,125,0.6)";
+    text.textContent = "实时推送中 (" + count + ")";
+    text.style.color = "#25D07D";
+  } else {
+    dot.style.background = "#7A8A9A";
+    dot.style.boxShadow = "none";
+    text.textContent = "就绪";
+    text.style.color = "#7A8A9A";
+  }
+}
+
+// 确保所有运行中的任务都有 SSE 连接
+function ensureSseForRunningTasks() {
+  const runningTasks = aiTasks.filter(function(t) {
+    return t.status === "running" || t.status === "pending";
+  });
+
+  runningTasks.forEach(function(t) {
+    if (!activeSseConnections[t.task_id]) {
+      setupTaskSse(t.task_id);
+    }
+  });
+
+  // 清理已完成的连接
+  checkAndCleanSse();
+}
+
+// 刷新任务列表（用于初始加载或补充新任务）
+async function refreshTaskList() {
+  try {
+    const result = await apiGet("/ai/tasks");
+    aiTasks = result.tasks || [];
+    renderAiTaskList();
+    ensureSseForRunningTasks();
+  } catch (e) {
+    // 静默失败
+  }
+}
+
+const TASK_CONFIG = {
+  backtest: {
+    title: "📈 模拟回测",
+    fields: [
+      { key: "symbol", label: "交易对", type: "text", default: "BTC/USDT" },
+      { key: "timeframe", label: "时间级别", type: "select", options: ["1m", "5m", "15m", "1h", "4h", "1d", "1w"], default: "1h" },
+      { key: "strategy", label: "策略类型", type: "select", options: ["emv", "bollinger", "macd", "rsi", "ma_cross"], default: "emv" },
+      { key: "days", label: "回测天数", type: "number", default: 90, min: 7, max: 365 },
+      { key: "initial_capital", label: "初始资金(USDT)", type: "number", default: 10000, min: 100 },
+    ],
+    endpoint: "/ai/tasks/backtest",
+  },
+  strategy_scan: {
+    title: "🔍 多币种策略扫描",
+    fields: [
+      { key: "symbols", label: "扫描币种（逗号分隔）", type: "text", default: "BTC/USDT,ETH/USDT,SOL/USDT,BNB/USDT,XRP/USDT" },
+      { key: "timeframes", label: "时间级别（逗号分隔）", type: "text", default: "15m,1h,4h,1d" },
+      { key: "strategy", label: "策略类型", type: "select", options: ["emv", "bollinger", "macd", "rsi", "ma_cross"], default: "emv" },
+      { key: "top_n", label: "返回前N个", type: "number", default: 5, min: 1, max: 20 },
+    ],
+    endpoint: "/ai/tasks/strategy-scan",
+  },
+  ai_analysis: {
+    title: "🧠 AI市场分析",
+    fields: [
+      { key: "symbol", label: "分析币种", type: "text", default: "BTC/USDT" },
+      { key: "analysis_type", label: "分析类型", type: "select", options: ["comprehensive", "technical", "sentiment", "risk"], default: "comprehensive" },
+    ],
+    endpoint: "/ai/tasks/ai-analysis",
+  },
+  full_test: {
+    title: "⚡ 全面系统测试",
+    fields: [
+      { key: "symbols", label: "测试币种（逗号分隔）", type: "text", default: "BTC/USDT,ETH/USDT,SOL/USDT" },
+      { key: "timeframes", label: "时间级别（逗号分隔）", type: "text", default: "1h,4h" },
+      { key: "strategy", label: "策略类型", type: "select", options: ["emv", "bollinger", "macd", "rsi", "ma_cross"], default: "emv" },
+    ],
+    endpoint: "/ai/tasks/full-test",
+  },
+};
+
+function showTaskForm(type) {
+  currentTaskType = type;
+  const config = TASK_CONFIG[type];
+  document.getElementById("modalTitle").textContent = config.title;
+
+  let html = "";
+  config.fields.forEach(function(field) {
+    const val = field.default;
+    html += '<div style="margin-bottom:16px;">';
+    html += '<label style="display:block;font-size:13px;color:#CBD5E1;margin-bottom:6px;">' + field.label + '</label>';
+    if (field.type === "select") {
+      html += '<select id="field_' + field.key + '" class="form-input">';
+      field.options.forEach(function(opt) {
+        html += '<option value="' + opt + '"' + (opt === val ? ' selected' : '') + '>' + opt + '</option>';
+      });
+      html += '</select>';
+    } else if (field.type === "number") {
+      html += '<input type="number" id="field_' + field.key + '" class="form-input" value="' + val + '"' +
+        (field.min !== undefined ? ' min="' + field.min + '"' : '') +
+        (field.max !== undefined ? ' max="' + field.max + '"' : '') + '>';
+    } else {
+      html += '<input type="text" id="field_' + field.key + '" class="form-input" value="' + val + '">';
+    }
+    html += '</div>';
+  });
+
+  document.getElementById("modalBody").innerHTML = html;
+  document.getElementById("taskModal").style.display = "flex";
+}
+
+function closeTaskModal(event) {
+  if (event && event.target !== event.currentTarget) return;
+  document.getElementById("taskModal").style.display = "none";
+}
+
+async function submitTask() {
+  const config = TASK_CONFIG[currentTaskType];
+  const params = {};
+
+  config.fields.forEach(function(field) {
+    let val = document.getElementById("field_" + field.key).value;
+    if (field.key === "symbols" || field.key === "timeframes") {
+      val = val.split(",").map(function(s) { return s.trim(); }).filter(Boolean);
+    } else if (field.type === "number") {
+      val = parseFloat(val) || field.default;
+    }
+    params[field.key] = val;
+  });
+
+  const btn = document.getElementById("modalSubmitBtn");
+  btn.disabled = true;
+  btn.textContent = "提交中...";
+
+  try {
+    const result = await apiPost(config.endpoint, params);
+    closeTaskModal();
+    showToast("任务已启动", "success");
+    loadAiTasks();
+    // 为新任务建立 SSE 实时推送连接
+    setupTaskSse(result.task_id);
+  } catch (e) {
+    showToast("创建失败: " + (e.message || e), "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "开始执行";
+  }
+}
+
+async function loadAiTasks() {
+  try {
+    const result = await apiGet("/ai/tasks?limit=20");
+    aiTasks = result.tasks || [];
+    renderAiTaskList();
+
+    // 为所有运行中的任务建立 SSE 实时推送连接
+    ensureSseForRunningTasks();
+  } catch (e) {
+    document.getElementById("aiTaskList").innerHTML =
+      '<div style="text-align:center;color:#f56c6c;padding:20px;">加载任务失败: ' + escapeHtml(e.message || String(e)) + '</div>';
+  }
+}
+
+function renderAiTaskList() {
+  const container = document.getElementById("aiTaskList");
+  if (!aiTasks || aiTasks.length === 0) {
+    container.innerHTML = '<div style="text-align:center;color:#7A8A9A;padding:30px 0;">暂无任务，点击上方卡片创建</div>';
+    return;
+  }
+
+  let html = "";
+  aiTasks.forEach(function(task) {
+    const statusClass = task.status === "completed" ? "status-success" :
+      task.status === "failed" ? "status-failed" : "status-running";
+    const statusText = task.status === "completed" ? "✓ 已完成" :
+      task.status === "failed" ? "✕ 失败" : "⏳ 运行中";
+
+    html += '<div class="task-item" onclick="showTaskDetail(\'' + task.task_id + '\')">';
+    html += '<div class="task-item-header">';
+    html += '<span class="task-name">' + escapeHtml(task.type_label) + '</span>';
+    html += '<span class="task-status ' + statusClass + '">' + statusText + '</span>';
+    html += '</div>';
+    html += '<div class="task-item-meta">';
+    html += '<span>创建: ' + formatTime(task.created_at) + '</span>';
+    html += '<span>耗时: ' + (task.duration_seconds || 0).toFixed(1) + 's</span>';
+    html += '</div>';
+    if (task.status === "running" || task.status === "pending") {
+      html += '<div class="task-progress-bar">';
+      html += '<div class="task-progress-fill" style="width:' + (task.progress || 0) + '%"></div>';
+      html += '</div>';
+      html += '<div class="task-progress-text">' + (task.progress || 0) + '%</div>';
+    }
+    if (task.status === "failed" && task.error) {
+      html += '<div class="task-error">' + escapeHtml(task.error) + '</div>';
+    }
+    html += '</div>';
+  });
+
+  container.innerHTML = html;
+}
+
+async function showTaskDetail(taskId) {
+  try {
+    const task = await apiGet("/ai/tasks/" + taskId);
+    document.getElementById("detailTitle").textContent = task.type_label + " - 任务详情";
+    document.getElementById("detailBody").innerHTML = renderTaskDetail(task);
+    document.getElementById("taskDetailModal").style.display = "flex";
+  } catch (e) {
+    showToast("加载详情失败", "error");
+  }
+}
+
+function closeTaskDetailModal(event) {
+  if (event && event.target !== event.currentTarget) return;
+  document.getElementById("taskDetailModal").style.display = "none";
+}
+
+function renderTaskDetail(task) {
+  let html = "";
+
+  // 基本信息
+  html += '<div class="detail-section">';
+  html += '<div class="detail-title">基本信息</div>';
+  html += '<div class="detail-grid">';
+  html += '<div class="detail-item"><span class="di-label">任务ID</span><span class="di-value">' + task.task_id + '</span></div>';
+  html += '<div class="detail-item"><span class="di-label">任务类型</span><span class="di-value">' + task.type_label + '</span></div>';
+  html += '<div class="detail-item"><span class="di-label">状态</span><span class="di-value">' +
+    (task.status === "completed" ? '<span style="color:#25D07D;">已完成</span>' :
+     task.status === "failed" ? '<span style="color:#f56c6c;">失败</span>' :
+     '<span style="color:#e6a23c;">运行中 ' + (task.progress || 0) + '%</span>') + '</span></div>';
+  html += '<div class="detail-item"><span class="di-label">耗时</span><span class="di-value">' + task.duration_seconds.toFixed(2) + 's</span></div>';
+  html += '</div></div>';
+
+  // 结果展示
+  if (task.result) {
+    html += '<div class="detail-section">';
+    html += '<div class="detail-title">结果分析</div>';
+
+    if (task.task_type === "backtest" && task.result.summary) {
+      html += renderBacktestResult(task.result);
+    } else if (task.task_type === "strategy_scan" && task.result.scan_summary) {
+      html += renderScanResult(task.result);
+    } else if (task.task_type === "ai_analysis" && task.result.technical_analysis) {
+      html += renderAiAnalysisResult(task.result);
+    } else if (task.task_type === "full_test") {
+      html += renderFullTestResult(task.result);
+    } else {
+      html += '<pre style="background:#0A131B;padding:12px;border-radius:8px;overflow-x:auto;font-size:12px;color:#94A3B8;">' +
+        escapeHtml(JSON.stringify(task.result, null, 2)) + '</pre>';
+    }
+
+    if (task.result.conclusion || task.result.summary) {
+      html += '<div class="conclusion-box">';
+      html += '<div class="conclusion-label">💡 分析结论</div>';
+      html += '<div class="conclusion-text">' + escapeHtml(task.result.conclusion || task.result.summary || "") + '</div>';
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+
+  if (task.error) {
+    html += '<div class="detail-section">';
+    html += '<div class="detail-title" style="color:#f56c6c;">错误信息</div>';
+    html += '<div style="color:#f56c6c;background:rgba(245,108,108,0.1);padding:12px;border-radius:8px;">' + escapeHtml(task.error) + '</div>';
+    html += '</div>';
+  }
+
+  return html;
+}
+
+function renderBacktestResult(result) {
+  const s = result.summary;
+  let html = '<div class="result-stats-grid">';
+  html += statCard("总收益", (s.total_return_pct >= 0 ? "+" : "") + s.total_return_pct + "%", s.total_return_pct >= 0 ? "profit" : "loss");
+  html += statCard("夏普比率", s.sharpe_ratio, s.sharpe_ratio > 1.5 ? "profit" : "neutral");
+  html += statCard("最大回撤", s.max_drawdown_pct + "%", "loss");
+  html += statCard("胜率", s.win_rate.toFixed(1) + "%", s.win_rate > 50 ? "profit" : "neutral");
+  html += statCard("总交易次数", s.total_trades, "neutral");
+  html += statCard("盈亏比", s.profit_factor, s.profit_factor > 1.5 ? "profit" : "neutral");
+  html += '</div>';
+
+  html += '<div style="margin-top:16px;">';
+  html += '<div style="font-size:13px;color:#94A3B8;margin-bottom:8px;">近期交易</div>';
+  html += '<table class="result-table"><thead><tr><th>方向</th><th>入场价</th><th>出场价</th><th>盈亏%</th><th>持仓K线</th></tr></thead><tbody>';
+  (result.top_trades || []).forEach(function(t) {
+    const pnlClass = t.pnl_pct >= 0 ? "profit" : "loss";
+    html += '<tr>';
+    html += '<td><span class="side-tag ' + t.side + '">' + (t.side === "long" ? "多" : "空") + '</span></td>';
+    html += '<td>$' + t.entry_price.toFixed(2) + '</td>';
+    html += '<td>$' + t.exit_price.toFixed(2) + '</td>';
+    html += '<td class="' + pnlClass + '">' + (t.pnl_pct >= 0 ? "+" : "") + t.pnl_pct.toFixed(2) + '%</td>';
+    html += '<td>' + t.hold_bars + '根</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  return html;
+}
+
+function renderScanResult(result) {
+  const s = result.scan_summary;
+  let html = '<div class="result-stats-grid">';
+  html += statCard("扫描组合数", s.total_combinations, "neutral");
+  html += statCard("平均评分", s.avg_score, s.avg_score > 60 ? "profit" : "neutral");
+  html += statCard("看涨信号", s.bullish_signals, "profit");
+  html += statCard("看跌信号", s.bearish_signals, "loss");
+  html += '</div>';
+
+  html += '<div style="margin-top:16px;">';
+  html += '<div style="font-size:13px;color:#94A3B8;margin-bottom:8px;">Top ' + (result.top_opportunities || []).length + ' 交易机会</div>';
+  html += '<table class="result-table"><thead><tr><th>币种</th><th>周期</th><th>评分</th><th>信号</th><th>波动率</th><th>趋势</th></tr></thead><tbody>';
+  (result.top_opportunities || []).forEach(function(r) {
+    const signalClass = r.signal === "strong_buy" ? "strong-buy" : r.signal === "buy" ? "buy" :
+      r.signal === "strong_sell" ? "strong-sell" : r.signal === "sell" ? "sell" : "neutral";
+    const signalLabel = { strong_buy: "强买", buy: "买入", neutral: "中性", sell: "卖出", strong_sell: "强卖" }[r.signal] || r.signal;
+    html += '<tr>';
+    html += '<td style="font-weight:600;">' + r.symbol + '</td>';
+    html += '<td>' + r.timeframe + '</td>';
+    html += '<td style="font-weight:600;color:#25D07D;">' + r.score + '</td>';
+    html += '<td><span class="signal-tag ' + signalClass + '">' + signalLabel + '</span></td>';
+    html += '<td>' + r.volatility_pct + '%</td>';
+    html += '<td>' + { uptrend: "📈 上涨", downtrend: "📉 下跌", sideways: "↔️ 震荡" }[r.trend] || r.trend + '</td>';
+    html += '</tr>';
+  });
+  html += '</tbody></table></div>';
+
+  return html;
+}
+
+function renderAiAnalysisResult(result) {
+  const ta = result.technical_analysis;
+  const sent = result.market_sentiment;
+  const risk = result.risk_assessment;
+
+  let html = '<div class="result-stats-grid">';
+  html += statCard("趋势方向", { uptrend: "📈 上涨", downtrend: "📉 下跌", neutral: "➡️ 震荡" }[ta.trend] || ta.trend, ta.trend === "bullish" ? "profit" : ta.trend === "bearish" ? "loss" : "neutral");
+  html += statCard("趋势强度", ta.trend_strength, ta.trend_strength > 60 ? "profit" : "neutral");
+  html += statCard("RSI", ta.rsi, ta.rsi > 70 ? "loss" : ta.rsi < 30 ? "profit" : "neutral");
+  html += statCard("恐慌贪婪指数", sent.fear_greed_index, sent.fear_greed_index > 70 ? "loss" : sent.fear_greed_index < 30 ? "profit" : "neutral");
+  html += '</div>';
+
+  html += '<div style="margin-top:16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;">';
+  html += '<div style="background:#0A131B;padding:12px;border-radius:8px;">';
+  html += '<div style="font-size:12px;color:#7A8A9A;margin-bottom:8px;">关键价位</div>';
+  html += '<div style="font-size:12px;">支撑: <span style="color:#25D07D;">$' + (ta.key_support || []).join(" / $") + '</span></div>';
+  html += '<div style="font-size:12px;margin-top:4px;">阻力: <span style="color:#f56c6c;">$' + (ta.key_resistance || []).join(" / $") + '</span></div>';
+  html += '</div>';
+  html += '<div style="background:#0A131B;padding:12px;border-radius:8px;">';
+  html += '<div style="font-size:12px;color:#7A8A9A;margin-bottom:8px;">风险评估</div>';
+  html += '<div style="font-size:12px;">整体风险: <span style="color:#e6a23c;font-weight:600;">' + { low: "低", medium: "中", high: "高" }[risk.overall_risk] || risk.overall_risk + '</span></div>';
+  html += '<div style="font-size:12px;margin-top:4px;">预期最大回撤: <span style="color:#f56c6c;">' + risk.max_drawdown_expected_pct + '%</span></div>';
+  html += '</div></div>';
+
+  html += '<div style="margin-top:16px;">';
+  html += '<div style="font-size:13px;color:#94A3B8;margin-bottom:8px;">策略适配建议</div>';
+  (result.strategy_recommendations || []).forEach(function(sr) {
+    html += '<div style="background:#0A131B;padding:10px 12px;border-radius:6px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">';
+    html += '<span>' + sr.strategy + '</span>';
+    html += '<span style="color:#25D07D;font-weight:600;">适配度 ' + sr.suitability + '%</span>';
+    html += '<span style="font-size:11px;color:#7A8A9A;">' + sr.suggested_timeframe + ' · ' + sr.risk_level + '风险</span>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  return html;
+}
+
+function renderFullTestResult(result) {
+  let html = '<div class="result-stats-grid">';
+  html += statCard("综合评分", result.overall_score, result.overall_score > 60 ? "profit" : "neutral");
+  html += statCard("测试组件", result.components_tested.length + "项", "neutral");
+  html += statCard("扫描品种", (result.strategy_scan?.scan_summary?.symbols_scanned || 0) + "个", "neutral");
+  html += '</div>';
+
+  if (result.best_symbol_backtest?.summary) {
+    const b = result.best_symbol_backtest.summary;
+    html += '<div style="margin-top:16px;background:rgba(37,208,125,0.08);border:1px solid rgba(37,208,125,0.2);border-radius:8px;padding:12px;">';
+    html += '<div style="font-size:13px;font-weight:600;color:#25D07D;margin-bottom:8px;">🏆 最佳回测: ' + b.symbol + ' (' + b.timeframe + ')</div>';
+    html += '<div style="display:flex;gap:20px;font-size:12px;">';
+    html += '<span>收益: <b style="color:' + (b.total_return_pct >= 0 ? '#25D07D' : '#f56c6c') + ';">' + (b.total_return_pct >= 0 ? "+" : "") + b.total_return_pct + '%</b></span>';
+    html += '<span>夏普: <b>' + b.sharpe_ratio + '</b></span>';
+    html += '<span>最大回撤: <b style="color:#f56c6c;">' + b.max_drawdown_pct + '%</b></span>';
+    html += '<span>胜率: <b>' + b.win_rate.toFixed(1) + '%</b></span>';
+    html += '</div></div>';
+  }
+
+  return html;
+}
+
+function statCard(label, value, type) {
+  const colorClass = type === "profit" ? "stat-profit" : type === "loss" ? "stat-loss" : "stat-neutral";
+  return '<div class="stat-card"><div class="stat-label">' + label + '</div><div class="stat-value ' + colorClass + '">' + value + '</div></div>';
+}
+
+function formatTime(isoStr) {
+  if (!isoStr) return "-";
+  try {
+    const d = new Date(isoStr);
+    return d.getHours().toString().padStart(2, "0") + ":" +
+      d.getMinutes().toString().padStart(2, "0") + ":" +
+      d.getSeconds().toString().padStart(2, "0");
+  } catch (e) {
+    return isoStr;
+  }
+}
+
+function showToast(msg, type) {
+  const toast = document.createElement("div");
+  toast.style.cssText = "position:fixed;top:20px;left:50%;transform:translateX(-50%);padding:12px 24px;border-radius:8px;" +
+    "font-size:14px;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);";
+  if (type === "success") {
+    toast.style.background = "rgba(37,208,125,0.9)";
+    toast.style.color = "#fff";
+  } else {
+    toast.style.background = "rgba(245,108,108,0.9)";
+    toast.style.color = "#fff";
+  }
+  toast.textContent = msg;
+  document.body.appendChild(toast);
+  setTimeout(function() { toast.remove(); }, 3000);
+}
+
+async function apiPost(path, data) {
+  const url = API_BASE + "/monitor/share/" + currentToken + path;
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(data),
+  });
+  const json = await resp.json();
+  if (json.code !== 0) {
+    throw new Error(json.message || "请求失败");
+  }
+  return json.data;
+}
+</script>
+</body>
+</html>

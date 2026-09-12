@@ -1,0 +1,614 @@
+{
+  "baseline_V4 最优（对照）": {
+    "symbol": "XAU",
+    "start_cap": 10000,
+    "end_cap": 9908.54,
+    "total_return_pct": -0.91,
+    "trade_count": 67,
+    "win_rate_pct": 26.87,
+    "profit_factor": 2.64,
+    "expectancy_pct_per_trade": -2.235,
+    "avg_win_pct": 2.36,
+    "avg_loss_pct": -0.89,
+    "sharpe": -0.05,
+    "max_drawdown_pct": 5.5,
+    "win_streak": 2,
+    "lose_streak": 10,
+    "tp_count": 13,
+    "sl_count": 47,
+    "timeout_count": 7,
+    "end_count": 0,
+    "filters": {
+      "total_attempts": 11301,
+      "blocked_no_cross": 10479,
+      "blocked_ma99": 271,
+      "blocked_alignment": 49,
+      "blocked_confirm": 230,
+      "blocked_strength": 67,
+      "blocked_rsi": 118,
+      "blocked_atr_vol": 0,
+      "blocked_breakout": 18,
+      "blocked_ma99_slope_accel": 0,
+      "blocked_price_above_ma99": 0,
+      "blocked_cooldown": 2,
+      "actually_opened": 67,
+      "seasonality_low_risk_count": 0,
+      "rolling_in_observe_period": 0,
+      "rolling_observe_rsi_blocked": 0
+    },
+    "last5": [
+      {
+        "entry": "2025-12-17 08:00",
+        "exit": "2025-12-24 00:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -3.27,
+        "reason": "sl",
+        "bars": 40
+      },
+      {
+        "entry": "2025-12-26 00:00",
+        "exit": "2025-12-30 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -3.54,
+        "reason": "sl",
+        "bars": 25
+      },
+      {
+        "entry": "2026-03-29 00:00",
+        "exit": "2026-04-01 08:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.41,
+        "pnl_usdt": -53.35,
+        "reason": "sl",
+        "bars": 20
+      },
+      {
+        "entry": "2026-06-18 12:00",
+        "exit": "2026-06-28 00:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -3.27,
+        "reason": "sl",
+        "bars": 57
+      },
+      {
+        "entry": "2026-07-22 04:00",
+        "exit": "2026-07-24 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.35,
+        "pnl_usdt": -53.2,
+        "reason": "sl",
+        "bars": 15
+      }
+    ]
+  },
+  "baseline_V6 最优(Gap2.5/MA0.8)": {
+    "symbol": "XAU",
+    "start_cap": 10000,
+    "end_cap": 10055.39,
+    "total_return_pct": 0.55,
+    "trade_count": 12,
+    "win_rate_pct": 33.33,
+    "profit_factor": 2.64,
+    "expectancy_pct_per_trade": 21.459,
+    "avg_win_pct": 1.84,
+    "avg_loss_pct": -0.69,
+    "sharpe": 0.09,
+    "max_drawdown_pct": 1.68,
+    "win_streak": 2,
+    "lose_streak": 3,
+    "tp_count": 2,
+    "sl_count": 8,
+    "timeout_count": 2,
+    "end_count": 0,
+    "filters": {
+      "total_attempts": 13721,
+      "blocked_no_cross": 12703,
+      "blocked_ma99": 285,
+      "blocked_alignment": 70,
+      "blocked_confirm": 279,
+      "blocked_strength": 86,
+      "blocked_rsi": 171,
+      "blocked_atr_vol": 0,
+      "blocked_breakout": 27,
+      "blocked_ma99_slope_accel": 67,
+      "blocked_price_above_ma99": 21,
+      "blocked_cooldown": 0,
+      "actually_opened": 12,
+      "seasonality_low_risk_count": 0,
+      "rolling_in_observe_period": 0,
+      "rolling_observe_rsi_blocked": 0
+    },
+    "last5": [
+      {
+        "entry": "2024-10-21 20:00",
+        "exit": "2024-10-31 20:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 0.91,
+        "pnl_usdt": 30.16,
+        "reason": "timeout",
+        "bars": 60
+      },
+      {
+        "entry": "2025-01-25 20:00",
+        "exit": "2025-01-31 16:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 2.89,
+        "pnl_usdt": 111.99,
+        "reason": "tp",
+        "bars": 35
+      },
+      {
+        "entry": "2025-03-24 08:00",
+        "exit": "2025-04-02 20:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -3.3,
+        "reason": "sl",
+        "bars": 57
+      },
+      {
+        "entry": "2025-08-06 12:00",
+        "exit": "2025-08-08 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.31,
+        "pnl_usdt": -54.4,
+        "reason": "sl",
+        "bars": 10
+      },
+      {
+        "entry": "2025-11-07 16:00",
+        "exit": "2025-11-11 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.18,
+        "pnl_usdt": -54.52,
+        "reason": "sl",
+        "bars": 21
+      }
+    ]
+  },
+  "baseline_V7 A: V4放宽+Gap2.0/MA0.5（无滚动）": {
+    "symbol": "XAU",
+    "start_cap": 10000,
+    "end_cap": 9667.28,
+    "total_return_pct": -3.33,
+    "trade_count": 28,
+    "win_rate_pct": 25.0,
+    "profit_factor": 2.12,
+    "expectancy_pct_per_trade": -21.966,
+    "avg_win_pct": 1.98,
+    "avg_loss_pct": -0.93,
+    "sharpe": -0.36,
+    "max_drawdown_pct": 4.54,
+    "win_streak": 2,
+    "lose_streak": 6,
+    "tp_count": 3,
+    "sl_count": 21,
+    "timeout_count": 4,
+    "end_count": 0,
+    "filters": {
+      "total_attempts": 13028,
+      "blocked_no_cross": 12073,
+      "blocked_ma99": 284,
+      "blocked_alignment": 64,
+      "blocked_confirm": 266,
+      "blocked_strength": 53,
+      "blocked_rsi": 141,
+      "blocked_atr_vol": 0,
+      "blocked_breakout": 17,
+      "blocked_ma99_slope_accel": 74,
+      "blocked_price_above_ma99": 27,
+      "blocked_cooldown": 1,
+      "actually_opened": 28,
+      "seasonality_low_risk_count": 5,
+      "rolling_in_observe_period": 0,
+      "rolling_observe_rsi_blocked": 0
+    },
+    "last5": [
+      {
+        "entry": "2025-08-10 00:00",
+        "exit": "2025-08-18 08:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -3.25,
+        "reason": "sl",
+        "bars": 50
+      },
+      {
+        "entry": "2025-08-28 08:00",
+        "exit": "2025-09-04 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.28,
+        "pnl_usdt": -51.89,
+        "reason": "sl",
+        "bars": 41
+      },
+      {
+        "entry": "2025-11-06 16:00",
+        "exit": "2025-11-11 12:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.27,
+        "pnl_usdt": -51.62,
+        "reason": "sl",
+        "bars": 29
+      },
+      {
+        "entry": "2025-12-08 08:00",
+        "exit": "2025-12-10 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 2.74,
+        "pnl_usdt": 63.87,
+        "reason": "tp",
+        "bars": 11
+      },
+      {
+        "entry": "2026-06-13 12:00",
+        "exit": "2026-06-23 12:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 0.81,
+        "pnl_usdt": 29.68,
+        "reason": "timeout",
+        "bars": 60
+      }
+    ]
+  },
+  "baseline_V7 B: +季节性缩仓": {
+    "symbol": "XAU",
+    "start_cap": 10000,
+    "end_cap": 9667.28,
+    "total_return_pct": -3.33,
+    "trade_count": 28,
+    "win_rate_pct": 25.0,
+    "profit_factor": 2.12,
+    "expectancy_pct_per_trade": -21.966,
+    "avg_win_pct": 1.98,
+    "avg_loss_pct": -0.93,
+    "sharpe": -0.36,
+    "max_drawdown_pct": 4.54,
+    "win_streak": 2,
+    "lose_streak": 6,
+    "tp_count": 3,
+    "sl_count": 21,
+    "timeout_count": 4,
+    "end_count": 0,
+    "filters": {
+      "total_attempts": 13028,
+      "blocked_no_cross": 12073,
+      "blocked_ma99": 284,
+      "blocked_alignment": 64,
+      "blocked_confirm": 266,
+      "blocked_strength": 53,
+      "blocked_rsi": 141,
+      "blocked_atr_vol": 0,
+      "blocked_breakout": 17,
+      "blocked_ma99_slope_accel": 74,
+      "blocked_price_above_ma99": 27,
+      "blocked_cooldown": 1,
+      "actually_opened": 28,
+      "seasonality_low_risk_count": 5,
+      "rolling_in_observe_period": 0,
+      "rolling_observe_rsi_blocked": 0
+    },
+    "last5": [
+      {
+        "entry": "2025-08-10 00:00",
+        "exit": "2025-08-18 08:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -3.25,
+        "reason": "sl",
+        "bars": 50
+      },
+      {
+        "entry": "2025-08-28 08:00",
+        "exit": "2025-09-04 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.28,
+        "pnl_usdt": -51.89,
+        "reason": "sl",
+        "bars": 41
+      },
+      {
+        "entry": "2025-11-06 16:00",
+        "exit": "2025-11-11 12:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.27,
+        "pnl_usdt": -51.62,
+        "reason": "sl",
+        "bars": 29
+      },
+      {
+        "entry": "2025-12-08 08:00",
+        "exit": "2025-12-10 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 2.74,
+        "pnl_usdt": 63.87,
+        "reason": "tp",
+        "bars": 11
+      },
+      {
+        "entry": "2026-06-13 12:00",
+        "exit": "2026-06-23 12:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 0.81,
+        "pnl_usdt": 29.68,
+        "reason": "timeout",
+        "bars": 60
+      }
+    ]
+  },
+  "baseline_V7 完整（+滚动风控C）": {
+    "symbol": "XAU",
+    "start_cap": 10000,
+    "end_cap": 9667.28,
+    "total_return_pct": -3.33,
+    "trade_count": 28,
+    "win_rate_pct": 25.0,
+    "profit_factor": 2.12,
+    "expectancy_pct_per_trade": -21.966,
+    "avg_win_pct": 1.98,
+    "avg_loss_pct": -0.93,
+    "sharpe": -0.36,
+    "max_drawdown_pct": 4.54,
+    "win_streak": 2,
+    "lose_streak": 6,
+    "tp_count": 3,
+    "sl_count": 21,
+    "timeout_count": 4,
+    "end_count": 0,
+    "filters": {
+      "total_attempts": 13028,
+      "blocked_no_cross": 12073,
+      "blocked_ma99": 284,
+      "blocked_alignment": 64,
+      "blocked_confirm": 266,
+      "blocked_strength": 53,
+      "blocked_rsi": 141,
+      "blocked_atr_vol": 0,
+      "blocked_breakout": 17,
+      "blocked_ma99_slope_accel": 74,
+      "blocked_price_above_ma99": 27,
+      "blocked_cooldown": 1,
+      "actually_opened": 28,
+      "seasonality_low_risk_count": 5,
+      "rolling_in_observe_period": 0,
+      "rolling_observe_rsi_blocked": 0
+    },
+    "last5": [
+      {
+        "entry": "2025-08-10 00:00",
+        "exit": "2025-08-18 08:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -3.25,
+        "reason": "sl",
+        "bars": 50
+      },
+      {
+        "entry": "2025-08-28 08:00",
+        "exit": "2025-09-04 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.28,
+        "pnl_usdt": -51.89,
+        "reason": "sl",
+        "bars": 41
+      },
+      {
+        "entry": "2025-11-06 16:00",
+        "exit": "2025-11-11 12:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.27,
+        "pnl_usdt": -51.62,
+        "reason": "sl",
+        "bars": 29
+      },
+      {
+        "entry": "2025-12-08 08:00",
+        "exit": "2025-12-10 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 2.74,
+        "pnl_usdt": 63.87,
+        "reason": "tp",
+        "bars": 11
+      },
+      {
+        "entry": "2026-06-13 12:00",
+        "exit": "2026-06-23 12:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 0.81,
+        "pnl_usdt": 29.68,
+        "reason": "timeout",
+        "bars": 60
+      }
+    ]
+  },
+  "grid_best": {
+    "gap_pct": 2.5,
+    "ma_slope_pct": 0.7,
+    "symbol": "XAU",
+    "start_cap": 10000,
+    "end_cap": 9918.11,
+    "total_return_pct": -0.82,
+    "trade_count": 18,
+    "win_rate_pct": 33.33,
+    "profit_factor": 2.03,
+    "expectancy_pct_per_trade": 1.162,
+    "avg_win_pct": 1.87,
+    "avg_loss_pct": -0.92,
+    "sharpe": -0.11,
+    "max_drawdown_pct": 2.64,
+    "win_streak": 2,
+    "lose_streak": 5,
+    "tp_count": 3,
+    "sl_count": 12,
+    "timeout_count": 3,
+    "end_count": 0,
+    "filters": {
+      "total_attempts": 13542,
+      "blocked_no_cross": 12541,
+      "blocked_ma99": 284,
+      "blocked_alignment": 66,
+      "blocked_confirm": 273,
+      "blocked_strength": 58,
+      "blocked_rsi": 155,
+      "blocked_atr_vol": 0,
+      "blocked_breakout": 20,
+      "blocked_ma99_slope_accel": 89,
+      "blocked_price_above_ma99": 37,
+      "blocked_cooldown": 1,
+      "actually_opened": 18,
+      "seasonality_low_risk_count": 5,
+      "rolling_in_observe_period": 0,
+      "rolling_observe_rsi_blocked": 0
+    },
+    "last5": [
+      {
+        "entry": "2025-03-24 08:00",
+        "exit": "2025-04-02 20:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -0.05,
+        "pnl_usdt": -3.25,
+        "reason": "sl",
+        "bars": 57
+      },
+      {
+        "entry": "2025-08-06 12:00",
+        "exit": "2025-08-08 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.31,
+        "pnl_usdt": -53.59,
+        "reason": "sl",
+        "bars": 10
+      },
+      {
+        "entry": "2025-08-10 16:00",
+        "exit": "2025-08-11 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.29,
+        "pnl_usdt": -53.34,
+        "reason": "sl",
+        "bars": 3
+      },
+      {
+        "entry": "2025-11-06 16:00",
+        "exit": "2025-11-11 12:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": -1.27,
+        "pnl_usdt": -53.13,
+        "reason": "sl",
+        "bars": 29
+      },
+      {
+        "entry": "2025-12-08 08:00",
+        "exit": "2025-12-10 04:00",
+        "side": "LONG",
+        "lev": 2,
+        "pnl_pct": 2.74,
+        "pnl_usdt": 65.73,
+        "reason": "tp",
+        "bars": 11
+      }
+    ]
+  },
+  "funnel": {
+    "total_attempts": 13542,
+    "blocked_no_cross": 12541,
+    "blocked_ma99": 284,
+    "blocked_alignment": 66,
+    "blocked_confirm": 273,
+    "blocked_strength": 58,
+    "blocked_rsi": 155,
+    "blocked_atr_vol": 0,
+    "blocked_breakout": 20,
+    "blocked_ma99_slope_accel": 89,
+    "blocked_price_above_ma99": 37,
+    "blocked_cooldown": 1,
+    "actually_opened": 18,
+    "seasonality_low_risk_count": 5,
+    "rolling_in_observe_period": 0,
+    "rolling_observe_rsi_blocked": 0
+  },
+  "yearly_v7": {
+    "2020": {
+      "pnl": -11.34,
+      "n": 3
+    },
+    "2022": {
+      "pnl": 78.6,
+      "n": 2
+    },
+    "2023": {
+      "pnl": 15.81,
+      "n": 2
+    },
+    "2024": {
+      "pnl": -80.28,
+      "n": 4
+    },
+    "2025": {
+      "pnl": -84.67,
+      "n": 7
+    }
+  },
+  "yearly_v4": {
+    "2020": {
+      "pnl": -131.63,
+      "n": 6
+    },
+    "2021": {
+      "pnl": -325.4,
+      "n": 13
+    },
+    "2022": {
+      "pnl": 109.47,
+      "n": 8
+    },
+    "2023": {
+      "pnl": 161.62,
+      "n": 12
+    },
+    "2024": {
+      "pnl": 116.73,
+      "n": 12
+    },
+    "2025": {
+      "pnl": 87.55,
+      "n": 13
+    },
+    "2026": {
+      "pnl": -109.81,
+      "n": 3
+    }
+  }
+}

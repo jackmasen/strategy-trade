@@ -1,0 +1,169 @@
+/* =========================================================
+   Element Plus 深色主题 - 护眼版
+   拒绝纯黑纯白高对比，采用：
+     深蓝绿背景 #0F1A24 → 面板 #152330 → 卡片 #1A2B3C
+     文字：主文字 #D8E2EC / 次文字 #97A6B6 / 辅助 #6B7C90
+     主题色：沉稳翠绿 #25D07D（非刺眼亮绿）
+     盈利色：柔和草绿 #4ADE80
+     亏损色：低饱和珊瑚红 #F87171（非刺眼大红色，护眼！）
+     强调金：琥珀 #FBBF24
+     边框/分割线：#243447
+   ========================================================= */
+
+// ---------- 基础色 ----------
+// 注：原 map.deep-merge 是 @use "sass:map" 模块函数，本文件未引入该模块会报
+// "no module with namespace map"。改用全局 legacy 函数 map-merge（无需 @use），
+// $colors 默认空 ()，浅合并空 map 等价于直接赋值，语义无损
+$colors: () !default;
+$colors: map-merge(
+  (
+    'white': #F0F4F8,
+    'black': #0A1118,
+    'primary': (
+      'base': #25D07D,
+      'light-3': #1A382A,
+      'light-5': #143224,
+      'light-7': #0F2A1E,
+      'light-8': #0B2318,
+      'light-9': #081C13,
+      'dark-2': #3FE392,
+    ),
+    'success': (
+      'base': #4ADE80,  // 温和盈利绿
+    ),
+    'warning': (
+      'base': #FBBF24,  // 琥珀黄
+    ),
+    'danger': (
+      'base': #F87171,  // 低饱和亏损红（不刺眼！）
+      'light-3': #3A1E1E,
+      'light-5': #2E1717,
+      'light-7': #231010,
+    ),
+    'error': (
+      'base': #F87171,
+    ),
+    'info': (
+      'base': #60A5FA,  // 柔和蓝
+    ),
+  ),
+  $colors
+);
+
+// ---------- 中性色 ----------
+$text-color-primary: #D8E2EC !default;
+$text-color-regular: #B6C2CF !default;
+$text-color-secondary: #97A6B6 !default;
+$text-color-placeholder: #6B7C90 !default;
+$text-color-disabled: #4E5F73 !default;
+
+$bg-color: #0F1A24 !default;              // 主背景（深空蓝绿，长时间看不累）
+$bg-color-page: #0F1A24 !default;
+$bg-color-overlay: #1A2B3C !default;
+$fill-color: #152330 !default;            // 浅填充（面板底色）
+$fill-color-light: #1A2B3C !default;
+$fill-color-lighter: #1F3246 !default;
+$fill-color-extra-light: #24384F !default;
+$fill-color-blank: #0C151D !default;
+
+$border-color: #243447 !default;
+$border-color-light: #1E2E41 !default;
+$border-color-lighter: #192738 !default;
+$border-color-extra-light: #142030 !default;
+$border-color-dark: #2E4560 !default;
+
+$mask-color: rgba(5, 10, 15, 0.72) !default;
+
+// ---------- 文字 ----------
+$font-color: $text-color-primary;
+$font-color-disabled: $text-color-disabled;
+$font-size-base: 14px !default;
+$font-size-small: 13px !default;
+$font-size-extra-small: 12px !default;
+$border-radius-base: 8px !default;
+$border-radius-small: 6px !default;
+
+// ---------- 组件组件变量 ----------
+$box-shadow: 0 6px 20px 0 rgba(0, 0, 0, 0.35) !default;
+$box-shadow-light: 0 3px 10px 0 rgba(0, 0, 0, 0.28) !default;
+$box-shadow-lighter: 0 2px 6px 0 rgba(0, 0, 0, 0.22) !default;
+$box-shadow-dark: 0 10px 28px 0 rgba(0, 0, 0, 0.5) !default;
+
+// 按钮 hover 透明度
+$button-hover-bg-color: rgba(37, 208, 125, 0.15) !default;
+$button-hover-border-color: #3FE392 !default;
+$button-active-bg-color: rgba(37, 208, 125, 0.25) !default;
+
+// 输入框
+$input-bg-color: #0C151D !default;
+$input-border-color: $border-color !default;
+$input-hover-border-color: #2F4A66 !default;
+$input-focus-border-color: #25D07D !default;
+
+// 表格
+$table-bg-color: #152330 !default;
+$table-tr-hover-bg-color: #1A2B3C !default;
+$table-header-bg-color: #192738 !default;
+$table-border-color: $border-color-lighter !default;
+$table-text-color: $text-color-regular !default;
+
+// 菜单
+$menu-bg-color: #0C151D !default;
+$menu-hover-bg-color: #152330 !default;
+$menu-active-color: #25D07D !default;
+$menu-text-color: $text-color-secondary !default;
+$menu-active-text-color: #FFFFFF !default;
+$sub-menu-bg-color: #0A1118 !default;
+
+// 侧边栏
+$aside-width: 240px !default;
+$aside-background-color: #0C151D !default;
+$aside-border-color: $border-color-lighter !default;
+
+// 头部
+$header-height: 60px !default;
+$header-background-color: rgba(18, 30, 43, 0.85) !default;
+$header-border-color: $border-color-lighter !default;
+$header-text-color: $text-color-primary !default;
+
+// 卡片
+$card-bg-color: #152330 !default;
+$card-border-color: $border-color-lighter !default;
+$card-shadow: 0 4px 16px rgba(0, 0, 0, 0.2) !default;
+$card-border-radius: 12px !default;
+
+// 对话框
+$dialog-background-color: #152330 !default;
+$dialog-mask-background: $mask-color !default;
+$dialog-header-background-color: #1A2B3C !default;
+
+// 标签页
+$tabs-header-background-color: transparent !default;
+$tabs-border-color: $border-color !default;
+$tabs-item-hover-color: #FFFFFF !default;
+$tabs-item-color: $text-color-secondary !default;
+$tabs-active-color: #25D07D !default;
+
+// 进度条
+$progress-color: #25D07D !default;
+$progress-background-color: #1A2B3C !default;
+
+// Tooltip
+$tooltip-bg-color: #1A2B3C !default;
+$tooltip-border-color: #29405A !default;
+$tooltip-text-color: #D8E2EC !default;
+
+// 下拉框
+$select-dropdown-bg-color: #152330 !default;
+$option-selected-color: #1A382A !default;
+$option-hover-color: #1A2B3C !default;
+$dropdown-menuItem-hover-fill: #1A2B3C !default;
+
+// 日期选择器
+$datepicker-bg-color: #152330 !default;
+$datepicker-cell-color: $text-color-regular !default;
+$datepicker-inrange-bg-color: #1A382A !default;
+
+// 开关
+$switch-on-color: #25D07D !default;
+$switch-off-color: #243447 !default;

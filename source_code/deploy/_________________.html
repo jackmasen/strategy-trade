@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>宝塔面板部署教程 - 策略交易系统 v1.2.0</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+    background: #f5f7fa;
+    color: #303133;
+    line-height: 1.7;
+  }
+  .container { max-width: 960px; margin: 0 auto; padding: 24px; }
+  h1 {
+    font-size: 28px; font-weight: 700; color: #1a1a1a;
+    margin-bottom: 8px; padding-bottom: 16px;
+    border-bottom: 3px solid #409eff;
+  }
+  .subtitle { color: #909399; font-size: 14px; margin-bottom: 32px; }
+  h2 {
+    font-size: 22px; font-weight: 600; color: #303133;
+    margin: 32px 0 16px; padding-left: 12px;
+    border-left: 4px solid #409eff;
+  }
+  h3 { font-size: 17px; font-weight: 600; margin: 20px 0 10px; color: #303133; }
+  p { margin-bottom: 12px; }
+  code {
+    background: #f0f2f5; color: #c7254e;
+    padding: 2px 6px; border-radius: 4px;
+    font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
+  }
+  pre {
+    background: #2d2d2d; color: #f8f8f2;
+    padding: 16px; border-radius: 8px;
+    overflow-x: auto; margin: 12px 0;
+    font-family: 'Consolas', 'Monaco', monospace; font-size: 13px;
+    line-height: 1.5;
+  }
+  pre code { background: none; color: inherit; padding: 0; }
+  .note {
+    background: #ecf5ff; border-left: 4px solid #409eff;
+    padding: 12px 16px; border-radius: 4px; margin: 12px 0;
+  }
+  .note-title { font-weight: 600; color: #409eff; margin-bottom: 4px; }
+  .warn {
+    background: #fdf6ec; border-left: 4px solid #e6a23c;
+    padding: 12px 16px; border-radius: 4px; margin: 12px 0;
+  }
+  .warn-title { font-weight: 600; color: #e6a23c; margin-bottom: 4px; }
+  .danger {
+    background: #fef0f0; border-left: 4px solid #f56c6c;
+    padding: 12px 16px; border-radius: 4px; margin: 12px 0;
+  }
+  .danger-title { font-weight: 600; color: #f56c6c; margin-bottom: 4px; }
+  .step {
+    background: white; border-radius: 8px; padding: 20px;
+    margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; background: #409eff; color: white;
+    border-radius: 50%; font-size: 14px; font-weight: 600;
+    margin-right: 8px;
+  }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th, td { padding: 10px 12px; border: 1px solid #ebeef5; text-align: left; font-size: 14px; }
+  th { background: #f5f7fa; font-weight: 600; }
+  .toc {
+    background: white; border-radius: 8px; padding: 20px;
+    margin-bottom: 24px; box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  }
+  .toc a { color: #409eff; text-decoration: none; font-size: 14px; }
+  .toc a:hover { text-decoration: underline; }
+  .toc ol { padding-left: 20px; }
+  .toc li { margin: 6px 0; }
+  .check { color: #67c23a; font-weight: 600; }
+  .config-table { font-size: 13px; }
+  .config-table td:first-child { white-space: nowrap; color: #606266; }
+  .footer {
+    text-align: center; padding: 24px; color: #909399;
+    font-size: 13px; margin-top: 40px;
+    border-top: 1px solid #ebeef5;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>宝塔面板部署教程</h1>
+  <div class="subtitle">策略交易系统 v1.2.0 | 更新日期: 2026-09-02 | 适用于宝塔面板 8.x+</div>
+
+  <div class="toc">
+    <h3>目录</h3>
+    <ol>
+      <li><a href="#sec1">环境准备与软件安装</a></li>
+      <li><a href="#sec2">上传项目代码</a></li>
+      <li><a href="#sec3">创建 MySQL 数据库</a></li>
+      <li><a href="#sec4">配置 Python 环境</a></li>
+      <li><a href="#sec5">配置 .env 环境变量</a></li>
+      <li><a href="#sec6">构建前端</a></li>
+      <li><a href="#sec7">配置宝塔网站与 Nginx</a></li>
+      <li><a href="#sec8">配置进程守护（Supervisor）</a></li>
+      <li><a href="#sec9">申请 SSL 证书</a></li>
+      <li><a href="#sec10">防火墙与安全设置</a></li>
+      <li><a href="#sec11">启动验证</a></li>
+      <li><a href="#sec12">常见问题排查</a></li>
+    </ol>
+  </div>
+
+  <!-- ==================== 第1节 ==================== -->
+  <h2 id="sec1">1. 环境准备与软件安装</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 登录宝塔面板</h3>
+    <p>浏览器访问 <code>http://你的服务器IP:8888</code>，输入账号密码登录宝塔面板。</p>
+    <div class="note">
+      <div class="note-title">提示</div>
+      如果未安装宝塔面板，SSH 登录服务器执行一键安装：
+      <pre><code>yum install -y wget && wget -O install.sh https://download.bt.cn/install/install_lts.sh && sh install.sh ed8484bec</code></pre>
+    </div>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 安装必要软件</h3>
+    <p>在宝塔面板 <strong>软件商店</strong> 中搜索并安装以下软件：</p>
+    <table>
+      <thead>
+        <tr><th>软件名称</th><th>推荐版本</th><th>用途</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Nginx</strong></td><td>1.24+</td><td>反向代理 + 前端静态资源</td></tr>
+        <tr><td><strong>MySQL</strong></td><td>5.7 或 8.0</td><td>数据库</td></tr>
+        <tr><td><strong>Redis</strong></td><td>6.0+</td><td>缓存 + 定时任务（APScheduler 兜底）</td></tr>
+        <tr><td><strong>Python 项目管理器</strong></td><td>3.10+</td><td>Python 虚拟环境管理</td></tr>
+        <tr><td><strong>Supervisor 管理器</strong></td><td>最新</td><td>进程守护（自动重启后端）</td></tr>
+      </tbody>
+    </table>
+    <div class="warn">
+      <div class="warn-title">注意</div>
+      <strong>不需要安装 Node.js</strong>，前端可以在本地构建后上传 dist 目录。如果想在服务器上构建，可以在宝塔软件商店安装 Node.js 版本管理器（Node 18+）。
+    </div>
+  </div>
+
+  <!-- ==================== 第2节 ==================== -->
+  <h2 id="sec2">2. 上传项目代码</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 创建网站目录</h3>
+    <p>在宝塔面板 <strong>网站 → 添加站点</strong>：</p>
+    <ul style="margin: 8px 0 12px 20px;">
+      <li>域名：填写你的域名或服务器IP</li>
+      <li>根目录：<code>/www/wwwroot/strategy-trade</code></li>
+      <li>PHP版本：纯静态</li>
+      <li>数据库：MySQL（也可选不创建，后面手动建）</li>
+    </ul>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 上传项目文件</h3>
+    <p>将本地项目 <code>strategy-trade-v1.2.0</code> 目录下的所有文件上传到服务器的 <code>/www/wwwroot/strategy-trade/</code>。</p>
+    <div class="note">
+      <div class="note-title">上传方式</div>
+      <strong>方式一（推荐）</strong>：本地压缩为 zip → 宝塔文件管理上传 → 在线解压<br>
+      <strong>方式二</strong>：使用 SCP/SFTP 工具（WinSCP / FileZilla）直接上传
+    </div>
+    <p>上传后目录结构应为：</p>
+    <pre><code>/www/wwwroot/strategy-trade/
+├── main.py                 # FastAPI 入口
+├── .env                    # 环境变量配置
+├── requirements.txt        # Python 依赖
+├── backend/                # 后端代码
+│   ├── config.py
+│   ├── core/
+│   ├── models/
+│   ├── routers/
+│   ├── services/
+│   └── ...
+├── frontend/               # 前端源码
+│   ├── src/
+│   ├── dist/               # 构建产物（上传此目录即可）
+│   └── package.json
+├── static/                 # 静态文件（监控页面等）
+│   └── monitor-dashboard.html
+├── data/                   # SQLite 数据库（兜底用）
+├── logs/                   # 日志目录
+└── deploy/                 # 部署配置
+    ├── nginx.conf
+    ├── supervisor.conf
+    └── init.sql</code></pre>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">3</span> 设置目录权限</h3>
+    <p>在宝塔文件管理器中，右键 <code>/www/wwwroot/strategy-trade</code> → 权限 → 设置为 <code>755</code>，所有者 <code>www</code>。</p>
+    <p>或 SSH 执行：</p>
+    <pre><code>chown -R www:www /www/wwwroot/strategy-trade
+chmod -R 755 /www/wwwroot/strategy-trade
+mkdir -p /www/wwwroot/strategy-trade/logs
+mkdir -p /www/wwwroot/strategy-trade/data
+chown -R www:www /www/wwwroot/strategy-trade/logs /www/wwwroot/strategy-trade/data</code></pre>
+  </div>
+
+  <!-- ==================== 第3节 ==================== -->
+  <h2 id="sec3">3. 创建 MySQL 数据库</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 宝塔面板创建数据库</h3>
+    <p>宝塔面板 → <strong>数据库 → 添加数据库</strong>：</p>
+    <table class="config-table">
+      <tr><td>数据库名</td><td><code>trading_system</code></td></tr>
+      <tr><td>用户名</td><td><code>trading_user</code></td></tr>
+      <tr><td>密码</td><td>自己设置一个强密码（记下来，后面要填）</td></tr>
+      <tr><td>访问权限</td><td>本地服务器</td></tr>
+      <tr><td>字符集</td><td><code>utf8mb4</code></td></tr>
+    </table>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 初始化数据库表</h3>
+    <p>数据库表会在后端首次启动时由 SQLAlchemy 自动创建，<strong>无需手动执行 SQL</strong>。</p>
+    <div class="note">
+      <div class="note-title">说明</div>
+      首次启动会自动建表并写入初始数据：<br>
+      超级管理员：<code>admin / Admin@2024</code><br>
+      运营账号：<code>trader / Trader@2024</code>
+    </div>
+  </div>
+
+  <!-- ==================== 第4节 ==================== -->
+  <h2 id="sec4">4. 配置 Python 环境</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 创建虚拟环境</h3>
+    <p>打开宝塔 <strong>Python 项目管理器 → 添加项目</strong>：</p>
+    <table class="config-table">
+      <tr><td>项目名称</td><td><code>strategy-trade</code></td></tr>
+      <tr><td>路径</td><td><code>/www/wwwroot/strategy-trade</code></td></tr>
+      <tr><td>Python 版本</td><td><code>3.10</code> 或 <code>3.11</code></td></tr>
+      <tr><td>框架</td><td><code>FastAPI</code></td></tr>
+      <tr><td>安装方式</td><td>选择 <code>requirements.txt</code></td></tr>
+      <tr><td>启动文件</td><td><code>main.py</code></td></tr>
+      <tr><td>端口</td><td><code>8000</code></td></tr>
+    </table>
+    <p>点击确定，等待 Python 环境和依赖包自动安装完成。</p>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 手动安装依赖（备选）</h3>
+    <p>如果 Python 项目管理器未自动安装依赖，SSH 手动执行：</p>
+    <pre><code># 进入项目目录
+cd /www/wwwroot/strategy-trade
+
+# 创建虚拟环境（宝塔 Python 项目管理器创建的路径可能不同）
+python3.10 -m venv venv
+
+# 激活虚拟环境
+source venv/bin/activate
+
+# 安装依赖
+pip install -r requirements.txt
+
+# 如果安装慢，使用国内镜像
+pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple</code></pre>
+  </div>
+
+  <!-- ==================== 第5节 ==================== -->
+  <h2 id="sec5">5. 配置 .env 环境变量</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 编辑 .env 文件</h3>
+    <p>在宝塔文件管理器中编辑 <code>/www/wwwroot/strategy-trade/.env</code>：</p>
+    <pre><code># ========== 基础配置 ==========
+APP_NAME=TradingStrategySystem
+APP_ENV=production
+APP_DEBUG=false
+APP_SECRET_KEY=改成你的随机密钥_用字母数字混合32位以上
+API_PREFIX=/api/v1
+
+# ========== 服务端口 ==========
+SERVER_HOST=127.0.0.1
+SERVER_PORT=8000
+
+# ========== MySQL 数据库 ==========
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=trading_user
+DB_PASSWORD=你在第3步设置的数据库密码
+DB_NAME=trading_system
+DB_CHARSET=utf8mb4
+DB_SQLITE_FALLBACK=
+
+# ========== Redis ==========
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+REDIS_PASSWORD=你的Redis密码（宝塔安装时设置的）
+REDIS_DB=0
+REDIS_DB_CELERY=1
+
+# ========== JWT 认证 ==========
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+JWT_REFRESH_TOKEN_EXPIRE_DAYS=7
+
+# ========== 币安交易所 ==========
+BINANCE_MAIN_API_KEY=
+BINANCE_MAIN_API_SECRET=
+BINANCE_TESTNET=true
+BINANCE_BASE_URL=https://testnet.binancefuture.com
+
+# ========== OKX 交易所 ==========
+OKX_MAIN_API_KEY=
+OKX_MAIN_API_SECRET=
+OKX_MAIN_PASSPHRASE=
+OKX_TESTNET=true
+OKX_BASE_URL=https://www.okx.com
+
+# ========== AI 接口 ==========
+AI_PROVIDER=custom
+AI_API_KEY=
+AI_API_ENDPOINT=
+AI_MODEL_NAME=gpt-4o
+
+# ========== 调度器 ==========
+CELERY_ENABLED=false
+
+# ========== CORS ==========
+CORS_ALLOW_ORIGINS=https://你的域名
+
+# ========== 风控默认参数 ==========
+DEFAULT_MAX_SINGLE_DRAWDOWN=2.0
+DEFAULT_DAILY_MAX_LOSS=5.0
+DEFAULT_MAX_POSITION_COUNT=3
+DEFAULT_TOTAL_POSITION_RATIO=50.0
+DEFAULT_SCORE_THRESHOLD=5.0
+DEFAULT_LEVERAGE_MIN=3
+DEFAULT_LEVERAGE_MAX=10</code></pre>
+  </div>
+
+  <div class="step">
+    <div class="danger">
+      <div class="danger-title">重要安全提示</div>
+      <strong>首次部署后立即修改默认密码</strong>！登录系统后到「个人设置」修改 admin 和 trader 的默认密码。<br>
+      <code>APP_SECRET_KEY</code> 必须修改为随机字符串，否则 JWT 令牌不安全。
+    </div>
+  </div>
+
+  <!-- ==================== 第6节 ==================== -->
+  <h2 id="sec6">6. 构建前端</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 本地构建（推荐）</h3>
+    <p>在本地开发机器上执行：</p>
+    <pre><code>cd frontend
+npm install
+npm run build</code></pre>
+    <p>构建完成后，将 <code>frontend/dist</code> 目录上传到服务器：</p>
+    <pre><code>/www/wwwroot/strategy-trade/dist/
+├── index.html
+└── assets/
+    ├── index-xxx.js
+    ├── index-xxx.css
+    └── ...</code></pre>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 服务器构建（备选）</h3>
+    <p>如果服务器已安装 Node.js：</p>
+    <pre><code>cd /www/wwwroot/strategy-trade/frontend
+npm install
+npm run build</code></pre>
+    <div class="note">
+      <div class="note-title">提示</div>
+      服务器构建需要 1GB 以上内存，小内存服务器建议本地构建后上传。
+    </div>
+  </div>
+
+  <!-- ==================== 第7节 ==================== -->
+  <h2 id="sec7">7. 配置宝塔网站与 Nginx</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 修改网站配置</h3>
+    <p>宝塔面板 → 网站 → 找到你的站点 → <strong>设置 → 配置文件</strong>，替换为以下内容：</p>
+    <pre><code># 策略交易系统 - Nginx 配置
+# 将 your_domain.com 替换为实际域名或IP
+
+server {
+    listen 80;
+    server_name your_domain.com;
+
+    # 前端静态资源
+    root /www/wwwroot/strategy-trade/dist;
+    index index.html;
+
+    access_log  /www/wwwlogs/strategy_trade_access.log;
+    error_log   /www/wwwlogs/strategy_trade_error.log;
+
+    # 前端 SPA 路由回退
+    location / {
+        try_files $uri $uri/ /index.html;
+        # 静态资源缓存
+        location ~* \.(?:js|css|woff2?|ttf|eot|svg|png|jpe?g|gif|ico|webp)$ {
+            expires 7d;
+            add_header Cache-Control "public, immutable";
+        }
+    }
+
+    # 后端 API 反向代理
+    location /api/ {
+        proxy_pass         http://127.0.0.1:8000;
+        proxy_http_version 1.1;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+        # WebSocket 支持
+        proxy_set_header   Upgrade           $http_upgrade;
+        proxy_set_header   Connection        "upgrade";
+        # 超时（回测等长时间请求）
+        proxy_read_timeout  600s;
+        proxy_send_timeout  600s;
+        proxy_connect_timeout 60s;
+        # SSE 支持（AI控制中心实时推送）
+        proxy_buffering    off;
+    }
+
+    # API 文档
+    location /docs {
+        proxy_pass         http://127.0.0.1:8000/docs;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+    location /openapi.json {
+        proxy_pass         http://127.0.0.1:8000/openapi.json;
+        proxy_set_header   Host              $host;
+    }
+
+    # 安全头
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+
+    # 禁止访问敏感文件
+    location ~ /\.(env|git|svn|ht|installed|gitignore) {
+        deny all;
+        return 404;
+    }
+}</code></pre>
+    <p>保存后，宝塔会自动重载 Nginx。</p>
+  </div>
+
+  <!-- ==================== 第8节 ==================== -->
+  <h2 id="sec8">8. 配置进程守护（Supervisor）</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 添加 Supervisor 守护进程</h3>
+    <p>宝塔面板 → <strong>Supervisor 管理器 → 添加守护进程</strong>：</p>
+    <table class="config-table">
+      <tr><td>名称</td><td><code>strategy-trade-api</code></td></tr>
+      <tr><td>启动用户</td><td><code>www</code></td></tr>
+      <tr><td>运行目录</td><td><code>/www/wwwroot/strategy-trade</code></td></tr>
+      <tr><td>启动命令</td><td>下方命令</td></tr>
+    </table>
+    <p>启动命令（根据虚拟环境路径调整）：</p>
+    <pre><code>/www/wwwroot/strategy-trade/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2 --log-level info</code></pre>
+    <div class="note">
+      <div class="note-title">虚拟环境路径</div>
+      如果使用宝塔 Python 项目管理器创建的虚拟环境，路径可能是：<br>
+      <code>/www/server/pyproject_env/strategy-trade_venv/bin/uvicorn</code><br>
+      在 SSH 中执行 <code>which uvicorn</code> 或检查 Python 项目管理器中的环境路径来确认。
+    </div>
+    <p>环境变量设置：</p>
+    <pre><code>PYTHONUNBUFFERED=1
+ENV_FOR_DYNACONF=production</code></pre>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 手动配置 Supervisor（备选）</h3>
+    <p>如果使用命令行操作，创建配置文件：</p>
+    <pre><code>cat > /etc/supervisord.d/strategy-trade.ini << 'EOF'
+[program:strategy-trade-api]
+directory=/www/wwwroot/strategy-trade
+command=/www/wwwroot/strategy-trade/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2 --log-level info
+environment=
+    PYTHONUNBUFFERED="1",
+    ENV_FOR_DYNACONF="production"
+
+user=www
+autostart=true
+autorestart=true
+startsecs=5
+startretries=3
+stopasgroup=true
+killasgroup=true
+redirect_stderr=false
+stdout_logfile=/www/wwwroot/strategy-trade/logs/api.log
+stdout_logfile_maxbytes=50MB
+stdout_logfile_backups=10
+stderr_logfile=/www/wwwroot/strategy-trade/logs/api_error.log
+stderr_logfile_maxbytes=50MB
+stderr_logfile_backups=10
+EOF
+
+supervisorctl reread
+supervisorctl update
+supervisorctl start strategy-trade-api</code></pre>
+  </div>
+
+  <!-- ==================== 第9节 ==================== -->
+  <h2 id="sec9">9. 申请 SSL 证书</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 申请 Let's Encrypt 免费证书</h3>
+    <p>宝塔面板 → 网站 → 你的站点 → <strong>SSL → Let's Encrypt</strong>：</p>
+    <ol style="margin: 8px 0 12px 20px;">
+      <li>勾选你的域名</li>
+      <li>点击「申请」</li>
+      <li>申请成功后开启「强制 HTTPS」</li>
+    </ol>
+    <div class="note">
+      <div class="note-title">提示</div>
+      SSL 申请需要域名已解析到服务器IP，且 80 端口可访问。
+    </div>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 修改 .env 启用 HTTPS</h3>
+    <pre><code># 修改 CORS 为 HTTPS 域名
+CORS_ALLOW_ORIGINS=https://你的域名</code></pre>
+    <p>修改后重启后端进程：</p>
+    <pre><code>supervisorctl restart strategy-trade-api</code></pre>
+  </div>
+
+  <!-- ==================== 第10节 ==================== -->
+  <h2 id="sec10">10. 防火墙与安全设置</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 放行端口</h3>
+    <p>宝塔面板 → <strong>安全</strong>：</p>
+    <table>
+      <thead><tr><th>端口</th><th>方向</th><th>用途</th></tr></thead>
+      <tbody>
+        <tr><td>80</td><td>入站</td><td>HTTP（Nginx）</td></tr>
+        <tr><td>443</td><td>入站</td><td>HTTPS（Nginx）</td></tr>
+        <tr><td>8888</td><td>入站</td><td>宝塔面板（建议改默认端口）</td></tr>
+      </tbody>
+    </table>
+    <div class="warn">
+      <div class="warn-title">安全警告</div>
+      <strong>不要放行 8000 端口</strong>！后端只通过 Nginx 反向代理访问，不直接暴露。
+    </div>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 云服务器安全组</h3>
+    <p>如果使用阿里云/腾讯云/AWS 等，还需在云控制台的<strong>安全组</strong>中放行 80 和 443 端口。</p>
+  </div>
+
+  <!-- ==================== 第11节 ==================== -->
+  <h2 id="sec11">11. 启动验证</h2>
+
+  <div class="step">
+    <h3><span class="step-num">1</span> 启动后端</h3>
+    <p>在 Supervisor 管理器中确认 <code>strategy-trade-api</code> 状态为 <span class="check">running</span>。</p>
+    <p>或 SSH 手动启动验证：</p>
+    <pre><code>cd /www/wwwroot/strategy-trade
+source venv/bin/activate
+uvicorn main:app --host 127.0.0.1 --port 8000</code></pre>
+    <p>看到以下输出说明启动成功：</p>
+    <pre><code>INFO:     应用启动完成
+INFO:     数据库表已创建
+INFO:     初始数据已写入: admin/Admin@2024, trader/Trader@2024
+INFO:     APScheduler 定时任务已启动
+INFO:     Uvicorn running on http://127.0.0.1:8000</code></pre>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">2</span> 验证访问</h3>
+    <table>
+      <thead><tr><th>验证项</th><th>访问地址</th><th>预期结果</th></tr></thead>
+      <tbody>
+        <tr><td>前端页面</td><td><code>http://你的域名</code></td><td>显示登录页面</td></tr>
+        <tr><td>API 健康检查</td><td><code>http://你的域名/health</code></td><td><code>{"status":"ok"}</code></td></tr>
+        <tr><td>API 文档</td><td><code>http://你的域名/docs</code></td><td>Swagger UI 文档</td></tr>
+        <tr><td>监控页面</td><td><code>http://你的域名/api/v1/monitor/dashboard</code></td><td>监控页面（需token参数）</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="step">
+    <h3><span class="step-num">3</span> 首次登录</h3>
+    <ol style="margin: 8px 0 12px 20px;">
+      <li>访问 <code>http://你的域名</code></li>
+      <li>使用 <code>admin / Admin@2024</code> 登录</li>
+      <li><strong>立即到「个人设置」修改密码</strong></li>
+      <li>到「系统管理 → 用户管理」修改 trader 账号密码</li>
+    </ol>
+  </div>
+
+  <!-- ==================== 第12节 ==================== -->
+  <h2 id="sec12">12. 常见问题排查</h2>
+
+  <div class="step">
+    <h3>Q1: 后端启动报错 ModuleNotFoundError</h3>
+    <p>虚拟环境中依赖未安装完整，执行：</p>
+    <pre><code>cd /www/wwwroot/strategy-trade
+source venv/bin/activate
+pip install -r requirements.txt</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Q2: 数据库连接失败</h3>
+    <p>检查 <code>.env</code> 中 <code>DB_*</code> 配置是否正确：</p>
+    <pre><code># SSH 测试 MySQL 连接
+mysql -u trading_user -p -h 127.0.0.1 trading_system</code></pre>
+    <p>检查 MySQL 是否运行：宝塔面板 → 软件商店 → MySQL → 状态。</p>
+  </div>
+
+  <div class="step">
+    <h3>Q3: Redis 连接失败</h3>
+    <p>系统会在 Redis 不可用时自动降级为 APScheduler 内存调度，不影响基本运行。如需启用 Redis：</p>
+    <pre><code># 检查 Redis 状态
+redis-cli ping
+# 应返回 PONG
+
+# 如果有密码
+redis-cli -a 你的密码 ping</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Q4: 前端页面白屏</h3>
+    <p>检查 dist 目录是否正确上传：</p>
+    <pre><code>ls /www/wwwroot/strategy-trade/dist/
+# 应看到 index.html 和 assets/ 目录</code></pre>
+    <p>检查 Nginx 配置中 <code>root</code> 路径是否正确指向 dist 目录。</p>
+  </div>
+
+  <div class="step">
+    <h3>Q5: API 502 Bad Gateway</h3>
+    <p>后端进程未运行或端口不对。检查：</p>
+    <pre><code># 检查后端进程状态
+supervisorctl status strategy-trade-api
+
+# 检查端口监听
+netstat -tlnp | grep 8000
+
+# 查看后端错误日志
+tail -50 /www/wwwroot/strategy-trade/logs/api_error.log</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Q6: WebSocket / SSE 连接失败</h3>
+    <p>Nginx 反向代理需要配置 WebSocket 支持，确认配置中有：</p>
+    <pre><code>proxy_set_header   Upgrade           $http_upgrade;
+proxy_set_header   Connection        "upgrade";
+proxy_buffering    off;</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Q7: 定时任务不执行</h3>
+    <p>确认 <code>.env</code> 中 <code>CELERY_ENABLED=false</code>（默认），系统使用内置 APScheduler 自动运行：</p>
+    <ul style="margin: 8px 0 12px 20px;">
+      <li>持仓检查：每 30 秒</li>
+      <li>策略执行：每 1 分钟</li>
+      <li>新闻采集：每 30 分钟</li>
+      <li>AI 分析：每 2 小时</li>
+    </ul>
+    <p>查看后端日志确认任务运行：</p>
+    <pre><code>tail -100 /www/wwwroot/strategy-trade/logs/api.log | grep -i scheduler</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Q8: 修改 .env 后不生效</h3>
+    <p>修改环境变量后必须重启后端进程：</p>
+    <pre><code>supervisorctl restart strategy-trade-api</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Q9: 日志目录权限问题</h3>
+    <pre><code>mkdir -p /www/wwwroot/strategy-trade/logs
+chown -R www:www /www/wwwroot/strategy-trade/logs
+chmod 755 /www/wwwroot/strategy-trade/logs</code></pre>
+  </div>
+
+  <div class="step">
+    <h3>Q10: 服务器内存不足（1G 以下）</h3>
+    <p>小内存服务器建议：</p>
+    <ul style="margin: 8px 0 12px 20px;">
+      <li>uvicorn workers 改为 1：<code>--workers 1</code></li>
+      <li>使用本地构建前端，不在服务器上 npm build</li>
+      <li>添加 Swap 分区：宝塔面板 → 工具 → Linux工具箱 → Swap</li>
+    </ul>
+  </div>
+
+  <div class="footer">
+    策略交易系统 v1.2.0 | 宝塔面板部署教程 | 2026-09-02
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,1114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Strategy Trade 策略交易系统 - 系统交接文档 v1.2.4</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; background: #0f1117; color: #c8d3e0; line-height: 1.8; }
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 30px; }
+  h1 { color: #58a6ff; font-size: 2.2em; border-bottom: 2px solid #1f2937; padding-bottom: 15px; margin-bottom: 10px; }
+  h2 { color: #79c0ff; font-size: 1.6em; margin-top: 40px; margin-bottom: 15px; padding-left: 12px; border-left: 4px solid #58a6ff; }
+  h3 { color: #d2a8ff; font-size: 1.25em; margin-top: 28px; margin-bottom: 10px; }
+  h4 { color: #7ee787; font-size: 1.1em; margin-top: 20px; margin-bottom: 8px; }
+  p { margin-bottom: 12px; color: #adbac7; }
+  ul, ol { margin-left: 25px; margin-bottom: 15px; }
+  li { margin-bottom: 6px; }
+  code { background: #1a2332; color: #f0883e; padding: 2px 6px; border-radius: 4px; font-size: 0.9em; }
+  pre { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; overflow-x: auto; margin-bottom: 15px; }
+  pre code { background: none; color: #c9d1d9; padding: 0; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+  th { background: #1f2937; color: #58a6ff; padding: 10px 14px; text-align: left; border: 1px solid #30363d; }
+  td { padding: 8px 14px; border: 1px solid #30363d; color: #adbac7; }
+  tr:nth-child(even) { background: #161b22; }
+  .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+  .badge { display: inline-block; padding: 2px 10px; border-radius: 12px; font-size: 0.8em; font-weight: bold; }
+  .badge-green { background: #1a3a2a; color: #7ee787; border: 1px solid #2ea043; }
+  .badge-yellow { background: #3a3a1a; color: #d29922; border: 1px solid #9e6a02; }
+  .badge-red { background: #3a1a1a; color: #f85149; border: 1px solid #da3633; }
+  .badge-blue { background: #0d2240; color: #58a6ff; border: 1px solid #1f6feb; }
+  .summary-box { background: linear-gradient(135deg, #0d2240, #161b22); border: 1px solid #1f6feb; border-radius: 10px; padding: 25px; margin-bottom: 30px; }
+  .summary-box p { color: #c9d1d9; }
+  .toc { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 20px; margin-bottom: 30px; }
+  .toc a { color: #58a6ff; text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  .toc ul { list-style: none; margin-left: 0; }
+  .toc li { margin-bottom: 4px; }
+  .toc-level-2 { margin-left: 20px; }
+  .hr { border: 0; height: 1px; background: #30363d; margin: 30px 0; }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>Strategy Trade 策略交易系统 - 系统交接文档</h1>
+<p style="color:#7ee787;font-size:1.1em;">版本: v1.2.4 &nbsp;|&nbsp; 日期: 2026-09-04 &nbsp;|&nbsp; GitHub: jackmasen/strategy-trade</p>
+
+<div class="summary-box">
+<h3 style="margin-top:0;">系统概述</h3>
+<p>Strategy Trade 是一套完整的 AI 驱动加密货币/商品量化交易系统，采用 FastAPI + Vue 3 前后端分离架构，集成多交易所对接（Binance/OKX）、7因子量化信号引擎、AI 行情分析、新闻情绪分析、策略自我进化、历史回测、系统监控等核心功能模块。系统支持全自动/半自动/模拟盘三种运行模式，提供完整的评分-触发-下单-风控闭环。</p>
+</div>
+
+<div class="toc">
+<h3 style="margin-top:0;">目录</h3>
+<ul>
+  <li><a href="#sec1">1. 系统架构总览</a></li>
+  <li><a href="#sec2">2. 技术栈与运行环境</a></li>
+  <li><a href="#sec3">3. 目录结构与模块划分</a></li>
+  <li><a href="#sec4">4. 数据库模型与表结构</a></li>
+  <li><a href="#sec5">5. API 接口完整清单</a></li>
+  <li><a href="#sec6">6. AI分析行情策略 - 详细分析</a></li>
+  <li><a href="#sec7">7. AI自动策略交易与回测 - 详细分析</a></li>
+  <li><a href="#sec8">8. AI新闻情绪分析 - 详细分析</a></li>
+  <li><a href="#sec9">9. AI策略自我升级 - 详细分析</a></li>
+  <li><a href="#sec10">10. 前端页面与路由</a></li>
+  <li><a href="#sec11">11. 系统监控与运维</a></li>
+  <li><a href="#sec12">12. 开发进度与已完成功能</a></li>
+  <li><a href="#sec13">13. 目前存在的问题与待办</a></li>
+  <li><a href="#sec14">14. 部署信息与服务器配置</a></li>
+</ul>
+</div>
+
+<!-- ===================== 1. 系统架构 ===================== -->
+<h2 id="sec1">1. 系统架构总览</h2>
+
+<h3>1.1 整体架构图</h3>
+<div class="card">
+<pre><code>┌─────────────────────────────────────────────────────────────┐
+│                     前端 Vue 3 + Element Plus                  │
+│  Dashboard | Kline | Strategy | Trade | AI | QuantSignal      │
+│  News | Evolution | Backtest | Risk | Reports | SystemAdmin   │
+└────────────────────────┬────────────────────────────────────┘
+                         │ HTTP API (Axios)
+┌────────────────────────┴────────────────────────────────────┐
+│                 FastAPI 后端 (main.py:8000)                    │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐  │
+│  │ Auth     │ │ Strategy │ │ Trade    │ │ SystemAdmin      │  │
+│  │ Router   │ │ Router   │ │ Router   │ │ Router           │  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐  │
+│  │ Analytics│ │ QuantSig │ │ Evolution│ │ Monitor Router   │  │
+│  │ Router   │ │ Router   │ │ Router   │ │                  │  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘  │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐  │
+│  │ AI Keys  │ │ Exchange │ │ Kline    │ │ Settings Router  │  │
+│  │ Router   │ │ Router   │ │ Layout   │ │                  │  │
+│  └──────────┘ └──────────┘ └──────────┘ └──────────────────┘  │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+     ┌───────────────────┼───────────────────┐
+     │                   │                   │
+┌────┴──────┐  ┌────────┴────────┐  ┌───────┴────────┐
+│  数据库层  │  │   服务层        │  │  外部服务      │
+│  MySQL /  │  │  StrategyEngine │  │  Binance API   │
+│  SQLite   │  │  QuantSignal    │  │  OKX API       │
+│  Redis    │  │  BacktestEngine │  │  OpenAI/Claude │
+│           │  │  AIClient       │  │  NewsAPI       │
+│           │  │  NewsPipeline   │  │  CryptoPanic   │
+└───────────┘  └─────────────────┘  └────────────────┘</code></pre>
+</div>
+
+<h3>1.2 核心设计原则</h3>
+<ul>
+  <li><strong>前后端分离</strong>：FastAPI 提供 RESTful API，Vue 3 SPA 静态资源由 FastAPI 挂载</li>
+  <li><strong>多因子量化驱动</strong>：从 3 因子（技术40%+新闻30%+AI30%）升级为 7 因子体系</li>
+  <li><strong>模拟优先</strong>：所有 AI 控制任务通过分享链接均为模拟盘（只读），无真实交易风险</li>
+  <li><strong>数据隔离</strong>：超管见全量聚合数据，运营商仅见自有数据</li>
+  <li><strong>API Key 加密存储</strong>：使用 AES 加密，日志自动脱敏</li>
+  <li><strong>多 API 故障转移</strong>：AI 调用支持多 Key 轮询，失败自动切换</li>
+</ul>
+
+<!-- ===================== 2. 技术栈 ===================== -->
+<h2 id="sec2">2. 技术栈与运行环境</h2>
+
+<table>
+  <tr><th>层级</th><th>技术</th><th>版本/说明</th></tr>
+  <tr><td>后端框架</td><td>FastAPI</td><td>Python 3.10+，ASGI 异步</td></tr>
+  <tr><td>ORM</td><td>SQLAlchemy</td><td>支持 MySQL / SQLite</td></tr>
+  <tr><td>数据库</td><td>MySQL / SQLite</td><td>生产用 MySQL，开发可用 SQLite</td></tr>
+  <tr><td>缓存/队列</td><td>Redis</td><td>Session / Celery Broker</td></tr>
+  <tr><td>定时任务</td><td>APScheduler / Celery</td><td>Celery_ENABLED=False 时用 APScheduler 兜底</td></tr>
+  <tr><td>HTTP 客户端</td><td>httpx</td><td>同步+异步，AI 调用/交易所 API</td></tr>
+  <tr><td>认证</td><td>JWT (PyJWT)</td><td>HS256，Access 24h + Refresh 7d</td></tr>
+  <tr><td>加密</td><td>cryptography (AES)</td><td>API Key 加密/解密/脱敏</td></tr>
+  <tr><td>前端框架</td><td>Vue 3</td><td>Composition API</td></tr>
+  <tr><td>UI 库</td><td>Element Plus</td><td>组件库</td></tr>
+  <tr><td>图表库</td><td>ECharts (vue-echarts)</td><td>K线图/仪表盘图表</td></tr>
+  <tr><td>状态管理</td><td>Pinia</td><td>持久化插件 pinia-plugin-persistedstate</td></tr>
+  <tr><td>构建工具</td><td>Vite</td><td>前端打包</td></tr>
+  <tr><td>HTTP 请求</td><td>Axios</td><td>统一拦截器/FormData 修复</td></tr>
+  <tr><td>进程管理</td><td>Supervisor</td><td>生产环境 uvicorn 多 worker</td></tr>
+  <tr><td>反向代理</td><td>Nginx</td><td>静态资源 + API 代理</td></tr>
+</table>
+
+<h3>2.1 环境变量配置 (.env)</h3>
+<pre><code># 基础
+APP_ENV=production
+APP_DEBUG=False
+APP_SECRET_KEY=please_change_me
+API_PREFIX=/api/v1
+SERVER_PORT=8000
+
+# MySQL
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_USER=root
+DB_PASSWORD=xxx
+DB_NAME=trading_system
+
+# Redis
+REDIS_HOST=127.0.0.1
+REDIS_PORT=6379
+
+# JWT
+JWT_ALGORITHM=HS256
+JWT_ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# 交易所
+BINANCE_MAIN_API_KEY=
+BINANCE_MAIN_API_SECRET=
+BINANCE_TESTNET=True
+OKX_MAIN_API_KEY=
+
+# AI
+AI_PROVIDER=custom
+AI_API_KEY=
+AI_API_ENDPOINT=
+AI_MODEL_NAME=gpt-4o
+
+# 新闻
+NEWSAPI_KEY=
+CRYPTOPANIC_TOKEN=
+FRED_API_KEY=
+ALPHAVANTAGE_API_KEY=
+NEWSDATA_API_KEY=
+
+# 代理
+PROXY_ENABLED=True
+
+# GitHub 更新
+GITHUB_REPO=jackmasen/strategy-trade
+GITHUB_TOKEN=gho_xxx</code></pre>
+
+<!-- ===================== 3. 目录结构 ===================== -->
+<h2 id="sec3">3. 目录结构与模块划分</h2>
+
+<h3>3.1 后端目录</h3>
+<pre><code>strategy-trade-v1.2.0_20260831/
+├── main.py                    # FastAPI 入口，生命周期/路由注册/静态资源挂载
+├── .env                       # 环境变量配置
+├── backend/
+│   ├── __init__.py
+│   ├── config.py              # Pydantic Settings 全局配置
+│   ├── core/                  # 核心基础层
+│   │   ├── auth.py            # JWT 认证 + 权限装饰器 (require_admin/require_trader/require_editor)
+│   │   ├── security.py        # AES 加密/解密/脱敏
+│   │   ├── exceptions.py      # 统一异常处理 (BizException/NotFoundException...)
+│   │   ├── schemas.py         # 通用响应 Schema (ApiResponse/Pagination)
+│   │   ├── utils.py           # 密码哈希/验证
+│   │   ├── logging_config.py  # 日志配置 (app/error/trade 三类日志)
+│   │   ├── celery_app.py      # Celery 配置
+│   │   └── proxy_manager.py   # 代理池管理
+│   ├── db/
+│   │   ├── base.py            # SQLAlchemy Base
+│   │   ├── session.py         # Engine/SessionLocal/get_db
+│   │   └── seed_data.py       # 种子数据 (admin/trader 默认用户/策略模板/演示新闻)
+│   ├── models/                # ORM 模型
+│   │   ├── user.py            # User, OperationLog
+│   │   ├── exchange.py        # ExchangeAccount
+│   │   ├── strategy.py        # StrategyConfig, ScoreRecord
+│   │   ├── trade.py           # TradeOrder, TradePosition
+│   │   ├── analytics.py       # NewsArticle, AIAnalysisRecord, BacktestRun, QuantSignalRecord, FalseSignalPattern, FactorPerformanceStat, EvolutionProposal, EvolutionRun, DailyFinancialReport...
+│   │   ├── ai_config.py       # AIConfig
+│   │   ├── ai_api_key.py      # AiApiKey (多API故障转移)
+│   │   ├── system_config.py   # SystemConfig
+│   │   ├── system_admin.py    # SystemUpdateRecord, SystemBackupRecord, SystemHealthReport
+│   │   └── kline_layout.py    # KlineLayout
+│   ├── routers/               # API 路由
+│   │   ├── auth.py            # /auth - 登录/刷新/用户信息
+│   │   ├── strategy.py        # /strategies - 策略CRUD/评分/执行
+│   │   ├── trade.py           # /trades - 订单/持仓/历史
+│   │   ├── exchange.py        # /exchange - 交易所账号管理
+│   │   ├── analytics.py       # /analytics - 分析/仪表盘
+│   │   ├── quant_signal.py    # /quant-signal - 7因子量化信号
+│   │   ├── evolution.py       # /evolution - 策略自我进化
+│   │   ├── monitor.py         # /monitor - 系统监控/AI控制中心/分享令牌
+│   │   ├── system_admin.py    # /system - 系统管理/健康检测/备份/更新
+│   │   ├── settings.py        # /settings - 系统设置/SMTP/AI配置
+│   │   ├── ai_keys.py         # /settings/ai-keys - AI多API Key管理
+│   │   ├── kline_layout.py    # /kline-layouts - K线布局管理
+│   │   └── notifications.py   # /notifications - 通知
+│   ├── services/              # 业务服务层
+│   │   ├── ai_client.py       # AIClient - 统一AI调用 (OpenAI/Anthropic/Custom)
+│   │   ├── ai_failover.py     # AI 故障转移
+│   │   ├── ai_share_engine.py # AI 控制中心 (SSE 实时进度推送)
+│   │   ├── backtest_engine.py # 回测引擎
+│   │   ├── monitor_service.py # 监控服务 (状态/自检/日志/分享令牌)
+│   │   ├── news_strategy.py   # 新闻AI策略服务
+│   │   ├── news_ai_analyzer.py# 新闻AI增强分析 (关键词预筛选+多API轮询)
+│   │   ├── news_keywords.py   # 新闻关键词预筛选
+│   │   ├── quant_signal_engine.py # 7因子量化信号引擎
+│   │   ├── strategy_evolution.py  # 策略自我进化服务
+│   │   ├── system_manager.py  # 系统管理 (健康检测/备份/更新)
+│   │   ├── engine_monitor_service.py
+│   │   ├── signal_verification.py # 信号验证
+│   │   ├── cryptopanic_ws.py  # CryptoPanic WebSocket
+│   │   └── xray_manager.py    # Xray 代理管理
+│   ├── strategy/              # 策略引擎
+│   │   ├── engine.py          # StrategyEngine - 评分+触发下单闭环
+│   │   ├── scoring.py         # StrategyScoringEngine - 7因子综合评分
+│   │   ├── indicators.py      # TechnicalAnalyzer - 技术指标 (MA/RSI/MACD/BB/ATR/EMV)
+│   │   ├── emv_strategy.py    # EMV 策略 (10层过滤趋势跟踪)
+│   │   └── __init__.py
+│   ├── exchanges/             # 交易所对接
+│   │   ├── base.py            # ExchangeClientBase 抽象基类
+│   │   ├── binance.py         # Binance 交易所
+│   │   ├── okx.py             # OKX 交易所
+│   │   ├── market.py          # MarketManager - 行情管理 (WebSocket/REST)
+│   │   ├── _types.py          # Candle/Order 类型定义
+│   │   └── __init__.py
+│   ├── news/                  # 新闻采集
+│   │   ├── pipeline.py        # NewsPipeline - 采集+去重+AI分析流水线
+│   │   ├── analyzer.py        # 新闻分析器
+│   │   ├── base.py            # 新闻源基类
+│   │   └── crawlers/          # 各新闻源爬虫
+│   │       ├── coindesk.py
+│   │       ├── macro.py
+│   │       ├── macro_media.py
+│   │       ├── cn_media.py
+│   │       ├── newsdata.py
+│   │       └── alphavantage.py
+│   ├── tasks/
+│   │   └── scheduled.py       # 定时任务 (策略执行/新闻采集/日报)
+│   ├── utils/
+│   │   └── email_util.py      # 邮件告警
+│   └── scripts/
+│       └── health_check.py    # 健康检查脚本
+├── frontend/                  # Vue 3 前端
+│   ├── src/
+│   │   ├── main.js
+│   │   ├── App.vue
+│   │   ├── router/index.js    # 路由配置
+│   │   ├── store/user.js       # Pinia 用户状态
+│   │   ├── utils/
+│   │   │   ├── request.js     # Axios 封装 (含 FormData 修复)
+│   │   │   └── env.js
+│   │   ├── composables/
+│   │   │   └── useSafeRequest.js
+│   │   ├── layouts/
+│   │   │   └── MainLayout.vue # 侧边栏+顶部布局
+│   │   └── views/             # 页面组件
+│   │       ├── Dashboard.vue
+│   │       ├── Login.vue
+│   │       ├── Exchange.vue
+│   │       ├── Strategy.vue
+│   │       ├── Trade.vue
+│   │       ├── Kline.vue
+│   │       ├── Positions.vue
+│   │       ├── News.vue
+│   │       ├── AI.vue
+│   │       ├── QuantSignal.vue
+│   │       ├── Evolution.vue
+│   │       ├── Backtest.vue
+│   │       ├── Risk.vue
+│   │       ├── Reports.vue
+│   │       ├── Users.vue
+│   │       ├── Settings.vue
+│   │       ├── SystemAdmin.vue
+│   │       ├── SystemMonitor.vue
+│   │       ├── CrawlerHealth.vue
+│   │       └── Profile.vue
+│   ├── dist/                  # 构建产物
+│   └── package.json
+└── deploy/
+    └── make_onepress_zip.py   # 一键打包部署</code></pre>
+
+<!-- ===================== 4. 数据库模型 ===================== -->
+<h2 id="sec4">4. 数据库模型与表结构</h2>
+
+<table>
+  <tr><th>模型</th><th>表名</th><th>说明</th></tr>
+  <tr><td>User</td><td>users</td><td>用户表 (admin=超管 role=1, trader=操作员 role=2)</td></tr>
+  <tr><td>OperationLog</td><td>operation_logs</td><td>操作日志</td></tr>
+  <tr><td>ExchangeAccount</td><td>exchange_accounts</td><td>交易所子账号 (Binance/OKX)</td></tr>
+  <tr><td>StrategyConfig</td><td>strategy_configs</td><td>策略配置 (类型/周期/杠杆/风控参数)</td></tr>
+  <tr><td>ScoreRecord</td><td>score_records</td><td>评分历史 (7因子快照+技术指标+AI理由)</td></tr>
+  <tr><td>TradeOrder</td><td>trade_orders</td><td>订单记录</td></tr>
+  <tr><td>TradePosition</td><td>trade_positions</td><td>持仓记录</td></tr>
+  <tr><td>NewsArticle</td><td>news_articles</td><td>新闻文章 (含AI情绪/影响力/关联币种)</td></tr>
+  <tr><td>AIAnalysisRecord</td><td>ai_analysis_records</td><td>AI分析记录</td></tr>
+  <tr><td>BacktestRun</td><td>backtest_runs</td><td>回测记录</td></tr>
+  <tr><td>QuantSignalRecord</td><td>quant_signal_records</td><td>量化信号记录 (含验证结果)</td></tr>
+  <tr><td>FalseSignalPattern</td><td>false_signal_patterns</td><td>假信号模式</td></tr>
+  <tr><td>FactorPerformanceStat</td><td>factor_performance_stats</td><td>因子性能统计</td></tr>
+  <tr><td>EvolutionProposal</td><td>evolution_proposals</td><td>进化方案 (待审批)</td></tr>
+  <tr><td>EvolutionRun</td><td>evolution_runs</td><td>进化执行记录</td></tr>
+  <tr><td>AIConfig</td><td>ai_configs</td><td>AI 全局配置</td></tr>
+  <tr><td>AiApiKey</td><td>ai_api_keys</td><td>AI多API Key (故障转移)</td></tr>
+  <tr><td>SystemConfig</td><td>system_configs</td><td>系统全局配置 (key-value)</td></tr>
+  <tr><td>SystemUpdateRecord</td><td>system_update_records</td><td>系统更新记录</td></tr>
+  <tr><td>SystemBackupRecord</td><td>system_backup_records</td><td>系统备份记录</td></tr>
+  <tr><td>SystemHealthReport</td><td>system_health_reports</td><td>健康检测报告</td></tr>
+  <tr><td>KlineLayout</td><td>kline_layouts</td><td>K线布局 (个人/公共)</td></tr>
+  <tr><td>DailyFinancialReport</td><td>daily_financial_reports</td><td>日报表</td></tr>
+  <tr><td>WeeklyFinancialReport</td><td>weekly_financial_reports</td><td>周报表</td></tr>
+  <tr><td>MonthlyFinancialReport</td><td>monthly_financial_reports</td><td>月报表</td></tr>
+</table>
+
+<h3>4.1 策略配置核心字段 (StrategyConfig)</h3>
+<pre><code>strategy_type:    standard(标准5指标) / emv(EMV趋势) / news_ai(新闻AI) / bollinger / macd
+symbols:           ["BTC", "ETH", "SOL", "XAU", "WTI"]
+timeframe:         "1h" / "4h" / "1h,4h"
+direction_mode:    0-多空都做 / 1-只做多 / 2-只做空
+run_mode:          1-全自动 / 2-半自动 / 3-模拟盘
+score_threshold:   开仓最低评分 (0-10)
+weight_technical:  技术权重 (默认0.4)
+weight_news:       新闻权重 (默认0.3)
+weight_ai:         AI权重 (默认0.3)
+leverage_mode:     1-固定 / 2-动态(按评分映射)
+tp_ratio:          止盈比例 (默认4%)
+sl_ratio:          止损比例 (默认2%)
+daily_max_loss:    日最大亏损 (默认5%)
+consecutive_loss_pause: 连续亏损暂停 (默认3单)</code></pre>
+
+<!-- ===================== 5. API 接口清单 ===================== -->
+<h2 id="sec5">5. API 接口完整清单</h2>
+
+<h3>5.1 认证模块 /auth</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th><th>权限</th></tr>
+  <tr><td>POST</td><td>/auth/login</td><td>用户登录</td><td>公开</td></tr>
+  <tr><td>POST</td><td>/auth/refresh</td><td>刷新Token</td><td>登录</td></tr>
+  <tr><td>GET</td><td>/auth/me</td><td>当前用户信息</td><td>登录</td></tr>
+  <tr><td>GET</td><td>/auth/menu</td><td>侧边栏菜单</td><td>登录</td></tr>
+  <tr><td>PUT</td><td>/auth/password</td><td>修改密码</td><td>登录</td></tr>
+</table>
+
+<h3>5.2 交易所模块 /exchange</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th></tr>
+  <tr><td>GET</td><td>/exchange/accounts</td><td>交易所子账号列表</td></tr>
+  <tr><td>POST</td><td>/exchange/accounts</td><td>添加子账号</td></tr>
+  <tr><td>PUT</td><td>/exchange/accounts/{id}</td><td>更新子账号</td></tr>
+  <tr><td>DELETE</td><td>/exchange/accounts/{id}</td><td>删除子账号</td></tr>
+  <tr><td>POST</td><td>/exchange/accounts/{id}/sync</td><td>同步余额/持仓</td></tr>
+  <tr><td>GET</td><td>/exchange/symbols</td><td>支持的交易品种</td></tr>
+  <tr><td>GET</td><td>/exchange/klines/{symbol}</td><td>获取K线数据</td></tr>
+  <tr><td>GET</td><td>/exchange/ticker/{symbol}</td><td>获取行情</td></tr>
+</table>
+
+<h3>5.3 策略模块 /strategies</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th></tr>
+  <tr><td>GET</td><td>/strategies</td><td>策略列表</td></tr>
+  <tr><td>POST</td><td>/strategies</td><td>创建策略</td></tr>
+  <tr><td>GET</td><td>/strategies/default-template</td><td>默认策略模板 (standard/emv/bollinger/macd)</td></tr>
+  <tr><td>GET</td><td>/strategies/{id}</td><td>策略详情</td></tr>
+  <tr><td>PUT</td><td>/strategies/{id}</td><td>更新策略</td></tr>
+  <tr><td>DELETE</td><td>/strategies/{id}</td><td>删除策略</td></tr>
+  <tr><td>POST</td><td>/strategies/{id}/toggle</td><td>启停策略</td></tr>
+  <tr><td>POST</td><td>/strategies/{id}/score-symbol</td><td>手动评分某品种</td></tr>
+  <tr><td>POST</td><td>/strategies/{id}/run</td><td>手动执行策略 (评分+下单)</td></tr>
+  <tr><td>GET</td><td>/strategies/{id}/scores</td><td>评分历史</td></tr>
+  <tr><td>GET</td><td>/strategies/scores/latest</td><td>最新评分快照</td></tr>
+  <tr><td>GET</td><td>/strategies/news-sentiment/{symbol}</td><td>新闻情绪评分</td></tr>
+  <tr><td>POST</td><td>/strategies/{id}/run-news-ai</td><td>执行新闻AI策略</td></tr>
+  <tr><td>POST</td><td>/strategies/news-ai/run-all</td><td>执行全部新闻AI策略</td></tr>
+</table>
+
+<h3>5.4 交易模块 /trades</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th></tr>
+  <tr><td>GET</td><td>/trades/orders</td><td>订单列表</td></tr>
+  <tr><td>POST</td><td>/trades/orders/manual</td><td>手动下单</td></tr>
+  <tr><td>POST</td><td>/trades/orders/{id}/cancel</td><td>撤单</td></tr>
+  <tr><td>GET</td><td>/trades/positions</td><td>当前持仓</td></tr>
+  <tr><td>POST</td><td>/trades/positions/{id}/close</td><td>手动平仓</td></tr>
+  <tr><td>GET</td><td>/trades/history</td><td>已平仓历史</td></tr>
+  <tr><td>GET</td><td>/trades/overview</td><td>交易总览 (Dashboard)</td></tr>
+</table>
+
+<h3>5.5 量化信号模块 /quant-signal</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th></tr>
+  <tr><td>GET</td><td>/quant-signal/overview</td><td>全币种信号概览 (7因子综合评分)</td></tr>
+  <tr><td>GET</td><td>/quant-signal/factor-dashboard</td><td>单币种因子仪表盘</td></tr>
+  <tr><td>GET</td><td>/quant-signal/history</td><td>信号历史记录</td></tr>
+  <tr><td>GET</td><td>/quant-signal/verification-stats</td><td>信号验证统计 (因子有效性)</td></tr>
+</table>
+
+<h3>5.6 策略进化模块 /evolution</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th></tr>
+  <tr><td>GET</td><td>/evolution/dashboard</td><td>进化仪表盘</td></tr>
+  <tr><td>GET</td><td>/evolution/false-signal-patterns</td><td>假信号模式列表</td></tr>
+  <tr><td>GET</td><td>/evolution/factor-importance</td><td>因子重要性排名</td></tr>
+  <tr><td>GET</td><td>/evolution/proposals</td><td>进化方案列表</td></tr>
+  <tr><td>POST</td><td>/evolution/proposals/{id}/apply</td><td>应用进化方案</td></tr>
+  <tr><td>POST</td><td>/evolution/run</td><td>手动触发进化分析</td></tr>
+</table>
+
+<h3>5.7 监控模块 /monitor</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th></tr>
+  <tr><td>GET</td><td>/monitor/status</td><td>系统实时状态</td></tr>
+  <tr><td>GET</td><td>/monitor/self-check</td><td>功能自检 (15项)</td></tr>
+  <tr><td>GET</td><td>/monitor/logs/files</td><td>日志文件列表</td></tr>
+  <tr><td>GET</td><td>/monitor/logs</td><td>读取日志</td></tr>
+  <tr><td>POST</td><td>/monitor/share-tokens</td><td>创建分享令牌 (0.5-720h)</td></tr>
+  <tr><td>GET</td><td>/monitor/share/{token}</td><td>公开监控页 (无需登录)</td></tr>
+  <tr><td>GET</td><td>/monitor/share/{token}/diagnostic</td><td>诊断报告</td></tr>
+  <tr><td>POST</td><td>/monitor/ai-tasks</td><td>创建AI控制任务 (SSE)</td></tr>
+  <tr><td>GET</td><td>/monitor/ai-tasks</td><td>AI任务列表</td></tr>
+  <tr><td>GET</td><td>/monitor/ai-tasks/{id}/stream</td><td>SSE实时进度</td></tr>
+</table>
+
+<h3>5.8 系统管理 /system</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th></tr>
+  <tr><td>GET</td><td>/system/info</td><td>系统信息</td></tr>
+  <tr><td>POST</td><td>/system/health-check</td><td>健康检测+自动修复</td></tr>
+  <tr><td>GET</td><td>/system/cache/items</td><td>可清理缓存项</td></tr>
+  <tr><td>POST</td><td>/system/cache/clean</td><td>清理缓存</td></tr>
+  <tr><td>POST</td><td>/system/backups</td><td>创建备份</td></tr>
+  <tr><td>GET</td><td>/system/backups</td><td>备份列表</td></tr>
+  <tr><td>POST</td><td>/system/backups/{id}/restore</td><td>恢复备份</td></tr>
+  <tr><td>POST</td><td>/system/update/upload</td><td>上传更新包</td></tr>
+  <tr><td>GET</td><td>/system/update/github-latest</td><td>检查GitHub最新版</td></tr>
+  <tr><td>POST</td><td>/system/update/github-apply</td><td>应用GitHub更新</td></tr>
+</table>
+
+<h3>5.9 AI Key 管理 /settings/ai-keys</h3>
+<table>
+  <tr><th>方法</th><th>路径</th><th>功能</th></tr>
+  <tr><td>GET</td><td>/settings/ai-keys</td><td>AI Key 列表</td></tr>
+  <tr><td>POST</td><td>/settings/ai-keys</td><td>添加 Key</td></tr>
+  <tr><td>PUT</td><td>/settings/ai-keys/{id}</td><td>更新 Key</td></tr>
+  <tr><td>DELETE</td><td>/settings/ai-keys/{id}</td><td>删除 Key</td></tr>
+  <tr><td>POST</td><td>/settings/ai-keys/{id}/test</td><td>测试单个 Key</td></tr>
+  <tr><td>POST</td><td>/settings/ai-keys/health-check</td><td>批量健康检测</td></tr>
+</table>
+
+<!-- ===================== 6. AI分析行情 ===================== -->
+<h2 id="sec6">6. AI分析行情策略 - 详细分析</h2>
+
+<div class="card">
+<h3>6.1 核心模块：<code>backend/services/ai_client.py</code> - AIClient</h3>
+<p><strong>统一 AI 客户端</strong>，支持多供应商（OpenAI / Anthropic / DeepSeek / 通义千问 / 豆包 / 硅基流动 / OneAPI / 本地 Ollama），所有供应商走统一接口。</p>
+
+<h4>工作流程</h4>
+<ol>
+  <li><strong>前置校验</strong>：检查 API Key 和 Endpoint 是否配置</li>
+  <li><strong>组装 Prompt</strong>：System Prompt 强制输出严格 JSON 格式（ai_score / ai_direction / ai_reason 三字段）</li>
+  <li><strong>发请求</strong>：最多 1 次首次 + max_retries 次重试，最后一次强制 STRICT_JSON 提示</li>
+  <li><strong>JSON 解析</strong>：提取 JSON（支持 <code>```json</code> 包裹和裸 JSON），字段类型/范围校验</li>
+  <li><strong>成本估算</strong>：按模型名粗估美元成本</li>
+</ol>
+
+<h4>输出 Schema</h4>
+<pre><code>{
+  "ai_score": 0.0-10.0,         // 7-10=强烈看多, 4-6=中性, 0-3=强烈看空
+  "ai_direction": "long/short/neutral",
+  "ai_reason": "100-500字中文理由"
+}</code></pre>
+
+<h4>错误码体系</h4>
+<ul>
+  <li><code>AI_NOT_CONFIGURED</code> - 未配置 Key/Endpoint</li>
+  <li><code>AI_INVALID_JSON</code> - 输出非合法 JSON（2次重试仍失败）</li>
+  <li><code>AI_PROVIDER_401</code> - Key 无效</li>
+  <li><code>AI_PROVIDER_429</code> - 限流</li>
+  <li><code>AI_TIMEOUT</code> - 超时</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>6.2 技术指标分析：<code>backend/strategy/indicators.py</code> - TechnicalAnalyzer</h3>
+<p>纯 NumPy 实现的技术指标计算器，避免 ta-lib 依赖。</p>
+
+<h4>5大指标权重</h4>
+<table>
+  <tr><th>指标</th><th>权重</th><th>评分逻辑</th></tr>
+  <tr><td>MA 均线</td><td>2.0</td><td>MA7/MA25/MA99 多头排列→高分</td></tr>
+  <tr><td>RSI</td><td>2.0</td><td>超卖(&lt;30)看多，超买(&gt;70)看空</td></tr>
+  <tr><td>MACD</td><td>2.5</td><td>金叉/红柱放大看多，死叉/绿柱放大看空</td></tr>
+  <tr><td>布林带</td><td>2.0</td><td>贴下轨反弹，贴上轨回调，极度收窄关注突破</td></tr>
+  <tr><td>ATR 波动率</td><td>1.5</td><td>影响可信度和建议杠杆（不直接决定方向）</td></tr>
+</table>
+
+<h4>输出</h4>
+<ul>
+  <li>score: 0-10 技术面综合分</li>
+  <li>directional_score: -10 ~ +10 方向分</li>
+  <li>direction: 0观望 / 1做多 / 2做空</li>
+  <li>suggest_leverage: 3-10 建议杠杆</li>
+  <li>suggest_tp_pct / suggest_sl_pct: 止盈/止损百分比</li>
+  <li>indicators: MA/RSI/MACD/BB/ATR/EMV 完整快照</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>6.3 7因子量化信号引擎：<code>backend/services/quant_signal_engine.py</code></h3>
+<p>从"单策略触发"升级为"多因子量化信号引擎"，7大因子体系：</p>
+
+<table>
+  <tr><th>#</th><th>因子</th><th>默认权重</th><th>核心指标</th><th>评分范围</th></tr>
+  <tr><td>1</td><td>市场状态 (MarketRegime)</td><td>20%</td><td>ADX / MA斜率 / 布林带宽 / 波动率比</td><td>-10 ~ +10</td></tr>
+  <tr><td>2</td><td>资金流向 (CapitalFlow)</td><td>18%</td><td>VWAP偏差 / OBV变化率 / MFI(14)</td><td>-10 ~ +10</td></tr>
+  <tr><td>3</td><td>杠杆集中度 (Leverage)</td><td>15%</td><td>OI变化率 / 资金费率 / 多空比</td><td>-10 ~ +10</td></tr>
+  <tr><td>4</td><td>清算压力 (Liquidation)</td><td>12%</td><td>上方/下方5%清算量 / 清算瀑布风险</td><td>-10 ~ +10</td></tr>
+  <tr><td>5</td><td>波动率 (Volatility)</td><td>10%</td><td>已实现波动率 / 波动率锥 / ATR比</td><td>-10 ~ +10</td></tr>
+  <tr><td>6</td><td>新闻情绪 (NewsSentiment)</td><td>15%</td><td>情绪得分 / 新闻密度 / 事件重要性 / 反身性修正</td><td>-10 ~ +10</td></tr>
+  <tr><td>7</td><td>策略优势 (StrategyAdvantage)</td><td>10%</td><td>各策略近期胜率 / 盈亏比 / 夏普 / 适配度</td><td>-5 ~ +5</td></tr>
+</table>
+
+<h4>综合评分公式</h4>
+<pre><code>CompositeScore = Σ (factor.weight * factor.confidence/100 * factor.score) / Σ (factor.weight * factor.confidence/100)</code></pre>
+
+<h4>动态权重调整</h4>
+<ul>
+  <li><strong>趋势市</strong>：market_regime 权重+5%, capital_flow 权重+2%</li>
+  <li><strong>震荡市</strong>：volatility 权重+5%, liquidation 权重+3%</li>
+  <li><strong>突破市</strong>：strategy_advantage 权重+2%</li>
+</ul>
+
+<h4>方向一致性判定</h4>
+<p>至少 60% 的有效因子（confidence &gt; 40%）方向一致，才确认看涨/看跌信号，避免单因子偏差。</p>
+
+<h4>止盈止损计算</h4>
+<ul>
+  <li>止损：ATR 的 1.5 倍，范围 [1.5%, 5.0%]</li>
+  <li>止盈：止损 × 盈亏比（趋势市 2.0，震荡市 1.5）</li>
+  <li>建议杠杆：置信度&gt;70 且趋势强→5x，置信度&gt;50→3x，否则→2x</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>6.4 综合评分引擎：<code>backend/strategy/scoring.py</code> - StrategyScoringEngine</h3>
+<p>将原 3 因子（技术40%+新闻30%+AI30%）与 7 因子引擎集成，输出 <code>ScoreResult</code>：</p>
+<ul>
+  <li>technical_score / news_score / ai_score（兼容旧字段）</li>
+  <li>score_total: 0-10 综合</li>
+  <li>directional_score: -10 ~ +10</li>
+  <li>direction: 0观望 / 1多 / 2空</li>
+  <li>trigger_trade: 是否触发交易</li>
+  <li>market_regime + factor_scores + factor_details: 7因子完整快照</li>
+</ul>
+</div>
+
+<!-- ===================== 7. AI自动策略交易与回测 ===================== -->
+<h2 id="sec7">7. AI自动策略交易与回测 - 详细分析</h2>
+
+<div class="card">
+<h3>7.1 策略引擎：<code>backend/strategy/engine.py</code> - StrategyEngine</h3>
+<p><strong>评分-触发-下单闭环</strong>，由 APScheduler/Celery 定时调用。</p>
+
+<h4>主流程</h4>
+<ol>
+  <li><strong>获取K线</strong>：优先 MarketManager 内存缓存，否则通过交易所 REST 获取</li>
+  <li><strong>评分</strong>：调用 StrategyScoringEngine 做综合评分</li>
+  <li><strong>写入 ScoreRecord</strong>：幂等（同 strategy+symbol+tf+收盘价 不重复写）</li>
+  <li><strong>触发交易</strong>：score_total &ge; threshold → trigger_trade=True</li>
+  <li><strong>风控检查</strong>：日亏损限额 / 连续亏损暂停 / 最大同时持仓数</li>
+  <li><strong>执行下单</strong>：根据 run_mode 决定是否真实下单</li>
+</ol>
+
+<h4>运行模式</h4>
+<table>
+  <tr><th>模式</th><th>值</th><th>行为</th></tr>
+  <tr><td>全自动</td><td>1</td><td>评分达标→自动下单到交易所</td></tr>
+  <tr><td>半自动</td><td>2</td><td>评分达标→触发信号，需人工确认下单</td></tr>
+  <tr><td>模拟盘</td><td>3</td><td>评分达标→仅记录信号，不执行真实交易</td></tr>
+</table>
+
+<h4>杠杆策略</h4>
+<ul>
+  <li><strong>固定杠杆</strong>：leverage_fixed (3-10)</li>
+  <li><strong>动态杠杆</strong>：按评分映射 (低→leverage_low_score, 中→leverage_mid_score, 高→leverage_high_score)</li>
+</ul>
+
+<h4>风控规则</h4>
+<ul>
+  <li>max_single_drawdown: 单笔最大回撤 (默认2%)</li>
+  <li>daily_max_loss: 日最大亏损 (默认5%)，触发后当日停止</li>
+  <li>consecutive_loss_pause: 连续亏损N单暂停 (默认3单)</li>
+  <li>cooldown_hours: 暂停冷却时长 (默认24h)</li>
+  <li>max_position_count: 最大同时持仓数 (默认3)</li>
+  <li>total_position_ratio: 总仓位上限 (默认50%)</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>7.2 策略类型</h3>
+<table>
+  <tr><th>类型</th><th>strategy_type</th><th>说明</th></tr>
+  <tr><td>标准策略</td><td>standard</td><td>5指标技术评分(40%) + 新闻情绪(30%) + AI分析(30%)</td></tr>
+  <tr><td>EMV策略</td><td>emv</td><td>EMV(14,3) 10层过滤趋势跟踪，ATR止损，仅黄金XAU/4H</td></tr>
+  <tr><td>新闻AI策略</td><td>news_ai</td><td>纯新闻情绪驱动，不看技术面，情绪极值触发</td></tr>
+  <tr><td>布林带策略</td><td>bollinger</td><td>BB(20,2σ)突破反转，价格贴轨+RSI确认</td></tr>
+  <tr><td>MACD策略</td><td>macd</td><td>MACD(12,26,9)金叉死叉，趋势跟踪型</td></tr>
+</table>
+</div>
+
+<div class="card">
+<h3>7.3 回测引擎：<code>backend/services/backtest_engine.py</code></h3>
+<p>基于历史K线模拟策略交易，计算各项指标。</p>
+
+<h4>支持指标</h4>
+<ul>
+  <li>SMA (简单移动平均)</li>
+  <li>RSI (相对强弱指数)</li>
+  <li>布林带 (Bollinger Bands)</li>
+  <li>EMA (指数移动平均)</li>
+</ul>
+
+<h4>回测输出</h4>
+<ul>
+  <li>win_rate: 胜率</li>
+  <li>profit_factor: 盈亏比</li>
+  <li>sharpe_ratio: 夏普比率</li>
+  <li>total_trades: 总交易笔数</li>
+  <li>per_symbol_stats: 分品种统计</li>
+  <li>param_snapshot: 策略参数快照</li>
+</ul>
+
+<h4>数据来源</h4>
+<p>回测数据从 <code>BacktestRun</code> 表读取，量化信号引擎的"策略优势因子"直接从回测数据库获取各策略在指定品种上的表现。</p>
+</div>
+
+<div class="card">
+<h3>7.4 AI 控制中心：<code>backend/services/ai_share_engine.py</code></h3>
+<p>通过分享链接提供 4 大核心功能，均为<strong>模拟盘（只读）</strong>，无真实交易风险。</p>
+
+<table>
+  <tr><th>功能</th><th>说明</th></tr>
+  <tr><td>模拟回测</td><td>历史数据模拟策略执行，展示回测指标</td></tr>
+  <tr><td>策略扫描</td><td>扫描全部品种+周期，输出评分排名</td></tr>
+  <tr><td>AI行情分析</td><td>调用 AIClient 做实时分析，输出 JSON 结构化结果</td></tr>
+  <tr><td>综合测试</td><td>以上功能组合执行</td></tr>
+</table>
+
+<h4>SSE 实时进度推送</h4>
+<ul>
+  <li><code>progress</code>: 百分比 + 状态 + 消息</li>
+  <li><code>completed</code>: 完整结果</li>
+  <li><code>failed</code>: 错误信息</li>
+  <li><code>heartbeat</code>: 30秒心跳保活</li>
+</ul>
+</div>
+
+<!-- ===================== 8. AI新闻情绪 ===================== -->
+<h2 id="sec8">8. AI新闻情绪分析 - 详细分析</h2>
+
+<div class="card">
+<h3>8.1 新闻采集流水线：<code>backend/news/pipeline.py</code> - NewsPipeline</h3>
+
+<h4>采集源</h4>
+<table>
+  <tr><th>采集器</th><th>数据源</th><th>说明</th></tr>
+  <tr><td>coindesk.py</td><td>CoinDesk</td><td>加密货币新闻</td></tr>
+  <tr><td>macro.py</td><td>FRED API</td><td>美联储宏观数据 (CPI/NFP/失业率/美债收益率)</td></tr>
+  <tr><td>macro_media.py</td><td>宏观媒体</td><td>宏观经济新闻</td></tr>
+  <tr><td>cn_media.py</td><td>中文媒体</td><td>中文加密货币新闻</td></tr>
+  <tr><td>newsdata.py</td><td>NewsData.io</td><td>聚合新闻 (200篇/天免费)</td></tr>
+  <tr><td>alphavantage.py</td><td>Alpha Vantage</td><td>新闻+情绪API (25次/天免费)</td></tr>
+  <tr><td>cryptopanic_ws.py</td><td>CryptoPanic</td><td>WebSocket实时推送</td></tr>
+</table>
+
+<h4>流水线流程</h4>
+<ol>
+  <li><strong>采集</strong>：各爬虫并行采集，去重（URL哈希）</li>
+  <li><strong>关键词预筛选</strong>：<code>news_keywords.py</code> 判断是否需要AI深度分析（节省90%+成本）</li>
+  <li><strong>AI分析</strong>：只对命中重要关键词的新闻调用AI</li>
+  <li><strong>入库</strong>：写入 NewsArticle 表，含 AI 情绪/影响力/关联币种</li>
+</ol>
+</div>
+
+<div class="card">
+<h3>8.2 AI 新闻分析器：<code>backend/services/news_ai_analyzer.py</code></h3>
+<p><strong>关键词预筛选 + 多API轮询</strong>，大幅降低 AI 调用成本。</p>
+
+<h4>AI 分析输出</h4>
+<pre><code>{
+  "sentiment": "positive/negative/neutral",
+  "sentiment_score": -1.0 ~ 1.0,
+  "impact_level": 1-4,
+  "affected_symbols": ["BTC", "ETH", "XAU", "WTI"],
+  "direction": "bullish/bearish/neutral",
+  "buy_sell_signal": "buy/sell/hold",
+  "confidence": 0-100,
+  "summary": "一句话中文摘要",
+  "key_factors": ["关键因素1", "关键因素2"]
+}</code></pre>
+
+<h4>分析原则（System Prompt 内置）</h4>
+<ul>
+  <li>非农数据好于预期 → 利空加密和黄金（美元走强）</li>
+  <li>加息/鹰派 → 利空加密和黄金</li>
+  <li>降息/鸽派 → 利多加密和黄金</li>
+  <li>战争/地缘冲突 → 利多黄金和原油（避险需求）</li>
+  <li>ETF通过 → 利多对应币种</li>
+  <li>黑客/交易所暴雷 → 利空对应币种</li>
+  <li>OPEC减产 → 利多原油</li>
+  <li>制裁 → 利多加密货币（避险替代品）</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>8.3 新闻情绪评分：<code>backend/strategy/scoring.py</code> - NewsSentimentScorer</h3>
+<p>统一情绪评分器，输出 <code>NewsScoreResult</code>：</p>
+<ul>
+  <li>score_raw: 0-10 分</li>
+  <li>directional_score: -1 ~ +1</li>
+  <li>total_news_count / positive_count / negative_count / neutral_count</li>
+  <li>hot_positive_count / hot_negative_count（高影响力新闻计数）</li>
+  <li>weighted_avg_sentiment: 按 impact_level 加权的平均情绪</li>
+  <li>top_reasons: 主要理由列表</li>
+</ul>
+
+<h4>新闻AI策略触发逻辑</h4>
+<ul>
+  <li>情绪评分 &gt; 55 → 看多 (long)</li>
+  <li>情绪评分 &lt; 45 → 看空 (short)</li>
+  <li>45-55 → 中性 (neutral)</li>
+  <li>偏离中性的强度 ≥ score_threshold → 触发交易信号</li>
+</ul>
+</div>
+
+<!-- ===================== 9. AI策略自我升级 ===================== -->
+<h2 id="sec9">9. AI策略自我升级 - 详细分析</h2>
+
+<div class="card">
+<h3>9.1 策略进化服务：<code>backend/services/strategy_evolution.py</code> - StrategyEvolutionService</h3>
+<p><strong>数据驱动的策略自我进化</strong>，基于历史验证数据自动识别问题并给出优化建议。</p>
+
+<h4>4大核心能力</h4>
+
+<h4>① 假信号自动识别 - analyze_false_signal_patterns()</h4>
+<p>从已验证的历史信号中挖掘失效模式，分析维度：</p>
+<ul>
+  <li><strong>单因子极值</strong>：某因子极端看多但结果是假信号</li>
+  <li><strong>因子矛盾</strong>：多因子方向不一致时的胜率</li>
+  <li><strong>市场状态</strong>：不同市场状态下的假信号率</li>
+  <li><strong>波动率环境</strong>：高波动/低波动下的假信号模式</li>
+</ul>
+<p>输出 <code>FalseSignalPattern</code>：模式描述 + 严重程度 + 胜率 + 样本数</p>
+
+<h4>② 因子重要性分析 - analyze_factor_importance()</h4>
+<p>计算各因子对胜率的贡献度，输出 <code>FactorPerformanceStat</code>：</p>
+<ul>
+  <li>各因子在"止盈"vs"止损"场景的平均得分差异</li>
+  <li>因子方向准确率</li>
+  <li>样本量统计（样本不足不调整，避免过拟合）</li>
+</ul>
+
+<h4>③ 参数自适应优化</h4>
+<p>根据历史表现动态调整：</p>
+<ul>
+  <li>评分阈值（score_threshold）</li>
+  <li>因子权重（weight_technical / weight_news / weight_ai）</li>
+  <li>杠杆映射参数</li>
+</ul>
+
+<h4>④ 进化方案生成 - EvolutionProposal</h4>
+<p>AI 分析历史数据，给出策略优化建议：</p>
+<ul>
+  <li>状态：pending → accepted/rejected → applied</li>
+  <li>包含变更前/后参数对比</li>
+  <li>预期收益改善估算</li>
+  <li>可回滚（完整记录变更历史）</li>
+</ul>
+</div>
+
+<div class="card">
+<h3>9.2 进化执行流程</h3>
+<ol>
+  <li>收集历史信号数据（QuantSignalRecord，需 verified=True）</li>
+  <li>挖掘假信号模式（FalseSignalPattern）</li>
+  <li>计算因子重要性（FactorPerformanceStat）</li>
+  <li>生成进化方案（EvolutionProposal，状态=pending）</li>
+  <li>管理员审批 → accepted</li>
+  <li>应用方案 → applied，记录 EvolutionRun</li>
+  <li>如效果不佳 → 回滚到变更前参数</li>
+</ol>
+
+<h4>设计原则</h4>
+<ul>
+  <li><strong>数据驱动</strong>：所有优化建议基于历史验证数据</li>
+  <li><strong>保守进化</strong>：样本量不足时不调整，避免过拟合</li>
+  <li><strong>可追溯</strong>：每次进化有完整记录，可回滚</li>
+</ul>
+</div>
+
+<!-- ===================== 10. 前端页面 ===================== -->
+<h2 id="sec10">10. 前端页面与路由</h2>
+
+<table>
+  <tr><th>路由路径</th><th>组件</th><th>功能</th><th>权限</th></tr>
+  <tr><td>/login</td><td>Login.vue</td><td>登录页</td><td>公开</td></tr>
+  <tr><td>/dashboard</td><td>Dashboard.vue</td><td>数据大屏（仪表盘/概览）</td><td>登录</td></tr>
+  <tr><td>/exchange</td><td>Exchange.vue</td><td>交易所子账号管理</td><td>登录</td></tr>
+  <tr><td>/strategy</td><td>Strategy.vue</td><td>策略配置管理</td><td>登录</td></tr>
+  <tr><td>/trade</td><td>Trade.vue</td><td>交易订单</td><td>登录</td></tr>
+  <tr><td>/kline</td><td>Kline.vue</td><td>K线行情（含云布局）</td><td>登录</td></tr>
+  <tr><td>/positions</td><td>Positions.vue</td><td>当前持仓</td><td>登录</td></tr>
+  <tr><td>/news</td><td>News.vue</td><td>新闻情绪</td><td>登录</td></tr>
+  <tr><td>/ai</td><td>AI.vue</td><td>AI实时分析</td><td>登录</td></tr>
+  <tr><td>/quant-signal</td><td>QuantSignal.vue</td><td>量化信号引擎（7因子仪表盘）</td><td>登录</td></tr>
+  <tr><td>/evolution</td><td>Evolution.vue</td><td>策略自我进化</td><td>登录</td></tr>
+  <tr><td>/backtest</td><td>Backtest.vue</td><td>历史回测</td><td>登录</td></tr>
+  <tr><td>/risk</td><td>Risk.vue</td><td>风控中心</td><td>登录</td></tr>
+  <tr><td>/reports</td><td>Reports.vue</td><td>财务报表</td><td>登录</td></tr>
+  <tr><td>/users</td><td>Users.vue</td><td>用户管理</td><td>超管</td></tr>
+  <tr><td>/settings</td><td>Settings.vue</td><td>系统设置</td><td>超管</td></tr>
+  <tr><td>/crawler-health</td><td>CrawlerHealth.vue</td><td>爬虫监控</td><td>登录</td></tr>
+  <tr><td>/monitor</td><td>SystemMonitor.vue</td><td>系统监控</td><td>超管</td></tr>
+  <tr><td>/system</td><td>SystemAdmin.vue</td><td>系统管理（健康检测/备份/更新）</td><td>超管</td></tr>
+  <tr><td>/profile</td><td>Profile.vue</td><td>个人中心</td><td>登录</td></tr>
+</table>
+
+<h3>10.1 Axios 请求封装 (request.js)</h3>
+<pre><code>// FormData 修复：让浏览器自动设置 multipart boundary
+if (config.data instanceof FormData) {
+  delete config.headers['Content-Type']
+}
+
+// 响应拦截器：code===0 返回 data，code===4010 自动登出
+// 统一错误提示：403=权限不足 / 422=参数校验失败 / 500=服务器错误</code></pre>
+
+<!-- ===================== 11. 系统监控 ===================== -->
+<h2 id="sec11">11. 系统监控与运维</h2>
+
+<div class="card">
+<h3>11.1 监控页面 5 大模块</h3>
+<ul>
+  <li><strong>服务状态</strong>：进程/CPU/内存/磁盘/数据库/Redis 连接</li>
+  <li><strong>功能自检</strong>：15 项系统功能检测（数据库/Redis/API/策略/定时任务等）</li>
+  <li><strong>运行日志</strong>：app/error/trade 三类日志查看+关键词搜索</li>
+  <li><strong>智能分析</strong>：AI 自动分析系统状态，给出诊断报告</li>
+  <li><strong>AI 控制中心</strong>：模拟回测/策略扫描/AI行情分析/综合测试（SSE 实时进度）</li>
+</ul>
+
+<h3>11.2 分享令牌机制</h3>
+<ul>
+  <li>Token 认证，有效期 0.5-720 小时，自动过期</li>
+  <li>独立于后端，不暴露后端信息</li>
+  <li>敏感信息自动脱敏（API Key/密码/用户数据/交易所账号/数据库用户数）</li>
+  <li>公开访问：<code>/monitor/share/{token}</code></li>
+</ul>
+
+<h3>11.3 系统状态显示位置</h3>
+<ol>
+  <li>数据大屏顶部横幅</li>
+  <li>系统管理 → 健康检测 Tab</li>
+  <li>独立公开监控页面</li>
+</ol>
+
+<h3>11.4 GitHub 更新机制</h3>
+<ul>
+  <li>仓库：<code>jackmasen/strategy-trade</code></li>
+  <li>检测：GitHub Releases API + GITHUB_TOKEN（避免限流）</li>
+  <li>语义版本号：v1.2.0 / v1.2.1 / v1.2.2 / v1.2.3 / v1.2.4</li>
+  <li>更新流程：检测最新版 → 下载 zip → 解压 → 自动提升嵌套目录 → 替换文件 → 重启</li>
+  <li>支持上传更新包（手动 zip 上传）</li>
+  <li>支持回滚</li>
+</ul>
+</div>
+
+<!-- ===================== 12. 开发进度 ===================== -->
+<h2 id="sec12">12. 开发进度与已完成功能</h2>
+
+<div class="card">
+<h3>已完成功能清单</h3>
+
+<h4>核心交易系统 <span class="badge badge-green">100%</span></h4>
+<ul>
+  <li>✅ 用户认证 + JWT（登录/刷新/权限分层：admin/trader/editor）</li>
+  <li>✅ 交易所子账号管理（Binance/OKX，支持测试网/正式网切换）</li>
+  <li>✅ 策略配置 CRUD（5种策略类型：standard/emv/news_ai/bollinger/macd）</li>
+  <li>✅ 评分引擎（7因子综合评分 + ScoreRecord 持久化）</li>
+  <li>✅ 策略执行闭环（评分→触发→风控→下单→持仓管理）</li>
+  <li>✅ 手动下单/平仓/撤单</li>
+  <li>✅ 三种运行模式（全自动/半自动/模拟盘）</li>
+  <li>✅ 完整风控（日亏损/连续亏损/仓位上限/冷却期）</li>
+</ul>
+
+<h4>AI 分析系统 <span class="badge badge-green">95%</span></h4>
+<ul>
+  <li>✅ 统一 AIClient（支持 OpenAI/Anthropic/DeepSeek/通义千问/豆包/本地 Ollama）</li>
+  <li>✅ AI 多 API Key 故障转移（优先级轮询，失败自动切换，3次失败标记 failed）</li>
+  <li>✅ AI Key 健康检测（单个/批量，延迟测量，自动恢复）</li>
+  <li>✅ AI 分析结构化输出（JSON Schema 校验，2次重试补全）</li>
+  <li>✅ 成本估算（按模型名粗估美元成本）</li>
+  <li>✅ 7因子量化信号引擎（市场状态/资金流向/杠杆/清算/波动率/新闻/策略优势）</li>
+  <li>✅ 动态权重调整（趋势市/震荡市/突破市）</li>
+  <li>✅ 方向一致性判定（60%因子一致才确认信号）</li>
+</ul>
+
+<h4>新闻情绪系统 <span class="badge badge-green">90%</span></h4>
+<ul>
+  <li>✅ 多源新闻采集（CoinDesk/FRED/CryptoPanic/NewsData/AlphaVantage/中文媒体）</li>
+  <li>✅ 新闻去重（URL哈希）</li>
+  <li>✅ 关键词预筛选（节省90%+AI成本）</li>
+  <li>✅ AI 深度分析（情绪/影响力/关联币种/买卖信号）</li>
+  <li>✅ 新闻情绪评分器（NewsSentimentScorer，加权平均）</li>
+  <li>✅ 新闻AI策略（纯新闻情绪驱动，偏离阈值触发）</li>
+  <li>✅ CryptoPanic WebSocket 实时推送</li>
+</ul>
+
+<h4>策略进化系统 <span class="badge badge-yellow">80%</span></h4>
+<ul>
+  <li>✅ 假信号模式自动识别（4维度分析：单因子极值/因子矛盾/市场状态/波动率）</li>
+  <li>✅ 因子重要性分析（贡献度/准确率/样本量）</li>
+  <li>✅ 参数自适应优化建议</li>
+  <li>✅ 进化方案管理（pending→accepted→applied，可回滚）</li>
+  <li>✅ 进化仪表盘（胜率/假信号/因子排名/优化方案汇总）</li>
+  <li>⚠️ 进化方案自动应用需更多历史数据积累</li>
+</ul>
+
+<h4>回测系统 <span class="badge badge-yellow">75%</span></h4>
+<ul>
+  <li>✅ 历史 K 线模拟（SMA/RSI/BB/EMA 指标计算）</li>
+  <li>✅ 回测结果统计（胜率/盈亏比/夏普/分品种统计）</li>
+  <li>✅ 回测数据驱动策略优势因子</li>
+  <li>⚠️ 策略类型覆盖不全（仅部分策略类型支持回测）</li>
+  <li>⚠️ 回测引擎与正式策略引擎逻辑未完全统一</li>
+</ul>
+
+<h4>系统监控 <span class="badge badge-green">100%</span></h4>
+<ul>
+  <li>✅ 系统状态实时仪表盘</li>
+  <li>✅ 15 项功能自检（数据库/Redis/API/策略/定时任务等）</li>
+  <li>✅ 日志管理（app/error/trade 三类，关键词搜索）</li>
+  <li>✅ 智能诊断报告</li>
+  <li>✅ 分享令牌（0.5-720h，自动过期，脱敏）</li>
+  <li>✅ AI 控制中心（SSE 实时进度，4大功能）</li>
+  <li>✅ 独立于后端，不暴露后端信息</li>
+</ul>
+
+<h4>系统管理 <span class="badge badge-green">100%</span></h4>
+<ul>
+  <li>✅ 系统信息展示</li>
+  <li>✅ 健康检测 + 自动修复</li>
+  <li>✅ 缓存清理（pycache/vite/dist/logs）</li>
+  <li>✅ 备份管理（创建/恢复/删除）</li>
+  <li>✅ GitHub 更新（检测/下载/解压/替换/重启）</li>
+  <li>✅ 上传更新包</li>
+  <li>✅ 更新回滚</li>
+</ul>
+
+<h4>前端系统 <span class="badge badge-green">95%</span></h4>
+<ul>
+  <li>✅ 20+ 页面组件完整实现</li>
+  <li>✅ 响应式布局</li>
+  <li>✅ K 线图（ECharts 集成）</li>
+  <li>✅ K 线云布局管理（个人/公共）</li>
+  <li>✅ 状态指示灯（绿色闪烁/红色脉冲/琥珀色闪烁）</li>
+  <li>✅ FormData 上传修复（Content-Type boundary）</li>
+  <li>⚠️ 服务器未安装 npm，前端 dist 需本地构建后上传</li>
+</ul>
+
+<h4>K线布局管理 <span class="badge badge-green">100%</span></h4>
+<ul>
+  <li>✅ 个人布局（用户独有）</li>
+  <li>✅ 公共布局（超管发布，按使用次数排序）</li>
+  <li>✅ 操作员只能使用公共布局+保存个人布局</li>
+  <li>✅ 操作员不能修改/删除/发布公共布局</li>
+</ul>
+
+<h4>财务报表 <span class="badge badge-green">90%</span></h4>
+<ul>
+  <li>✅ 日报/周报/月报</li>
+  <li>✅ 盈亏统计</li>
+  <li>✅ 策略表现排名</li>
+</ul>
+</div>
+
+<!-- ===================== 13. 存在问题 ===================== -->
+<h2 id="sec13">13. 目前存在的问题与待办</h2>
+
+<div class="card">
+<table>
+  <tr><th>#</th><th>问题</th><th>严重度</th><th>状态</th><th>说明</th></tr>
+  <tr><td>1</td><td>服务器未安装 npm</td><td><span class="badge badge-red">高</span></td><td>未解决</td><td>前端 dist 未重新构建，FormData 修复未生效。需本地 build 后上传 dist 或服务器安装 Node.js</td></tr>
+  <tr><td>2</td><td>版本号不同步</td><td><span class="badge badge-yellow">中</span></td><td>部分解决</td><td>_get_current_version() 返回 v1.2.3，GitHub Release 最新 v1.2.4，会持续提示"有更新"</td></tr>
+  <tr><td>3</td><td>Gmail SMTP 限额</td><td><span class="badge badge-yellow">中</span></td><td>已规避</td><td>Gmail 免费账户 500 封/天限制，建议切换 QQ 或 163 邮箱</td></tr>
+  <tr><td>4</td><td>分享令牌存内存</td><td><span class="badge badge-yellow">中</span></td><td>待优化</td><td>服务重启后令牌丢失，建议迁移到 Redis</td></tr>
+  <tr><td>5</td><td>回测引擎不完整</td><td><span class="badge badge-yellow">中</span></td><td>部分完成</td><td>仅部分策略类型支持回测，回测与正式引擎逻辑未完全统一</td></tr>
+  <tr><td>6</td><td>进化方案数据不足</td><td><span class="badge badge-yellow">中</span></td><td>待积累</td><td>策略自我进化需要大量已验证信号数据，目前样本不足</td></tr>
+  <tr><td>7</td><td>.env 不在 Git 版本控制</td><td><span class="badge badge-blue">低</span></td><td>设计如此</td><td>需手动在服务器更新 .env（含 GITHUB_TOKEN 等）</td></tr>
+  <tr><td>8</td><td>商品价格回退</td><td><span class="badge badge-blue">低</span></td><td>已规避</td><td>WTI/XAU 无 Binance K线，通过 OKX 公共 API 获取价格，用模拟 K线构造最小数据集</td></tr>
+  <tr><td>9</td><td>前端 dist 旧版未更新</td><td><span class="badge badge-red">高</span></td><td>未解决</td><td>服务器 dist 为旧版打包，request.js FormData 修复未生效在构建产物中</td></tr>
+  <tr><td>10</td><td>Celery 未启用</td><td><span class="badge badge-blue">低</span></td><td>设计如此</td><td>CELERY_ENABLED=False，用 APScheduler 兜底执行定时任务</td></tr>
+</table>
+</div>
+
+<!-- ===================== 14. 部署信息 ===================== -->
+<h2 id="sec14">14. 部署信息与服务器配置</h2>
+
+<div class="card">
+<h3>14.1 服务器信息</h3>
+<table>
+  <tr><th>项目</th><th>值</th></tr>
+  <tr><td>服务器 IP</td><td>186.244.251.11</td></tr>
+  <tr><td>SSH 用户</td><td>root</td></tr>
+  <tr><td>域名</td><td>aicl.tgjsbot.kdns.fr</td></tr>
+  <tr><td>项目路径</td><td>/www/wwwroot/strategy-trade/</td></tr>
+  <tr><td>后端进程</td><td>uvicorn main:app --host 127.0.0.1 --port 8000 --workers 2</td></tr>
+  <tr><td>进程管理</td><td>Supervisor (/etc/supervisor/conf.d/strategy-trade.conf)</td></tr>
+  <tr><td>反向代理</td><td>Nginx (前端 dist + API 代理)</td></tr>
+  <tr><td>前端目录</td><td>/www/wwwroot/strategy-trade/frontend/dist</td></tr>
+  <tr><td>后端目录</td><td>/www/wwwroot/strategy-trade/backend</td></tr>
+  <tr><td>.env 路径</td><td>/www/wwwroot/strategy-trade/.env</td></tr>
+  <tr><td>监控页面</td><td>https://aicl.tgjsbot.kdns.fr/monitor/share/{token}</td></tr>
+  <tr><td>GitHub 仓库</td><td>https://github.com/jackmasen/strategy-trade</td></tr>
+</table>
+
+<h3>14.2 GitHub Release 版本历史</h3>
+<table>
+  <tr><th>版本</th><th>说明</th><th>状态</th></tr>
+  <tr><td>v1.2.0</td><td>初始版本</td><td>已发布</td></tr>
+  <tr><td>v1.2.1</td><td>热修复</td><td>已发布</td></tr>
+  <tr><td>v1.2.2</td><td>热修复</td><td>已发布</td></tr>
+  <tr><td>v1.2.3</td><td>功能更新</td><td>已发布</td></tr>
+  <tr><td>v1.2.4</td><td>修复 GITHUB_TOKEN API 限流 + 版本号更新到 v1.2.3 + 上传 422 修复</td><td><span class="badge badge-green">Latest</span></td></tr>
+</table>
+
+<h3>14.3 常用运维命令</h3>
+<pre><code># SSH 连接
+ssh root@186.244.251.11
+
+# 重启后端服务
+supervisorctl restart strategy-trade
+
+# 查看服务状态
+supervisorctl status strategy-trade
+
+# 查看后端日志
+tail -f /www/wwwroot/strategy-trade/logs/app_$(date +%Y-%m-%d).log
+
+# 重新加载 Nginx
+nginx -s reload
+
+# 清理 Python 缓存
+find /www/wwwroot/strategy-trade/backend -name "__pycache__" -exec rm -rf {} +
+
+# 检查 GitHub 最新版
+curl -H "Authorization: token $GITHUB_TOKEN" \
+  https://api.github.com/repos/jackmasen/strategy-trade/releases/latest</code></pre>
+
+<h3>14.4 本地构建前端</h3>
+<pre><code>cd frontend
+npm install
+npm run build
+# 将 dist 目录上传到服务器 /www/wwwroot/strategy-trade/frontend/dist/</code></pre>
+</div>
+
+<hr class="hr">
+<p style="text-align:center;color:#7ee787;font-size:1.1em;">文档生成时间: 2026-09-04 | 系统版本: v1.2.4 | GitHub: jackmasen/strategy-trade</p>
+<p style="text-align:center;color:#58a6ff;">源码已保存至桌面: <code>strategy-trade-v1.2.4_源码/</code></p>
+
+</div>
+</body>
+</html>
