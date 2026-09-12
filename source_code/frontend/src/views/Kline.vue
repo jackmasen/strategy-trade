@@ -1960,6 +1960,8 @@ let klineTimer = null
 let tickerTimer = null
 let priceDirection = ref('neutral')
 let lastPrice = 0
+// 竞态防护：每次切换币种递增，旧请求的结果被丢弃
+let dataGen = 0
 
 // 计算
 const spread = computed(() => {
@@ -2017,12 +2019,14 @@ async function loadAccounts() {
 
 // 加载K线综合分析
 async function loadKlineAnalysis() {
+  const gen = dataGen // 竞态防护：记录当前请求编号
   try {
     const r = await http.get(`${API_PREFIX}/exchange/kline-analysis/${selectedSymbol.value}`, {
       timeframe: timeframe.value,
       limit: 200,
       account_id: selectedAccount.value,
     }, { _silent: true })
+    if (gen !== dataGen) return // 币种已切换，丢弃旧数据
     klineError.value = ''
     klines.value = r.klines || []
     indicators.value = r.indicators || {}
@@ -2057,11 +2061,13 @@ async function loadKlineAnalysis() {
 
 // 加载深度
 async function loadOrderbook() {
+  const gen = dataGen // 竞态防护
   try {
     const r = await http.get(`${API_PREFIX}/exchange/orderbook/${selectedSymbol.value}`, {
       limit: 20,
       account_id: selectedAccount.value,
     }, { _silent: true })
+    if (gen !== dataGen) return // 币种已切换，丢弃旧数据
     orderbook.value = { bids: r.bids || [], asks: r.asks || [] }
     // 计算主力位置
     calcMainForce()
@@ -2121,11 +2127,13 @@ function calcMainForce() {
 
 // 加载成交记录
 async function loadTrades() {
+  const gen = dataGen // 竞态防护
   try {
     const r = await http.get(`${API_PREFIX}/exchange/trades/${selectedSymbol.value}`, {
       limit: 50,
       account_id: selectedAccount.value,
     }, { _silent: true })
+    if (gen !== dataGen) return // 币种已切换，丢弃旧数据
     const newTrades = r.items || []
 
     // 检测大资金异动
@@ -2244,20 +2252,24 @@ async function sendAISignalEmail(signal) {
 
 // 加载持仓量
 async function loadOpenInterest() {
+  const gen = dataGen // 竞态防护
   try {
     const r = await http.get(`${API_PREFIX}/exchange/open-interest/${selectedSymbol.value}`, {
       account_id: selectedAccount.value,
     }, { _silent: true })
+    if (gen !== dataGen) return // 币种已切换，丢弃旧数据
     openInterest.value = r
   } catch (e) {}
 }
 
 // 加载ticker
 async function loadTicker() {
+  const gen = dataGen // 竞态防护
   try {
     const r = await http.get(`${API_PREFIX}/exchange/ticker/${selectedSymbol.value}`, {
       account_id: selectedAccount.value,
     }, { _silent: true })
+    if (gen !== dataGen) return // 币种已切换，丢弃旧数据
     ticker.value = r
     if (r.last_price) {
       lastPrice = r.last_price
@@ -2370,6 +2382,7 @@ function formatHolding(mins) {
 
 function onSymbolChange() {
   lastPrice = 0
+  dataGen++ // 竞态防护：废弃所有进行中的旧请求
   whaleAlerts.value = []
   // 清空所有旧币种数据，避免残留
   klines.value = []

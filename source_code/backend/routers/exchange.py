@@ -659,14 +659,27 @@ def cancel_all_open(aid: int, symbol: str = "", db: Session = Depends(get_db), u
 #  行情（只读，跨账号）
 # ==========================================================
 def _refresh_ticker_cache(mm, symbol):
+    """后台刷新ticker缓存 — 按symbol自动路由正确数据源"""
     try:
+        client = mm.get_data_client(symbol)
+        if client:
+            t = client.fetch_ticker(symbol)
+            if t and t.last_price and t.last_price > 0:
+                mm.on_ws_ticker(t)
+                return
+        # Bybit 兜底（非加密品种）
+        if mm._bybit_client and symbol in _NON_CRYPTO_SYMBOLS_SET:
+            t = mm._bybit_client.fetch_ticker(symbol)
+            if t and t.last_price and t.last_price > 0:
+                mm.on_ws_ticker(t)
+                return
+        # 最后尝试主客户端
         if mm._primary_client:
             t = mm._primary_client.fetch_ticker(symbol)
             mm.on_ws_ticker(t)
     except Exception as e:
-        logger.warning(f"[Exchange] Ticker拉取失败(symbol={symbol}): {e} — 返回模拟数据")
-        t = _gen_mock_ticker(symbol)
-        mm.on_ws_ticker(t)
+        logger.warning(f"[Exchange] Ticker刷新失败(symbol={symbol}): {e}")
+        # 失败时不生成模拟数据，保留旧缓存
 
 @router.get("/ticker/{symbol}")
 def get_ticker(symbol: str, account_id: int = 0, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
@@ -743,9 +756,31 @@ def get_klines(
                 } for c in klines
             ],
         })
-    # 回退 REST（使用统一的客户端获取逻辑，含公开兜底）
-    client = _get_client_by_account(db, user, account_id, allow_public=True)
-    klines = _cached_fetch_klines(client, symbol, timeframe, limit=limit)
+    # 回退 REST（优先按symbol路由正确数据源）
+    klines = []
+    # 1) 指定账号
+    if account_id > 0:
+        try:
+            client = _get_client_by_account(db, user, account_id, allow_public=True)
+            klines = _cached_fetch_klines(client, symbol, timeframe, limit=limit)
+        except Exception as e:
+            logger.debug(f"[Exchange] 指定账号K线失败(symbol={symbol}, acc={account_id}): {e}")
+    # 2) 按symbol路由
+    if len(klines) < 50:
+        client = mm.get_data_client(symbol)
+        if client:
+            try:
+                klines = _cached_fetch_klines(client, symbol, timeframe, limit=limit)
+            except Exception as e:
+                logger.debug(f"[Exchange] K线按symbol路由失败(symbol={symbol}): {e}")
+    # 3) 非加密品种兜底
+    if len(klines) < 50 and symbol in _NON_CRYPTO_SYMBOLS_SET:
+        try:
+            bybit_client = mm.ensure_bybit_public_client()
+            if bybit_client and bybit_client is not mm.get_data_client(symbol):
+                klines = _cached_fetch_klines(bybit_client, symbol, timeframe, limit=limit)
+        except Exception as e2:
+            logger.debug(f"[Exchange] Bybit兜底K线失败(symbol={symbol}): {e2}")
     # 回填 memory（下一次就命中内存）
     from backend.exchanges.market import _tf_bucket_ms
     now_ms = int(datetime.now().timestamp() * 1000)
@@ -867,27 +902,39 @@ def get_orderbook(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """获取深度盘口"""
+    """获取深度盘口 — 按symbol自动路由正确数据源"""
     symbol = symbol.upper()
-    client = _get_client_by_account(db, user, account_id)
-    try:
-        ob = client.fetch_orderbook(symbol, limit=max(5, min(100, limit)))
-        if ob and (ob.bids or ob.asks):
-            return success(ob.to_dict())
-    except Exception as e:
-        logger.debug(f"[Exchange] 盘口拉取失败(symbol={symbol}): {e}")
-    # 非加密品种：Bybit 公开行情兜底
-    if symbol in _NON_CRYPTO_SYMBOLS_SET:
+    mm = MarketManager.get_instance()
+    ob = None
+
+    # 1) 指定账号：优先用账号对应交易所
+    if account_id > 0:
         try:
-            mm = MarketManager.get_instance()
+            client = _get_client_by_account(db, user, account_id)
+            ob = client.fetch_orderbook(symbol, limit=max(5, min(100, limit)))
+        except Exception as e:
+            logger.debug(f"[Exchange] 指定账号盘口失败(symbol={symbol}, acc={account_id}): {e}")
+
+    # 2) 按symbol路由到正确数据源（加密→主用, 非加密→Bybit）
+    if not ob or not (ob.bids or ob.asks):
+        client = mm.get_data_client(symbol)
+        if client:
+            try:
+                ob = client.fetch_orderbook(symbol, limit=max(5, min(100, limit)))
+            except Exception as e:
+                logger.debug(f"[Exchange] 盘口按symbol路由失败(symbol={symbol}): {e}")
+
+    # 3) 非加密品种兜底：再试 Bybit 公开客户端
+    if (not ob or not (ob.bids or ob.asks)) and symbol in _NON_CRYPTO_SYMBOLS_SET:
+        try:
             bybit_client = mm.ensure_bybit_public_client()
-            if bybit_client and bybit_client is not client:
+            if bybit_client and bybit_client is not mm.get_data_client(symbol):
                 ob = bybit_client.fetch_orderbook(symbol, limit=max(5, min(100, limit)))
-                if ob and (ob.bids or ob.asks):
-                    return success(ob.to_dict())
         except Exception as e2:
             logger.debug(f"[Exchange] Bybit兜底盘口失败(symbol={symbol}): {e2}")
-    # 最终返回空盘口（前端显示空数据）
+
+    if ob and (ob.bids or ob.asks):
+        return success(ob.to_dict())
     return success({"bids": [], "asks": []})
 
 
@@ -899,23 +946,37 @@ def get_recent_trades(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
-    """获取近期成交记录"""
+    """获取近期成交记录 — 按symbol自动路由正确数据源"""
     symbol = symbol.upper()
-    client = _get_client_by_account(db, user, account_id)
+    mm = MarketManager.get_instance()
     trades = []
-    try:
-        trades = client.fetch_recent_trades(symbol, limit=max(10, min(500, limit)))
-    except Exception as e:
-        logger.debug(f"[Exchange] 成交记录拉取失败(symbol={symbol}): {e}")
-    # 非加密品种：Bybit 公开行情兜底
+
+    # 1) 指定账号：优先用账号对应交易所
+    if account_id > 0:
+        try:
+            client = _get_client_by_account(db, user, account_id)
+            trades = client.fetch_recent_trades(symbol, limit=max(10, min(500, limit)))
+        except Exception as e:
+            logger.debug(f"[Exchange] 指定账号成交失败(symbol={symbol}, acc={account_id}): {e}")
+
+    # 2) 按symbol路由到正确数据源
+    if not trades:
+        client = mm.get_data_client(symbol)
+        if client:
+            try:
+                trades = client.fetch_recent_trades(symbol, limit=max(10, min(500, limit)))
+            except Exception as e:
+                logger.debug(f"[Exchange] 成交按symbol路由失败(symbol={symbol}): {e}")
+
+    # 3) 非加密品种兜底：再试 Bybit 公开客户端
     if not trades and symbol in _NON_CRYPTO_SYMBOLS_SET:
         try:
-            mm = MarketManager.get_instance()
             bybit_client = mm.ensure_bybit_public_client()
-            if bybit_client and bybit_client is not client:
+            if bybit_client and bybit_client is not mm.get_data_client(symbol):
                 trades = bybit_client.fetch_recent_trades(symbol, limit=max(10, min(500, limit)))
         except Exception as e2:
-            logger.debug(f"[Exchange] Bybit兜底成交记录失败(symbol={symbol}): {e2}")
+            logger.debug(f"[Exchange] Bybit兜底成交失败(symbol={symbol}): {e2}")
+
     return success({
         "symbol": symbol,
         "count": len(trades),
@@ -1359,7 +1420,27 @@ def kline_analysis(
         raise ParameterException("timeframe 必须为 1m/5m/15m/30m/1h/2h/3h/4h/6h/12h/1d/1w/1M/1y")
     limit = max(50, min(500, limit))
 
-    client = _get_client_by_account(db, user, account_id)
+    mm = MarketManager.get_instance()
+    client = None
+
+    # 1) 指定账号：优先用账号对应交易所
+    if account_id > 0:
+        try:
+            client = _get_client_by_account(db, user, account_id)
+        except Exception:
+            client = None
+
+    # 2) 按symbol路由到正确数据源（加密→主用, 非加密→Bybit）
+    if not client:
+        client = mm.get_data_client(symbol)
+
+    # 3) 非加密品种兜底：再试 Bybit 公开客户端
+    if not client and symbol in _NON_CRYPTO_SYMBOLS_SET:
+        client = mm.ensure_bybit_public_client()
+
+    # 4) 最后兜底：用账号客户端
+    if not client:
+        client = _get_client_by_account(db, user, account_id)
 
     # 1. 主周期 K线
     klines = _cached_fetch_klines(client, symbol, timeframe, limit=limit)
