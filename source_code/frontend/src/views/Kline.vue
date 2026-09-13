@@ -788,8 +788,13 @@
                       <el-radio-button value="1m">1分</el-radio-button>
                       <el-radio-button value="5m">5分</el-radio-button>
                       <el-radio-button value="15m">15分</el-radio-button>
+                      <el-radio-button value="30m">30分</el-radio-button>
                       <el-radio-button value="1h">1小时</el-radio-button>
+                      <el-radio-button value="2h">2小时</el-radio-button>
+                      <el-radio-button value="3h">3小时</el-radio-button>
                       <el-radio-button value="4h">4小时</el-radio-button>
+                      <el-radio-button value="6h">6小时</el-radio-button>
+                      <el-radio-button value="12h">12小时</el-radio-button>
                       <el-radio-button value="1d">日线</el-radio-button>
                       <el-radio-button value="1w">周线</el-radio-button>
                       <el-radio-button value="1M">月线</el-radio-button>
@@ -2279,6 +2284,23 @@ async function loadTicker() {
 }
 
 function loadAll() {
+  dataGen++ // 竞态防护：废弃所有进行中的旧请求
+  // 清空旧K线数据，避免切换周期时残留旧数据
+  klines.value = []
+  indicators.value = {}
+  if (mainChart) {
+    mainChart.clear()
+    mainChart.setOption({}, true)
+  }
+  if (macdChart) {
+    macdChart.clear()
+    macdChart.setOption({}, true)
+  }
+  if (rsiChart) {
+    rsiChart.clear()
+    rsiChart.setOption({}, true)
+  }
+  connStatus.value = 'loading'
   loadKlineAnalysis()
   loadOrderbook()
   loadTrades()
@@ -2587,7 +2609,7 @@ function renderMainChart() {
     series,
   }
 
-  mainChart.setOption(option)
+  mainChart.setOption(option, true) // notMerge=true 确保切换周期时完全替换旧数据
 }
 
 function renderMacdChart() {
@@ -2615,7 +2637,7 @@ function renderMacdChart() {
       { name: 'DEA', type: 'line', data: ind.macd_dea, smooth: true, lineStyle: { width: 1, color: '#FBBF24' }, showSymbol: false },
     ],
   }
-  macdChart.setOption(option)
+  macdChart.setOption(option, true)
 }
 
 function renderRsiChart() {
@@ -2650,7 +2672,7 @@ function renderRsiChart() {
       },
     ],
   }
-  rsiChart.setOption(option)
+  rsiChart.setOption(option, true)
 }
 
 // 窗口大小变化
