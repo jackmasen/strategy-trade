@@ -1051,6 +1051,7 @@ const saveNotify = async () => {
     await http.put(`${API_PREFIX}/settings/notify`, {
       dingtalk: p.dingtalk,
       feishu: p.feishu,
+      smtp_enabled: p.smtp_enabled,
       smtp_host: p.smtp_host,
       smtp_port: p.smtp_port,
       smtp_user: p.smtp_user,
