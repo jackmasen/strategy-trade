@@ -386,7 +386,7 @@ def _signal_to_dict(signal, include_factors=True):
 
 @router.get("/overview")
 def signal_overview(
-    symbols: str = Query(default="BTC,ETH,SOL,XAU,WTI,TSLA,NVDA,AAPL,MSFT,GOOGL,AMZN,META,NFLX,TCEHY,SKHYNIX,SNDK,INTC,AMD,SMCI,PLTR,KO,PG,WMT,JNJ,PEP,MCD,JPM,MSTR,COIN", description="币种列表，逗号分隔"),
+    symbols: str = Query(default="BTC,ETH,SOL,BNB,XRP,ADA,DOGE,AVAX,LINK,XAU,XAG,WTI,TSLA,NVDA,AAPL,MSFT,GOOGL,AMZN,META,NFLX,TCEHY,SKHYNIX,SNDK,INTC,AMD,SMCI,PLTR,KO,PG,WMT,JNJ,PEP,MCD,JPM,MSTR,COIN", description="币种列表，逗号分隔"),
     timeframe: str = Query(default="4h", description="时间周期"),
     save: bool = Query(default=False, description="是否保存信号到历史"),
     user: User = Depends(get_current_user),
