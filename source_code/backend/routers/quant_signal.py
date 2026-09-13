@@ -167,6 +167,23 @@ def _fetch_commodity_price(symbol: str) -> Optional[float]:
     if binance_price and binance_price > 0:
         prices.append(binance_price)
 
+    # 源4: Yahoo Finance（Bybit/Binance不支持的品种如PG）
+    if not prices or symbol in ("PG", "AMD"):
+        try:
+            r = _requests.get(
+                f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+                params={"interval": "1d", "range": "1d"},
+                headers={"User-Agent": "Mozilla/5.0"},
+                timeout=8,
+            )
+            meta = r.json().get("chart", {}).get("result", [{}])[0].get("meta", {})
+            yprice = meta.get("regularMarketPrice", 0)
+            if yprice and yprice > 0:
+                prices.append(float(yprice))
+                logger.info(f"[QuantSignal] Yahoo Finance {symbol} price: {yprice}")
+        except Exception as e:
+            logger.debug(f"[QuantSignal] Yahoo Finance {symbol} failed: {e}")
+
     if not prices:
         return None
 

@@ -81,6 +81,41 @@ def _gen_mock_ticker(symbol):
 
 _TF_MS = {"1m":60000,"5m":300000,"15m":900000,"1h":3600000,"4h":14400000,"1d":86400000,"1w":604800000,"1M":2592000000,"1y":31536000000}
 
+# Bybit不支持的品种，用Yahoo Finance获取真实价格
+_YAHOO_FALLBACK_SYMBOLS = {"PG", "AMD"}
+
+def _fetch_yahoo_ticker(symbol):
+    """从Yahoo Finance获取真实股票价格（Bybit/Binance不支持的品种）"""
+    import requests as _req
+    try:
+        r = _req.get(
+            f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}",
+            params={"interval": "1d", "range": "1d"},
+            headers={"User-Agent": "Mozilla/5.0"},
+            timeout=8,
+        )
+        data = r.json()
+        meta = data.get("chart", {}).get("result", [{}])[0].get("meta", {})
+        last = meta.get("regularMarketPrice", 0)
+        if not last or last <= 0:
+            return None
+        prev = meta.get("previousClose", last)
+        chg = ((last - prev) / prev * 100) if prev > 0 else 0.0
+        return TickerType(
+            symbol=symbol,
+            last_price=round(last, 2),
+            bid_price=round(last, 2),
+            ask_price=round(last, 2),
+            high_24h=round(meta.get("regularMarketDayHigh", last), 2),
+            low_24h=round(meta.get("regularMarketDayLow", last), 2),
+            volume_24h=round(meta.get("regularMarketVolume", 0), 2),
+            change_pct_24h=round(chg, 3),
+            timestamp_ms=int(time.time() * 1000),
+        )
+    except Exception as e:
+        logger.debug(f"[Exchange] Yahoo Finance获取失败({symbol}): {e}")
+        return None
+
 def _gen_mock_klines(symbol, timeframe, limit):
     import random
     base = _MOCK_PRICES.get(symbol, 100)
@@ -669,7 +704,16 @@ def _refresh_ticker_cache(mm, symbol):
                 return
         # Bybit 兜底（非加密品种）
         if mm._bybit_client and symbol in _NON_CRYPTO_SYMBOLS_SET:
-            t = mm._bybit_client.fetch_ticker(symbol)
+            try:
+                t = mm._bybit_client.fetch_ticker(symbol)
+                if t and t.last_price and t.last_price > 0:
+                    mm.on_ws_ticker(t)
+                    return
+            except Exception:
+                pass
+        # Yahoo Finance 兜底（Bybit不支持的品种如PG）
+        if symbol in _YAHOO_FALLBACK_SYMBOLS:
+            t = _fetch_yahoo_ticker(symbol)
             if t and t.last_price and t.last_price > 0:
                 mm.on_ws_ticker(t)
                 return
@@ -717,6 +761,12 @@ def get_ticker(symbol: str, account_id: int = 0, db: Session = Depends(get_db), 
                 return success(t.to_dict())
         except Exception:
             pass
+    # Yahoo Finance 兜底（Bybit不支持的品种如PG）
+    if symbol in _YAHOO_FALLBACK_SYMBOLS:
+        t = _fetch_yahoo_ticker(symbol)
+        if t and t.last_price and t.last_price > 0:
+            mm._on_ws_ticker(t)
+            return success(t.to_dict())
     # 最后返回模拟数据
     t = _gen_mock_ticker(symbol)
     return success(t.to_dict())
